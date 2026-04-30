@@ -1,22 +1,46 @@
+import { motion, useAnimationControls } from 'framer-motion';
+import { useEffect, useRef } from 'react';
+import { crossedThresholdUp, tierFor } from '@/combat/threat';
+
 type Props = {
-	/** 0..1 threat level — drives the strip fill. */
+	/** Raw threat scalar (0..∞). Spec §10. */
 	threat: number;
+	/** Visual cap — at and above this value the strip is fully filled.
+	 *  Default 8 (the squad-tier threshold), so the bar maxes out as the
+	 *  player enters squad-tier territory. */
+	visualCap?: number;
 };
 
 /**
- * Top-right threat strip. Auditor-red fill on a paper background, rises
- * smoothly with `threat`. Spec §11.4: redacted-document feel — black
- * bar overlays + subtle noise; PRQ-14 adds the noise layer.
- *
- * Smooth fill via CSS `width` transition (we deliberately skip
- * framer-motion here — a simple width transition reads identical at
- * the strip's small size and saves the bundle).
+ * Top-right threat strip. Auditor-red fill rises with `threat`; on a
+ * tier-threshold cross (2 / 4 / 5 / 8) it fires a brief scale-pulse so
+ * the player sees the moment the spawn pool just expanded. PRQ-09
+ * shipped the static strip; this rev wires the pulse animation per
+ * PRQ-10 T7.
  */
-export function ThreatStrip({ threat }: Props) {
-	const pct = Math.max(0, Math.min(1, threat)) * 100;
+export function ThreatStrip({ threat, visualCap = 8 }: Props) {
+	const pct = Math.max(0, Math.min(1, threat / visualCap)) * 100;
+	const controls = useAnimationControls();
+	const prevRef = useRef(threat);
+
+	useEffect(() => {
+		const prev = prevRef.current;
+		prevRef.current = threat;
+		const crossed = crossedThresholdUp(prev, threat);
+		if (crossed === null) return;
+		// Pulse: scale-up from 1 → 1.12 → 1, 280ms.
+		void controls.start({
+			scale: [1, 1.12, 1],
+			transition: { duration: 0.28, ease: 'easeOut' },
+		});
+	}, [threat, controls]);
+
+	const tier = tierFor(threat);
 	return (
-		<div
+		<motion.div
 			data-testid="threat-strip"
+			data-tier={tier}
+			animate={controls}
 			style={{
 				position: 'absolute',
 				top: 16,
@@ -28,14 +52,15 @@ export function ThreatStrip({ threat }: Props) {
 				zIndex: 5,
 				pointerEvents: 'none',
 				overflow: 'hidden',
+				transformOrigin: '100% 50%',
 			}}
 		>
-			<div
+			<motion.div
+				animate={{ width: `${pct}%` }}
+				transition={{ duration: 0.25, ease: 'easeOut' }}
 				style={{
 					height: '100%',
-					width: `${pct}%`,
 					background: 'var(--auditor-red, #E53D3D)',
-					transition: 'width 250ms ease-out',
 				}}
 			/>
 			<div
@@ -50,8 +75,8 @@ export function ThreatStrip({ threat }: Props) {
 					mixBlendMode: 'difference',
 				}}
 			>
-				THREAT {Math.round(pct)}
+				THREAT {threat.toFixed(1)}
 			</div>
-		</div>
+		</motion.div>
 	);
 }

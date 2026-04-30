@@ -46,6 +46,17 @@ describe('world repo', () => {
 		expect(w?.deaths).toBe(1);
 		expect(w?.playedSeconds).toBe(120);
 	});
+
+	it('getThreat / bumpThreat round-trip + atomic decrement clamps at 0', async () => {
+		await world.initFresh(db, 'threat-test');
+		expect(await world.getThreat(db)).toBe(0);
+		await world.bumpThreat(db, 1.5);
+		await world.bumpThreat(db, 1.0);
+		expect(await world.getThreat(db)).toBeCloseTo(2.5, 5);
+		// Decay below zero clamps.
+		await world.bumpThreat(db, -10);
+		expect(await world.getThreat(db)).toBe(0);
+	});
 });
 
 describe('chunks repo', () => {

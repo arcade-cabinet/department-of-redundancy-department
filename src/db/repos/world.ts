@@ -39,6 +39,29 @@ export async function setThreat(db: Db, threat: number): Promise<void> {
 	await db.update(worldMeta).set({ threat, updatedAt: new Date() }).where(eq(worldMeta.id, 1));
 }
 
+/** Read the current threat scalar (spec §10). Returns 0 on a fresh DB. */
+export async function getThreat(db: Db): Promise<number> {
+	const rows = await db
+		.select({ threat: worldMeta.threat })
+		.from(worldMeta)
+		.where(eq(worldMeta.id, 1))
+		.limit(1);
+	return rows[0]?.threat ?? 0;
+}
+
+/** Atomically apply a threat delta. SQLite's UPDATE...SET threat=
+ *  max(0, threat + delta) keeps the read-modify-write inside one
+ *  statement so concurrent kill events don't lose deltas. */
+export async function bumpThreat(db: Db, delta: number): Promise<void> {
+	await db
+		.update(worldMeta)
+		.set({
+			threat: sql`max(0, ${worldMeta.threat} + ${delta})`,
+			updatedAt: new Date(),
+		})
+		.where(eq(worldMeta.id, 1));
+}
+
 /** Increment the lifetime kill counter. */
 export async function incrementKills(db: Db, n = 1): Promise<void> {
 	await db
