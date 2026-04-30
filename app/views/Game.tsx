@@ -8,7 +8,10 @@ import { MiddleManagerEntity } from '@/ai/enemies/MiddleManagerEntity';
 import { pickSpawnSet } from '@/ai/enemies/spawnDirector';
 import { planSpawns } from '@/ai/enemies/spawner';
 import { useNavMesh } from '@/ai/navmesh/useNavMesh';
+import { AttachListener } from '@/audio/AttachListener';
 import { audioCues } from '@/audio/cues';
+import { globalAudio } from '@/audio/GlobalAudio';
+import { wireAudioCues } from '@/audio/wireCues';
 import { place } from '@/building/place';
 import { radialIdToSlug } from '@/building/radialAction';
 import { clearAll, freshDebuffSet } from '@/combat/debuffs';
@@ -141,6 +144,24 @@ export function Game({ onExit }: Props) {
 			setBossAlive(false);
 		}
 	}, [floorState.currentFloor, defeatedFloors]);
+
+	// PRQ-15 M2c7: wire the typed audioCues bus to AudioManager so
+	// every `audio:*` event from earlier PRQs (floor-arrival, door-*)
+	// fires a real Three.Audio source. Listener is shared via the
+	// globalAudio singleton; PauseMenu's master-volume slider drives
+	// the listener gain. Asset binaries land in M2c8 / M5 polish.
+	useEffect(() => {
+		const dispose = wireAudioCues();
+		// Pull persisted master volume so audio respects the slider
+		// across reloads. Falls back to 1 on storage error.
+		import('@/db/preferences')
+			.then(async (prefs) => {
+				const v = await prefs.get('volume_master');
+				globalAudio.setMaster(v);
+			})
+			.catch(() => {});
+		return dispose;
+	}, []);
 
 	// Clear debuffs on every floor-arrival cue (PRQ-13 reviewer fold:
 	// a 4s reaper-redaction shouldn't bleed onto the next floor).
@@ -508,6 +529,7 @@ export function Game({ onExit }: Props) {
 					eyeHeight={2.4}
 					referenceFovDeg={70}
 				/>
+				<AttachListener />
 				<Suspense fallback={null}>
 					<Lighting />
 					<PauseProvider paused={paused || gameOver}>

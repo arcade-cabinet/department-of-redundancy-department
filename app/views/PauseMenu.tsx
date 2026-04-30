@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { globalAudio } from '@/audio/GlobalAudio';
 import * as prefs from '@/db/preferences';
 import { Button, Dialog, Slider, Tabs } from '@/ui/primitives';
 
@@ -59,6 +60,9 @@ export function PauseMenu({ open, onResume, onQuit, stats }: Props) {
 			const v = vals[0] ?? 0;
 			setter(v);
 			void prefs.set(key, v);
+			// PRQ-15 M2c7: master volume drives the GlobalAudio listener
+			// gain in real time so the player hears the slider immediately.
+			if (key === 'volume_master') globalAudio.setMaster(v);
 		};
 
 	return (
