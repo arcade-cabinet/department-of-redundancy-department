@@ -68,4 +68,6 @@ for (const g of Object.keys(groups)) {
 }
 const totalBefore = Object.values(before).reduce((s, v) => s + v, 0);
 const totalAfter = Object.values(after).reduce((s, v) => s + v, 0);
-console.log(`TOTAL: ${(totalBefore / 1024 / 1024).toFixed(2)} MB → ${(totalAfter / 1024 / 1024).toFixed(2)} MB`);
+console.log(
+	`TOTAL: ${(totalBefore / 1024 / 1024).toFixed(2)} MB → ${(totalAfter / 1024 / 1024).toFixed(2)} MB`,
+);

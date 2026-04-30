@@ -52,7 +52,9 @@ for (const r of rows) {
 for (const g of groups) {
 	console.log(`  ${g.padEnd(11)} ${String(counts[g]).padStart(3)} entries, ${fmtMB(sums[g])}`);
 }
-console.log(`  ${'TOTAL'.padEnd(11)} ${String(rows.length).padStart(3)} entries, ${fmtMB(totalBytes)}`);
+console.log(
+	`  ${'TOTAL'.padEnd(11)} ${String(rows.length).padStart(3)} entries, ${fmtMB(totalBytes)}`,
+);
 
 if (missing > 0) {
 	console.error(`\ncheck-asset-manifest: ${missing} entry(ies) missing on disk.`);

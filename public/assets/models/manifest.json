@@ -1,1216 +1,528 @@
 {
 	"characters": {
 		"hitman": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				2,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 2, 1],
 			"path": "/assets/models/characters/hitman.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:566475b6dc294e3c84fde6e074b2dea64532058a430e7bdcb6061c8dd4cf00cf",
-			"tags": [
-				"enemy",
-				"tier-1.5"
-			]
+			"tags": ["enemy", "tier-1.5"]
 		},
 		"hr-reaper": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				3,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 3, 1],
 			"path": "/assets/models/characters/hr-reaper.glb",
 			"scale": 1.5,
 			"sourceHash": "sha256:f5d66344c2a9546d9f52a12c9df522a492a01b2b77bafaae8b1b78bff2916ec9",
-			"tags": [
-				"enemy",
-				"tier-3",
-				"boss"
-			]
+			"tags": ["enemy", "tier-3", "boss"]
 		},
 		"middle-manager": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				2,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 2, 1],
 			"path": "/assets/models/characters/middle-manager.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:1467facfaf555e4d7a28637aa3d652b63fd93e9c7be3c7f9fa0c0f35d45da2d5",
-			"tags": [
-				"enemy",
-				"tier-0"
-			]
+			"tags": ["enemy", "tier-0"]
 		},
 		"policeman": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				2,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 2, 1],
 			"path": "/assets/models/characters/policeman.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:2597e53cfe156bdef1ac4502f4947c98071f2c621724ac11dd087fc8acab90df",
-			"tags": [
-				"enemy",
-				"tier-1"
-			]
+			"tags": ["enemy", "tier-1"]
 		},
 		"swat": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				2,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 2, 1],
 			"path": "/assets/models/characters/swat.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:d14fe51b97ff0cecd0d6e35c01e82e2d2671d25b496f0d9f413e7313f32cf482",
-			"tags": [
-				"enemy",
-				"tier-2"
-			]
+			"tags": ["enemy", "tier-2"]
 		}
 	},
 	"props": {
 		"bedside-1": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/props/bedside-1.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:cc79fec315aff801b0511812d4a3dc55107a01e4ff2b893f1040b25992c5f042",
-			"tags": [
-				"prop",
-				"office"
-			]
+			"tags": ["prop", "office"]
 		},
 		"bedside-2": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/props/bedside-2.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:70fa96768335e5b719828b0ba7d6fc0505e13520b42cea3eb1247fd9969148cf",
-			"tags": [
-				"prop",
-				"office"
-			]
+			"tags": ["prop", "office"]
 		},
 		"cabinet-1": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				2,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 2, 1],
 			"path": "/assets/models/props/cabinet-1.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:950ff5ce3a5c22de47a9bfdfde88eecf6a35949a3d3060408a7fe31067d69f95",
-			"tags": [
-				"prop",
-				"office"
-			]
+			"tags": ["prop", "office"]
 		},
 		"cabinet-2": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				2,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 2, 1],
 			"path": "/assets/models/props/cabinet-2.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:72f9f0fb1ffb986673ea85e56e496c784a75147ec23eb55fc600a6e085a6108b",
-			"tags": [
-				"prop",
-				"office"
-			]
+			"tags": ["prop", "office"]
 		},
 		"cabinet-3": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				2,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 2, 1],
 			"path": "/assets/models/props/cabinet-3.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:aa00075cca7bb27dda9ffc635fc653e86ae4aea261ab3f416a2547c0cd62ad29",
-			"tags": [
-				"prop",
-				"office"
-			]
+			"tags": ["prop", "office"]
 		},
 		"closet": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				3,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 3, 1],
 			"path": "/assets/models/props/closet.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:f10366b50f87257cd5a4daa00ece32f75509c1791e670beb32dd8a11359d83fe",
-			"tags": [
-				"prop",
-				"office"
-			]
+			"tags": ["prop", "office"]
 		},
 		"desk": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				2,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [2, 1, 1],
 			"path": "/assets/models/props/desk.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:0362f285b374e96af8ca90612cca38f9edc3eed0f26ab049323885a915c2b5aa",
-			"tags": [
-				"prop",
-				"office"
-			]
+			"tags": ["prop", "office"]
 		},
 		"staircase-1": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				3,
-				2
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 3, 2],
 			"path": "/assets/models/props/staircase-1.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:36426b14352ba43b111dcbbd5e6db09571e16adb7080c8c6084d35656c530375",
-			"tags": [
-				"prop",
-				"buildable",
-				"stair"
-			]
+			"tags": ["prop", "buildable", "stair"]
 		},
 		"staircase-2": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				2,
-				3,
-				2
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [2, 3, 2],
 			"path": "/assets/models/props/staircase-2.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:cbef9c85bc4db8ea09ea8c310285fdd315a3e8f7adffcb5b2e5b50103af2f098",
-			"tags": [
-				"prop",
-				"buildable",
-				"stair"
-			]
+			"tags": ["prop", "buildable", "stair"]
 		},
 		"treasure-chest": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/props/treasure-chest.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:37c3c8490e7183302b36a5571db54ed6e2979fa9e42fcd5d20ad25ba4b6419b2",
-			"tags": [
-				"prop",
-				"supply-closet"
-			]
+			"tags": ["prop", "supply-closet"]
 		}
 	},
 	"traps": {
 		"trap-1": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-1.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:4082a16084a3ad76d32a0a81cee7cf89da496a249c2ca233b152a354e1ef94a3",
-			"tags": [
-				"trap",
-				"shredder"
-			]
+			"tags": ["trap", "shredder"]
 		},
 		"trap-12": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-12.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:e0081a26e8b991f89630ef6c1a70cdf1980408fa8e562b4a8fce51859fef661e",
-			"tags": [
-				"trap",
-				"turret"
-			]
+			"tags": ["trap", "turret"]
 		},
 		"trap-13": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-13.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:57d4f4d58c1d0c44a21f7a5fe747e57c7b4faa6440781312dc9e35acb6a3a29b",
-			"tags": [
-				"trap",
-				"turret"
-			]
+			"tags": ["trap", "turret"]
 		},
 		"trap-14": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-14.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:d23fdb01ba9d997ff09ab08c17aff58da847a4c438613f11f90632c5e8a2ebfa",
-			"tags": [
-				"trap",
-				"turret"
-			]
+			"tags": ["trap", "turret"]
 		},
 		"trap-15": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-15.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:18114396bd813be17b3bafbc74b1b02f758c77f718d3794ea3c16c6f08c10e92",
-			"tags": [
-				"trap",
-				"turret"
-			]
+			"tags": ["trap", "turret"]
 		},
 		"trap-16": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-16.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:b09457f418776cd61c42501302f3f28b9fb282b57594919e2c3a4eb08f874481",
-			"tags": [
-				"trap",
-				"spike"
-			]
+			"tags": ["trap", "spike"]
 		},
 		"trap-17": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-17.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:0dfe75106877339965a240e7cda0899769fa7ac49050cf0d43b45211174d4d5c",
-			"tags": [
-				"trap",
-				"spike"
-			]
+			"tags": ["trap", "spike"]
 		},
 		"trap-18": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-18.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:eec820c498e256507882465ac255660035419daa57a43bf17120dbe9141c72ab",
-			"tags": [
-				"trap",
-				"spike"
-			]
+			"tags": ["trap", "spike"]
 		},
 		"trap-19": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-19.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:44d8d36408c450fbcae8b9d44a3e92072b9400bb75ac4ffeb45564f797a90eeb",
-			"tags": [
-				"trap",
-				"spike"
-			]
+			"tags": ["trap", "spike"]
 		},
 		"trap-19_2": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-19_2.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:c2b88c32b3a0992fda13339f6bf132f324a280870aa0259812d3657a06e5aff1",
-			"tags": [
-				"trap",
-				"spike"
-			]
+			"tags": ["trap", "spike"]
 		},
 		"trap-19_3": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-19_3.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:03bab10160be2d7ad4ef26a1e2cbda2cfdf160f3ec2bcd511543897aa58418c1",
-			"tags": [
-				"trap",
-				"spike"
-			]
+			"tags": ["trap", "spike"]
 		},
 		"trap-1_1": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-1_1.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:aa1355308606c32d0e85684145915851b303ce2a1b3230d7c9317476f53b91f9",
-			"tags": [
-				"trap",
-				"shredder"
-			]
+			"tags": ["trap", "shredder"]
 		},
 		"trap-1_2": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-1_2.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:a5f5a09155c26a6495d4b710f16fd50d7ca2ef9a938f984d24940c1b9761816a",
-			"tags": [
-				"trap",
-				"shredder"
-			]
+			"tags": ["trap", "shredder"]
 		},
 		"trap-20": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-20.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:f85609e527e4f652a02aa857cdf8acbdb7b7ad038a0c96d68464408b69c6a6c9",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-20_2": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-20_2.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:45ffc0b528cdbbeb777407fba5b0bb612f977d7def7e6106663917eb6507143d",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-21": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-21.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:73f2ce4d429850ec746c91c8126d0cb46895ab6feb7434547011cf19aa595c89",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-21_2": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-21_2.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:c81f76bfd6df5d60e2d4bcc76ab8e9112520a6525c1953763f5048455fce326f",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-21_3": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-21_3.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:38a57ee3aba5466090362adc21b7307365e977a0bbb4d3c6db9f106070d62650",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-22": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-22.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:d66213c5681b4a6d82f7dd28f7df11075e98a586bf9c62acc8bae7cbf567b395",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-22_2": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-22_2.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:4b96f38995e7babecf6efc1959124e31c50075052f6e64d7bbe81194fe890dc8",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-22_3": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-22_3.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:8f128c91f67710fc4912a8b507018b2e2f435683222ba731c5f3bc6bcfd29460",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-23": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-23.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:03580a1010e9704e7ed0b0bd79e84493bc0506a25407ff6d955b01cf16608f8c",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-23_2": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-23_2.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:e6e2f865d7124cf5ee59144dafdbeafd8176a10a9bf694201fe5e3e45763c210",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-24": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-24.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:108fc7dea89189399ab9ea85ad46cf1d9502fbef5d0b07bd9f952e7fdf77780b",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-24_2": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-24_2.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:d266e7cf88c1baeab304063a32b4a970ef0b089c4a7b01f7c75e31e4831ca41b",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-25": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-25.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:a836fffa811b1885f9873ee112bd7cc435768fe6b75efbe67418e14464964dd7",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-25_2": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-25_2.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:d04a89b968266309831479b00f219037175f639b8f232824aacdcb79de0426a4",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-26": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-26.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:23aa525610d50a3aad02104f8d5bc524eb80a7d64753e255da3718d23471d56f",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-26_2": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-26_2.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:116229426596be2f7ce05cdfb7beee7a7b91d58c641c85d641f6fd87aaf00ab9",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-27": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-27.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:2f5ddc02c9bd11508deec2b973023e4589f4b6ba355e5a806eba1a4524369f36",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-28": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-28.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:6a9612e30972ae015952fe63e9f6c7ad8b068f46a972f859256669213a5dd411",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-28_2": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-28_2.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:93533f02895abaed76c482df3b59e917a9f303b2d8db8f1a3e486d21dc9809be",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-2_1": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-2_1.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:28a30ed7724009cb5d8e09299eafa3aa8ee12b9fe522a8ccc64af3fd5fc94772",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-2_2": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-2_2.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:92684d1cc315d34687c448755354b18f241609ee73c90a2fea7d7437a913c21c",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-2_3": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-2_3.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:2dcf6d16587638f70895fe5ffa2479ff42f330269be119d39316c36cf77836ac",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-2_4": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-2_4.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:81b7ad740889226e423a139ec9616aad638091517854c21b59fea0c0fee7bc50",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-2_5": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-2_5.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:634936f2535c6d5ae55b23da6896cf723f7b1807375199ef62dae2d8179f91d0",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-3": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-3.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:19445fb54c298ccdbf45883f00f45d451ba6dbf9479a8cfbc805226d6e028289",
-			"tags": [
-				"trap",
-				"mortar"
-			]
+			"tags": ["trap", "mortar"]
 		},
 		"trap-3_2": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-3_2.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:b7d8192020b8e0565c4196f8ade0c0176781ee3fcc6c97015f9acf8baf1cda30",
-			"tags": [
-				"trap",
-				"mortar"
-			]
+			"tags": ["trap", "mortar"]
 		},
 		"trap-4": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-4.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:b79e7783fa3a73a8b87c8137f7267401b127d6323e5eaf327579045eaa5ae14c",
-			"tags": [
-				"trap",
-				"mortar"
-			]
+			"tags": ["trap", "mortar"]
 		},
 		"trap-5": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-5.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:20824cad8d64a770d675815271d6da3c64ad28f081d17c1172f812bb1123a2c5",
-			"tags": [
-				"trap",
-				"mortar"
-			]
+			"tags": ["trap", "mortar"]
 		},
 		"trap-6": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-6.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:5cf0876430bb93cc0b962c83597875298e06fd2906502d7c7728604bcffbece6",
-			"tags": [
-				"trap",
-				"sprinkler"
-			]
+			"tags": ["trap", "sprinkler"]
 		},
 		"trap-6_2": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-6_2.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:4bbf88382be902d5ee0ba9e2ca0e43f932dd02a948ca794972696385f47f3d55",
-			"tags": [
-				"trap",
-				"sprinkler"
-			]
+			"tags": ["trap", "sprinkler"]
 		},
 		"trap-6_3": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-6_3.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:f97184a082343da4e448009d3c456459505f4181fce3da8e01533665ab718dab",
-			"tags": [
-				"trap",
-				"sprinkler"
-			]
+			"tags": ["trap", "sprinkler"]
 		},
 		"trap-7": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-7.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:cc60cb7cfdbf8abbc51b83128c507df3bf0e63595b7d3d09362b92b9515720ad",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-7_2": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-7_2.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:64747bf226a4232014cc23b9b476404ab703bb3770b2ff93ff27b03034bccca5",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-7_3": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-7_3.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:8e0aab86e4bc9f31eb2aa11cff870d7b7a63c3fbe45ab578cedf71213c5eee67",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-8": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-8.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:4df11cc593b1f669dff2e95c034ab6959242dd3df2f379900654c88abaae8b8f",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-9": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-9.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:ac8c7f9fe2ac260638101227ca09b76d8073a41ae103f24ee5d109c6d3dd4166",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		},
 		"trap-9_2": {
-			"anchor": [
-				0,
-				0,
-				0
-			],
-			"footprintCells": [
-				1,
-				1,
-				1
-			],
+			"anchor": [0, 0, 0],
+			"footprintCells": [1, 1, 1],
 			"path": "/assets/models/traps/trap-9_2.glb",
 			"scale": 1.0,
 			"sourceHash": "sha256:ac8c7f9fe2ac260638101227ca09b76d8073a41ae103f24ee5d109c6d3dd4166",
-			"tags": [
-				"trap"
-			]
+			"tags": ["trap"]
 		}
 	},
 	"version": 1

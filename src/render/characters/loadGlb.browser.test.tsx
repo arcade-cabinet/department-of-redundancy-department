@@ -1,5 +1,5 @@
-import { Canvas } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
+import { Canvas } from '@react-three/fiber';
 import { render } from '@testing-library/react';
 import { Suspense } from 'react';
 import { describe, expect, it } from 'vitest';

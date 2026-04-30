@@ -99,7 +99,8 @@ async function fetchTexture(localName, slug) {
 		try {
 			const r = await fetchBinary(variants[ext].url, dest);
 			any = true;
-			if (!r.skipped) console.log(`  ${localName}/${mapKey} ${(r.bytes / 1024 / 1024).toFixed(2)} MB`);
+			if (!r.skipped)
+				console.log(`  ${localName}/${mapKey} ${(r.bytes / 1024 / 1024).toFixed(2)} MB`);
 		} catch (e) {
 			console.error(`  ${localName}/${mapKey} fail: ${e.message}`);
 		}
