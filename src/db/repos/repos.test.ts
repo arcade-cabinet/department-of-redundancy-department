@@ -69,6 +69,25 @@ describe('chunks repo', () => {
 });
 
 describe('placed_structures repo', () => {
+	it('damage uses atomic UPDATE ... RETURNING (no read-modify-write race)', async () => {
+		const id = await structures.place(db, {
+			floor: 1,
+			slug: 'placed-wall-block',
+			x: 0,
+			y: 0,
+			z: 0,
+			hp: 10,
+		});
+		// Two damage(3) calls concurrently. With the old read-then-update
+		// pattern, both could SELECT hp=10, both compute 7, both UPDATE
+		// to 7 — losing one decrement. With the atomic UPDATE pattern,
+		// the engine serializes the decrements: first call lands hp=7,
+		// second lands hp=4. Verify final hp = 10 - 2*3 = 4.
+		await Promise.all([structures.damage(db, id, 3), structures.damage(db, id, 3)]);
+		const list = await structures.listForFloor(db, 1);
+		expect(list[0]?.hp).toBe(4);
+	});
+
 	it('place + listForFloor + damage destroys at hp<=0', async () => {
 		const id = await structures.place(db, {
 			floor: 1,

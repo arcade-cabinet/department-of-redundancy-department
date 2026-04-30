@@ -23,15 +23,15 @@
  */
 
 export interface MigrationRunnerInput {
-	/** Returns scalar values from a single-row query. Used to read the
-	 *  current `world_meta.schema_version`. Implementations must return
-	 *  `null` if the table doesn't exist yet (fresh DB). */
-	getCurrentVersion(): number | null;
-	/** Run a single SQL block atomically. Multiple statements in the same
-	 *  string MUST commit together; if any fails, the implementation
+	/** Returns the current `world_meta.schema_version - 1` (so the
+	 *  highest already-applied migration idx). Returns `null` if the
+	 *  table doesn't exist yet (fresh DB). May be sync or async. */
+	getCurrentVersion(): number | null | Promise<number | null>;
+	/** Run a single SQL block atomically. Multiple statements in the
+	 *  same string MUST commit together; if any fails, the implementation
 	 *  must roll back. Drizzle proxies + sql.js `db.exec` already do
-	 *  this by default. */
-	exec(sql: string): void;
+	 *  this by default. May be sync or async. */
+	exec(sql: string): void | Promise<void>;
 }
 
 export interface MigrationEntry {
@@ -54,20 +54,24 @@ export interface MigrationRunResult {
  * migrations is a no-op. Throws if `migrations` are out of order or if
  * any individual migration fails (the implementation rolls back via
  * the adapter's transaction semantics).
+ *
+ * Async-capable so the same runner serves the web (sql.js, sync exec)
+ * AND native (Capacitor SQLite, async exec) adapters — one source of
+ * truth for the schema_version stamping pattern, no drift risk.
  */
-export function runMigrations(
+export async function runMigrations(
 	input: MigrationRunnerInput,
 	migrations: readonly MigrationEntry[],
-): MigrationRunResult {
+): Promise<MigrationRunResult> {
 	assertSorted(migrations);
 
-	const current = input.getCurrentVersion();
+	const current = await input.getCurrentVersion();
 	const startIdx = current ?? -1;
 	const appliedTags: string[] = [];
 
 	for (const m of migrations) {
 		if (m.idx <= startIdx) continue;
-		input.exec(m.sql);
+		await input.exec(m.sql);
 		appliedTags.push(m.tag);
 	}
 
@@ -80,7 +84,7 @@ export function runMigrations(
 		// DB at version 0 means "0000_initial has been applied and nothing
 		// newer is pending." This matches the conventional drizzle journal
 		// semantics where idx is 0-based.
-		input.exec(
+		await input.exec(
 			`INSERT OR IGNORE INTO world_meta (id, seed) VALUES (1, '');\n` +
 				`UPDATE world_meta SET schema_version = ${newVersion + 1}, updated_at = (unixepoch() * 1000) WHERE id = 1;`,
 		);

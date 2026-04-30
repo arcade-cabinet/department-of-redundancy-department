@@ -69,9 +69,11 @@ async function init(): Promise<DBHandle> {
 		{ schema, casing: 'snake_case' },
 	);
 
-	// Apply migrations. The runner reads world_meta.schema_version (or
-	// detects a fresh DB), then replays anything new in order.
-	runMigrations(
+	// Apply migrations. The shared runner reads world_meta.schema_version
+	// (or detects a fresh DB), then replays anything new in order. Same
+	// runner the native adapter uses — single source of truth for the
+	// schema_version stamping pattern.
+	await runMigrations(
 		{
 			getCurrentVersion: () => {
 				try {

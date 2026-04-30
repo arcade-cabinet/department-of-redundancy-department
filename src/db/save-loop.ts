@@ -1,4 +1,11 @@
+import type { SqliteRemoteDatabase } from 'drizzle-orm/sqlite-proxy';
 import type { Db } from './repos/types';
+import type * as schema from './schema';
+
+/** The top-level handle the save loop receives. Has `.transaction()`
+ *  which the wider Db union (repos accept either the top-level db OR
+ *  a transaction handle) does not. */
+type RootDb = SqliteRemoteDatabase<typeof schema>;
 
 /**
  * Debounced batched save loop. Spec §8.4: enqueue writes from the
@@ -36,7 +43,7 @@ export interface SaveLoopOptions {
 	subscribeLifecycle?: (onTrigger: () => void) => () => void;
 }
 
-export function startSaveLoop(db: Db, opts: SaveLoopOptions = {}): SaveLoopHandle {
+export function startSaveLoop(db: RootDb, opts: SaveLoopOptions = {}): SaveLoopHandle {
 	const debounceMs = opts.debounceMs ?? 1000;
 	const subscribe = opts.subscribeLifecycle ?? defaultLifecycle;
 
@@ -50,15 +57,23 @@ export function startSaveLoop(db: Db, opts: SaveLoopOptions = {}): SaveLoopHandl
 		if (queue.length === 0) return;
 		const batch = queue;
 		queue = [];
-		const work = (async () => {
+		// Spec §8.4: single transaction per flush. drizzle-proxy's
+		// db.transaction(...) emits BEGIN/COMMIT (or ROLLBACK on throw)
+		// via the proxy's run() callback — so a tab-die mid-flush leaves
+		// the DB in its pre-batch state instead of half-applied.
+		// Per-writer errors are still logged + isolated via inner try/catch
+		// so one bad writer doesn't roll back the entire batch (e.g. a
+		// chunk-blob save shouldn't be rolled back because an unrelated
+		// inventory write threw).
+		const work = db.transaction(async (tx) => {
 			for (const w of batch) {
 				try {
-					await w(db);
+					await w(tx);
 				} catch (err) {
 					console.error('save-loop: writer failed:', err);
 				}
 			}
-		})();
+		});
 		inFlight = work;
 		try {
 			await work;
