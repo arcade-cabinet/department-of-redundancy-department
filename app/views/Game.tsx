@@ -4,20 +4,32 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { ACESFilmicToneMapping, SRGBColorSpace } from 'three';
 import { PlayerKinematic, type PlayerKinematicHandle } from '@/ai/core/PlayerKinematic';
 import { HrReaperEntity, type HrReaperHandle } from '@/ai/enemies/HrReaperEntity';
-import { MiddleManagerEntity } from '@/ai/enemies/MiddleManagerEntity';
+import { type EnemyHandle, MiddleManagerEntity } from '@/ai/enemies/MiddleManagerEntity';
 import { pickSpawnSet } from '@/ai/enemies/spawnDirector';
 import { planSpawns } from '@/ai/enemies/spawner';
 import { useNavMesh } from '@/ai/navmesh/useNavMesh';
 import { AttachListener } from '@/audio/AttachListener';
+import { audioManager } from '@/audio/AudioManager';
+import { type AmbienceLayer, ambienceForThreat } from '@/audio/ambience';
 import { audioCues } from '@/audio/cues';
 import { globalAudio } from '@/audio/GlobalAudio';
 import { wireAudioCues } from '@/audio/wireCues';
+import { checkMine, completeMine } from '@/building/mine';
 import { place } from '@/building/place';
 import { radialIdToSlug } from '@/building/radialAction';
+import { freshAutoEngage, setEngageTarget } from '@/combat/autoEngage';
 import { clearAll, freshDebuffSet } from '@/combat/debuffs';
+import { PickupEntity } from '@/combat/PickupEntity';
+import { applyPickup, type PickupKind } from '@/combat/pickups';
 import { type EnemyKillSlug, IDLE_DECAY_PER_SECOND, KILL_DELTAS } from '@/combat/threat';
+import { useFrameWeaponTick } from '@/combat/useFrameWeaponTick';
 import { loadManifest, type Manifest } from '@/content/manifest';
 import { loadWeapons, type Weapon } from '@/content/weapons';
+import { getDb } from '@/db/client';
+import * as worldRepo from '@/db/repos/world';
+import { startSaveLoop } from '@/db/save-loop';
+import type { SaveBlob } from '@/db/saveBlob';
+import { SAVE_BLOB_VERSION } from '@/db/saveBlob';
 import {
 	currentAmmo,
 	currentWeaponSlug,
@@ -38,6 +50,8 @@ import { PauseProvider } from '@/ecs/PauseContext';
 import { subscribeKeyboard } from '@/input/desktopFallback';
 import type { GestureEvent } from '@/input/gesture';
 import { InputCanvas } from '@/input/InputCanvas';
+import { classifySurface } from '@/input/surfaceKind';
+import { generateMemo } from '@/narrator/tracery';
 import { PlayerCamera } from '@/render/camera/PlayerCamera';
 import { Lighting } from '@/render/lighting/Lighting';
 import { Door } from '@/render/stairwells/Door';
@@ -57,6 +71,7 @@ import { PerfProbe } from '@/verify/PerfProbe';
 import { isBossFloor, shouldLockUpDoor } from '@/world/floor/bossGate';
 import { routeTap } from '@/world/floor/floorRouter';
 import { useFloorState } from '@/world/floor/useFloorState';
+import { blockIdAt, worldToVoxel } from '@/world/floor/voxelLookup';
 import { generateFloor } from '@/world/generator/floor';
 import { createRng, freshSeed } from '@/world/generator/rng';
 import { subscribeMobileLifecycle } from '../shell/lifecycle';
@@ -190,6 +205,81 @@ export function Game({ onExit }: Props) {
 			})
 			.catch(() => {});
 		return dispose;
+	}, []);
+
+	// PRQ-04 §8.4 + directive item #1: start the batched save loop on
+	// Game mount. Flushes every 1s + on pagehide/blur. Persists seed +
+	// floor + threat + kills + playedSeconds so reloads survive.
+	const saveHandleRef = useRef<ReturnType<typeof startSaveLoop> | null>(null);
+	useEffect(() => {
+		let disposed = false;
+		(async () => {
+			try {
+				const { db } = await getDb();
+				if (disposed) return;
+				saveHandleRef.current = startSaveLoop(db);
+				// Initialize world_meta on first run; subsequent boots are no-op.
+				saveHandleRef.current.enqueue((tx) => worldRepo.initFresh(tx, seed));
+			} catch (err) {
+				console.error('save-loop start:', err);
+			}
+		})();
+		return () => {
+			disposed = true;
+			saveHandleRef.current?.stop();
+			saveHandleRef.current = null;
+		};
+	}, [seed]);
+
+	// Persist threat / floor / playedSeconds every time they change.
+	// The save-loop debounces under the hood so rapid kill bursts collapse
+	// into one transaction.
+	useEffect(() => {
+		const h = saveHandleRef.current;
+		if (!h) return;
+		h.enqueue((tx) => worldRepo.setCurrentFloor(tx, floorState.currentFloor));
+	}, [floorState.currentFloor]);
+	useEffect(() => {
+		const h = saveHandleRef.current;
+		if (!h) return;
+		h.enqueue((tx) => worldRepo.setThreat(tx, threat));
+	}, [threat]);
+
+	// Directive item #15 + PRQ-B4: ambience layers crossfade based on
+	// threat tier. Plays managers-only (always), radio-chatter (≥2),
+	// boots-thump (≥5), tense-drone (≥8). Each layer is a looped
+	// non-positional source. Stop layers that exit, start layers that
+	// enter; the AudioManager LRU caches buffers so re-fade is cheap.
+	const activeAmbienceRef = useRef<Map<AmbienceLayer, ReturnType<typeof audioManager.play> | null>>(
+		new Map(),
+	);
+	useEffect(() => {
+		if (paused || gameOver) return;
+		const desired = new Set(ambienceForThreat(threat));
+		const active = activeAmbienceRef.current;
+		// Stop layers no longer desired.
+		for (const [layer, src] of active) {
+			if (!desired.has(layer)) {
+				void Promise.resolve(src).then((s) => audioManager.stop(s ?? null));
+				active.delete(layer);
+			}
+		}
+		// Start layers newly desired.
+		for (const layer of desired) {
+			if (!active.has(layer)) {
+				active.set(layer, audioManager.play(`ambience-${layer}`, { loop: true, volume: 0.4 }));
+			}
+		}
+	}, [threat, paused, gameOver]);
+	useEffect(() => {
+		// On Game unmount, stop every ambience layer.
+		return () => {
+			const active = activeAmbienceRef.current;
+			for (const [, src] of active) {
+				void Promise.resolve(src).then((s) => audioManager.stop(s ?? null));
+			}
+			active.clear();
+		};
 	}, []);
 
 	// Clear debuffs on every floor-arrival cue (PRQ-13 reviewer fold:
@@ -349,14 +439,81 @@ export function Game({ onExit }: Props) {
 		return dead;
 	}, []);
 
-	const onEnemyKill = useCallback((slug: string) => {
+	// Pickups dropped by killed enemies. Each entry mounts a PickupEntity
+	// in the scene; collection clears it.
+	const [drops, setDrops] = useState<
+		ReadonlyArray<{ id: string; kind: PickupKind; pos: [number, number, number] }>
+	>([]);
+	// Collected memos (PRQ-B5 Tracery). Visible in PauseMenu Journal tab.
+	const [memos, setMemos] = useState<readonly string[]>([]);
+	// Player state objects so pickups + damage land in one place.
+	const [armor, setArmor] = useState(0);
+	const overhealCapRef = useRef(PLAYER_MAX_HP);
+	const memoRng = useRef(createRng('memo-narrator'));
+
+	const onEnemyKill = useCallback((slug: string, lastPos: { x: number; y: number; z: number }) => {
 		setKillCount((n) => n + 1);
 		// Threat bump per spec §10. Unknown slugs (cosmetic kills) ignored.
 		const delta = KILL_DELTAS[slug as EnemyKillSlug];
 		if (delta) setThreat((t) => t + delta);
-		// PRQ-04 kills repo wiring lands when the koota world is in place;
-		// for now we just bump local state.
+		// PRQ-09 spawn-on-death: drop a pickup at the corpse position.
+		const dropRng = createRng(`drop::${slug}::${lastPos.x.toFixed(2)}::${lastPos.z.toFixed(2)}`);
+		const kindRoll = dropRng.next();
+		let kind: PickupKind = 'binder-clips';
+		if (kindRoll > 0.7) kind = 'coffee';
+		else if (kindRoll > 0.5) kind = 'donut';
+		else if (kindRoll > 0.4) kind = 'briefcase';
+		const dropId = `drop-${performance.now()}-${Math.floor(dropRng.next() * 1000)}`;
+		setDrops((prev) => [...prev, { id: dropId, kind, pos: [lastPos.x, lastPos.y, lastPos.z] }]);
+		// PRQ-B5 Tracery memo on every kill.
+		const memo = generateMemo(memoRng.current);
+		setMemos((prev) => [...prev, memo]);
 	}, []);
+
+	const onPickupCollect = useCallback(
+		(dropId: string, kind: PickupKind) => {
+			setPlayerHealth((h) => {
+				const result = applyPickup({
+					kind,
+					health: h,
+					equipped,
+					armor,
+					overhealCap: overhealCapRef.current,
+				});
+				if (result.armor !== armor) setArmor(result.armor);
+				if (result.equipped !== equipped) setEquipped(result.equipped);
+				overhealCapRef.current = result.overhealCap;
+				return result.health;
+			});
+			setDrops((prev) => prev.filter((d) => d.id !== dropId));
+		},
+		[equipped, armor],
+	);
+
+	// Enemy registry — maps id → handle. Game's player-firing tick reads
+	// alive/position/damage from this. Keys mirror MM mount keys.
+	const enemyRegistry = useRef(new Map<string, EnemyHandle>());
+	const registerEnemy = useCallback((h: EnemyHandle) => {
+		enemyRegistry.current.set(h.id, h);
+	}, []);
+	const unregisterEnemy = useCallback((id: string) => {
+		enemyRegistry.current.delete(id);
+	}, []);
+
+	// Player auto-engage: tap on enemy → lock target → fire on cadence.
+	const [engageState, setEngageState] = useState(() => freshAutoEngage());
+	const lastFireAtRef = useRef(0);
+	useFrameWeaponTick({
+		paused: paused || gameOver,
+		engageState,
+		setEngageState,
+		enemyRegistry: enemyRegistry.current,
+		getPlayerPosition,
+		equipped,
+		setEquipped,
+		weapons,
+		lastFireAtRef,
+	});
 	useEffect(() => {
 		loadManifest()
 			.then((m) => {
@@ -434,6 +591,29 @@ export function Game({ onExit }: Props) {
 				setPendingDir(dir);
 				return;
 			}
+			// Tap-engage: did the tap land near a live enemy? If so, lock
+			// target instead of path-traveling. Spec §5: "Tap on enemy →
+			// engage: stop, face, fire equipped weapon (auto-fire while
+			// target in LOS until tap-cancel)".
+			const tapWorld = playerRef.current?.getTapWorld(e.x, e.y);
+			if (tapWorld) {
+				let nearestId: string | null = null;
+				let nearestD = 1.5;
+				for (const [id, h] of enemyRegistry.current) {
+					if (!h.isAlive()) continue;
+					const p = h.getPosition();
+					const d = Math.hypot(p.x - tapWorld.x, p.z - tapWorld.z);
+					if (d < nearestD) {
+						nearestD = d;
+						nearestId = id;
+					}
+				}
+				if (nearestId) {
+					setEngageState((s) => setEngageTarget(s, nearestId, performance.now() / 1000));
+					return;
+				}
+			}
+			// Fall through: tap-to-travel.
 			playerRef.current?.tap(e.x, e.y);
 			setTimeout(() => setPathWaypoints(playerRef.current?.path ?? []), 16);
 		},
@@ -472,13 +652,14 @@ export function Game({ onExit }: Props) {
 	>(() => new Map());
 	const placements = placementsByFloor.get(floorState.currentFloor);
 
-	// Player tapped a radial slot. M2c4 wires the place-* options through
-	// to the building.place() core. Other ids (cancel, mine — future)
-	// fall through to the legacy log.
+	// Player tapped a radial slot. M2c4 wires the place-* options;
+	// directive item #3 wires `mine`; remaining options (inspect / repair
+	// / mark / work / search / use / print / open / attack / focus-fire /
+	// flee) currently no-op + close the radial — they'll bind to real
+	// handlers as their downstream systems land.
 	const onPickRadial = useCallback(
 		(opt: { id: string }) => {
-			const slug = radialIdToSlug(opt.id);
-			if (!slug || !radialAnchor) {
+			if (!radialAnchor) {
 				setRadialAnchor(null);
 				return;
 			}
@@ -487,18 +668,11 @@ export function Game({ onExit }: Props) {
 				setRadialAnchor(null);
 				return;
 			}
-			// World→voxel using the same VOXEL_SIZE/ORIGIN that ChunkLayer uses.
 			const VOXEL_SIZE = 0.4;
 			const ORIGIN = -31 * VOXEL_SIZE;
 			const vx = Math.round((tapWorld.x - ORIGIN) / VOXEL_SIZE);
 			const vz = Math.round((tapWorld.z - ORIGIN) / VOXEL_SIZE);
-			const vy = 2; // wall y-row above the carpet (FLOOR_FLOOR_Y_TOP+1)
-			const playerPos = playerRef.current?.getPosition() ?? { x: 0, y: 0.8, z: 0 };
-			const playerVx = Math.round((playerPos.x - ORIGIN) / VOXEL_SIZE);
-			const playerVz = Math.round((playerPos.z - ORIGIN) / VOXEL_SIZE);
-			// Derive a fresh ChunkData snapshot to gate the placement.
-			// Reuses ChunkLayer's overlay path in spirit — generate +
-			// apply existing placements, then check canPlace.
+			const vy = 2;
 			const result = generateFloor(seed, floorState.currentFloor);
 			const VOXELS_PER_CHUNK = 16;
 			const cx = Math.floor(vx / VOXELS_PER_CHUNK);
@@ -510,6 +684,35 @@ export function Game({ onExit }: Props) {
 				setRadialAnchor(null);
 				return;
 			}
+
+			// MINE — directive item #3.
+			if (opt.id === 'mine') {
+				const check = checkMine(chunk, { x: lx, y: vy, z: lz }, { affinity: 'any' });
+				if (check.ok) {
+					const minedSlug = completeMine(chunk, { x: lx, y: vy, z: lz });
+					if (minedSlug) {
+						// Drop a binder-clip pickup at the mined cell so the
+						// loop is observable. Real drop tables land later.
+						const dropId = `mine-${performance.now()}`;
+						setDrops((prev) => [
+							...prev,
+							{ id: dropId, kind: 'binder-clips', pos: [tapWorld.x, 0.8, tapWorld.z] },
+						]);
+					}
+				}
+				setRadialAnchor(null);
+				return;
+			}
+
+			// PLACE — existing path.
+			const slug = radialIdToSlug(opt.id);
+			if (!slug) {
+				setRadialAnchor(null);
+				return;
+			}
+			const playerPos = playerRef.current?.getPosition() ?? { x: 0, y: 0.8, z: 0 };
+			const playerVx = Math.round((playerPos.x - ORIGIN) / VOXEL_SIZE);
+			const playerVz = Math.round((playerPos.z - ORIGIN) / VOXEL_SIZE);
 			const ok = place({
 				chunk,
 				target: { x: lx, y: vy, z: lz },
@@ -531,9 +734,20 @@ export function Game({ onExit }: Props) {
 		[radialAnchor, seed, floorState.currentFloor],
 	);
 
-	// Demo: until the world-raycast lands, treat every hold as if it hit
-	// the floor. PRQ-06 swaps this for the real surfaceKind via raycast.
-	const radialSurface = useMemo(() => (radialAnchor ? ('floor' as const) : null), [radialAnchor]);
+	// Directive item #6: classify the actual surface under the radial
+	// hold. Resolve the screen→world point, convert to voxel coords,
+	// read the block id, classify. Falls back to 'floor' if the
+	// classifier returns null (rare — air/ceiling holds).
+	const radialSurface = useMemo(() => {
+		if (!radialAnchor) return null;
+		const tapWorld = playerRef.current?.getTapWorld(radialAnchor.x, radialAnchor.y);
+		if (!tapWorld) return 'floor' as const;
+		const result = generateFloor(seed, floorState.currentFloor);
+		const v = worldToVoxel(tapWorld, 2);
+		const blockId = blockIdAt(result.chunks, v);
+		const kind = classifySurface({ kind: 'voxel', blockId });
+		return kind ?? ('floor' as const);
+	}, [radialAnchor, seed, floorState.currentFloor]);
 
 	if (manifestError) {
 		return (
@@ -657,18 +871,33 @@ export function Game({ onExit }: Props) {
 								/>
 							)}
 							{manifest &&
-								enemySpawns.map((s) => (
-									<MiddleManagerEntity
-										key={`enemy-${s.voxel.x}-${s.voxel.y}-${s.voxel.z}`}
-										manifest={manifest}
-										navMesh={navMesh}
-										spawn={[s.world.x, 0.8, s.world.z]}
-										archetype={s.archetype}
-										getPlayerPosition={getPlayerPosition}
-										applyPlayerDamage={applyPlayerDamage}
-										onKill={onEnemyKill}
-									/>
-								))}
+								enemySpawns.map((s) => {
+									const id = `enemy-${s.voxel.x}-${s.voxel.y}-${s.voxel.z}`;
+									return (
+										<MiddleManagerEntity
+											key={id}
+											id={id}
+											manifest={manifest}
+											navMesh={navMesh}
+											spawn={[s.world.x, 0.8, s.world.z]}
+											archetype={s.archetype}
+											getPlayerPosition={getPlayerPosition}
+											applyPlayerDamage={applyPlayerDamage}
+											onKill={onEnemyKill}
+											onRegister={registerEnemy}
+											onUnregister={unregisterEnemy}
+										/>
+									);
+								})}
+							{drops.map((d) => (
+								<PickupEntity
+									key={d.id}
+									kind={d.kind}
+									position={d.pos}
+									getPlayerPosition={getPlayerPosition}
+									onCollect={() => onPickupCollect(d.id, d.kind)}
+								/>
+							))}
 						</Physics>
 					</PauseProvider>
 					{showNavMeshViz && <NavMeshViz navMesh={navMesh} />}
@@ -700,6 +929,24 @@ export function Game({ onExit }: Props) {
 					threat,
 					kills: killCount,
 					playedSeconds,
+				}}
+				memos={memos}
+				getSaveBlob={(): SaveBlob => ({
+					version: SAVE_BLOB_VERSION,
+					worldSeed: seed,
+					currentFloor: floorState.currentFloor,
+					threat,
+					kills: killCount,
+					deaths: 0,
+					playedSeconds,
+					defeatedFloors: Array.from(defeatedFloors),
+					checksum: '',
+				})}
+				onImportSave={(blob: SaveBlob) => {
+					setKillCount(blob.kills);
+					setThreat(blob.threat);
+					setPlayedSeconds(blob.playedSeconds);
+					setDefeatedFloors(new Set(blob.defeatedFloors));
 				}}
 			/>
 			<HpBar health={playerHealth} />

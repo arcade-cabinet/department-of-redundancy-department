@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { globalAudio } from '@/audio/GlobalAudio';
 import * as prefs from '@/db/preferences';
+import { exportSaveBlob, importSaveBlob, type SaveBlob } from '@/db/saveBlob';
+import { t } from '@/i18n/locale';
 import { Button, Dialog, Slider, Tabs } from '@/ui/primitives';
 
 type Props = {
@@ -15,6 +17,12 @@ type Props = {
 		kills: number;
 		playedSeconds: number;
 	};
+	/** Tracery memos collected during this run (PRQ-B5). */
+	memos?: readonly string[];
+	/** Snapshot factory for the save-export button (PRQ-RC2). */
+	getSaveBlob?: () => SaveBlob;
+	/** Apply an imported save blob (PRQ-RC2). */
+	onImportSave?: (blob: SaveBlob) => void;
 };
 
 /**
@@ -30,11 +38,52 @@ type Props = {
  * The host (Game.tsx) decides when to open it; on open the Physics
  * world is paused upstream (PauseProvider).
  */
-export function PauseMenu({ open, onResume, onQuit, stats }: Props) {
+export function PauseMenu({
+	open,
+	onResume,
+	onQuit,
+	stats,
+	memos,
+	getSaveBlob,
+	onImportSave,
+}: Props) {
 	const [vMaster, setVMaster] = useState<number | null>(null);
 	const [vSfx, setVSfx] = useState<number | null>(null);
 	const [vMusic, setVMusic] = useState<number | null>(null);
 	const [look, setLook] = useState<number | null>(null);
+	const [importErr, setImportErr] = useState<string | null>(null);
+
+	const onExport = () => {
+		if (!getSaveBlob) return;
+		const json = exportSaveBlob(getSaveBlob());
+		const blob = new Blob([json], { type: 'application/json' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `dord-save-${Date.now()}.json`;
+		a.click();
+		URL.revokeObjectURL(url);
+	};
+	const onImport = () => {
+		if (!onImportSave) return;
+		const inp = document.createElement('input');
+		inp.type = 'file';
+		inp.accept = 'application/json';
+		inp.onchange = () => {
+			const file = inp.files?.[0];
+			if (!file) return;
+			file.text().then((text) => {
+				const parsed = importSaveBlob(text);
+				if (!parsed) {
+					setImportErr('Save file invalid or corrupt.');
+					return;
+				}
+				setImportErr(null);
+				onImportSave(parsed);
+			});
+		};
+		inp.click();
+	};
 
 	useEffect(() => {
 		if (!open) return;
@@ -70,18 +119,18 @@ export function PauseMenu({ open, onResume, onQuit, stats }: Props) {
 			<Dialog.Portal>
 				<Dialog.Overlay data-testid="pause-overlay" />
 				<Dialog.Content data-testid="pause-menu">
-					<Dialog.Title>PAUSED</Dialog.Title>
+					<Dialog.Title>{t('pause.title')}</Dialog.Title>
 
 					<Tabs.Root defaultValue="settings">
 						<Tabs.List>
 							<Tabs.Trigger value="stats" data-testid="pause-tab-stats">
-								Stats
+								{t('pause.tab.stats')}
 							</Tabs.Trigger>
 							<Tabs.Trigger value="settings" data-testid="pause-tab-settings">
-								Settings
+								{t('pause.tab.settings')}
 							</Tabs.Trigger>
 							<Tabs.Trigger value="journal" data-testid="pause-tab-journal">
-								Journal
+								{t('pause.tab.journal')}
 							</Tabs.Trigger>
 						</Tabs.List>
 
@@ -130,10 +179,63 @@ export function PauseMenu({ open, onResume, onQuit, stats }: Props) {
 								step={0.05}
 								testId="look-sens"
 							/>
+							{(getSaveBlob || onImportSave) && (
+								<div
+									style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}
+								>
+									{getSaveBlob && (
+										<Button data-testid="pause-export-save" variant="ghost" onClick={onExport}>
+											EXPORT SAVE
+										</Button>
+									)}
+									{onImportSave && (
+										<Button data-testid="pause-import-save" variant="ghost" onClick={onImport}>
+											IMPORT SAVE
+										</Button>
+									)}
+								</div>
+							)}
+							{importErr && (
+								<p
+									data-testid="pause-import-err"
+									style={{ color: 'var(--alarm)', fontSize: '0.85rem' }}
+								>
+									{importErr}
+								</p>
+							)}
 						</Tabs.Content>
 
 						<Tabs.Content value="journal">
-							<p style={{ opacity: 0.6 }}>No memos collected yet.</p>
+							{memos && memos.length > 0 ? (
+								<ul
+									data-testid="pause-memos"
+									style={{
+										listStyle: 'none',
+										padding: 0,
+										margin: 0,
+										maxHeight: 240,
+										overflowY: 'auto',
+									}}
+								>
+									{memos.map((m) => (
+										<li
+											key={m}
+											style={{
+												padding: 'var(--space-2)',
+												marginBottom: 'var(--space-2)',
+												background: 'var(--ink-2, rgba(255,255,255,0.04))',
+												borderLeft: '2px solid var(--paper)',
+												fontSize: '0.85rem',
+												lineHeight: 1.4,
+											}}
+										>
+											{m}
+										</li>
+									))}
+								</ul>
+							) : (
+								<p style={{ opacity: 0.6 }}>No memos collected yet.</p>
+							)}
 						</Tabs.Content>
 					</Tabs.Root>
 
@@ -145,10 +247,10 @@ export function PauseMenu({ open, onResume, onQuit, stats }: Props) {
 						}}
 					>
 						<Button data-testid="pause-resume" variant="auditor" onClick={onResume}>
-							RESUME
+							{t('pause.button.resume')}
 						</Button>
 						<Button data-testid="pause-quit" variant="ghost" onClick={onQuit}>
-							QUIT TO LANDING
+							{t('pause.button.quit')}
 						</Button>
 					</div>
 				</Dialog.Content>

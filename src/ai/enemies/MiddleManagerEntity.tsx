@@ -15,9 +15,19 @@ import { createRng } from '@/world/generator/rng';
 import { archetypeStats, type EnemyArchetype } from './enemyArchetypes';
 import { type FSMState, freshFSM, tick as fsmTick, killFSM } from './MiddleManagerFSM';
 
+export interface EnemyHandle {
+	id: string;
+	getPosition(): { x: number; y: number; z: number };
+	damage(n: number): void;
+	isAlive(): boolean;
+}
+
 type Props = {
 	manifest: Manifest;
 	navMesh: NavMesh | null;
+	/** Stable id used by Game.tsx's enemy registry to look up the
+	 *  handle without traversing the R3F scene. */
+	id: string;
 	/** Spawn world position (foot of capsule). */
 	spawn: [number, number, number];
 	/** Reads the player's current world position. Stored as a ref so the
@@ -26,7 +36,12 @@ type Props = {
 	/** Applies damage to the player. Returns true if player is now dead. */
 	applyPlayerDamage: (n: number) => boolean;
 	/** Bumps the kills counter (PRQ-04 kills repo wired upstream). */
-	onKill: (slug: string) => void;
+	onKill: (slug: string, lastPos: { x: number; y: number; z: number }) => void;
+	/** Called once on mount with a stable handle. Game.tsx records the
+	 *  handle in its registry; Game's player firing path looks up the
+	 *  target via this id, queries position + LOS, and calls damage(). */
+	onRegister?: (h: EnemyHandle) => void;
+	onUnregister?: (id: string) => void;
 	/** Enemy archetype slug — drives stats, character GLB, kill weight.
 	 *  Defaults to 'middle-manager' for backward-compat with the alpha
 	 *  spawn-3-managers fixture. M2c2 fold-forward: PRQ-10 archetype
@@ -62,10 +77,13 @@ const PERCEPTION_HZ = 5;
 export function MiddleManagerEntity({
 	manifest,
 	navMesh,
+	id,
 	spawn,
 	getPlayerPosition,
 	applyPlayerDamage,
 	onKill,
+	onRegister,
+	onUnregister,
 	archetype = 'middle-manager',
 }: Props) {
 	const { camera } = useThree();
@@ -111,18 +129,26 @@ export function MiddleManagerEntity({
 		);
 	};
 
-	// Public hooks for Game.tsx-side handlers (e.g. melee from player) to
-	// damage this manager. Exposed via a ref attached to the root group.
+	// Track alive state in a ref so the EnemyHandle.isAlive() is sync.
+	const aliveRef = useRef(true);
+	// Public hooks for Game.tsx-side handlers (player firing) to damage
+	// this enemy. Exposed via a stable handle registered on mount.
 	useEffect(() => {
 		if (!groupRef.current) return;
 		const group = groupRef.current;
 		const damageFn = (dmg: number) => {
+			if (!aliveRef.current) return;
 			setHealth((h) => {
 				const next = applyDamage(h, dmg);
 				if (isDead(next) && !isDead(h)) {
+					aliveRef.current = false;
 					fsmRef.current = killFSM(fsmRef.current, performance.now() / 1000);
 					setCharacterState('death');
-					onKill(archetype);
+					const body = bodyRef.current;
+					const lastPos = body
+						? { x: body.translation().x, y: body.translation().y, z: body.translation().z }
+						: { x: spawn[0], y: spawn[1], z: spawn[2] };
+					onKill(archetype, lastPos);
 				} else if (next.damageFlashTimer > 0) {
 					setCharacterState('hit');
 				}
@@ -130,7 +156,22 @@ export function MiddleManagerEntity({
 			});
 		};
 		(group.userData as { damage?: (n: number) => void }).damage = damageFn;
-	}, [onKill, archetype]);
+		const handle: EnemyHandle = {
+			id,
+			getPosition: () => {
+				const body = bodyRef.current;
+				if (!body) return { x: spawn[0], y: spawn[1], z: spawn[2] };
+				const t = body.translation();
+				return { x: t.x, y: t.y, z: t.z };
+			},
+			damage: damageFn,
+			isAlive: () => aliveRef.current,
+		};
+		onRegister?.(handle);
+		return () => {
+			onUnregister?.(id);
+		};
+	}, [onKill, archetype, id, onRegister, onUnregister, spawn]);
 
 	const paused = usePaused();
 	useFrame(() => {

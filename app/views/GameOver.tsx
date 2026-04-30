@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { t } from '@/i18n/locale';
 import { Button, pageFade } from '@/ui/primitives';
 
 type Props = {
@@ -51,9 +52,7 @@ export function GameOver({ onRestart, onExit, stats }: Props) {
 					color: 'var(--auditor-red)',
 				}}
 			>
-				You have been
-				<br />
-				terminated
+				{t('gameover.title')}
 			</h1>
 			<p
 				style={{
@@ -64,7 +63,7 @@ export function GameOver({ onRestart, onExit, stats }: Props) {
 					fontFamily: 'var(--font-body)',
 				}}
 			>
-				Your file has been redundantized. HR will be in touch.
+				{t('gameover.body')}
 			</p>
 			{stats && (
 				<dl

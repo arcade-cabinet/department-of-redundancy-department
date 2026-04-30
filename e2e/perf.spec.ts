@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { DESKTOP_BUDGET } from '../src/verify/perfBudget';
 import { bootGame } from './fixtures/boot';
 
 /**
@@ -15,7 +16,9 @@ import { bootGame } from './fixtures/boot';
  * a permissive bound so flakes don't gate ship.
  */
 
-test('@perf draw calls stay ≤ 500 on desktop after boot', async ({ page }) => {
+test(`@perf draw calls stay ≤ ${DESKTOP_BUDGET.maxDrawCalls} on desktop after boot`, async ({
+	page,
+}) => {
 	await bootGame(page, { enterGame: true, query: '?test=1' });
 	// Settle one full floor mount (chunks, lighting, navmesh) AND let
 	// the renderer dispatch real draw calls. The first useFrame tick
@@ -35,7 +38,7 @@ test('@perf draw calls stay ≤ 500 on desktop after boot', async ({ page }) => 
 		return w.__dord?.perf?.().calls ?? -1;
 	});
 	expect(calls).toBeGreaterThan(0);
-	expect(calls).toBeLessThanOrEqual(500);
+	expect(calls).toBeLessThanOrEqual(DESKTOP_BUDGET.maxDrawCalls);
 });
 
 test('@perf single-frame budget under 30ms after warmup', async ({ page }) => {
