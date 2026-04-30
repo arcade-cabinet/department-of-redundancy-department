@@ -22,12 +22,5 @@
 			"@/*": ["./src/*"]
 		}
 	},
-	"include": [
-		"src",
-		"e2e",
-		"scripts/**/*.mjs",
-		"vite.config.ts",
-		"vitest.config.ts",
-		"playwright.config.ts"
-	]
+	"include": ["src", "scripts/**/*.mjs", "vite.config.ts", "vitest.config.ts"]
 }
