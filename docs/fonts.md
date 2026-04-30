@@ -1,6 +1,13 @@
+---
+title: Self-hosted fonts
+updated: 2026-04-30
+status: current
+domain: technical
+---
+
 # Self-hosted fonts
 
-Per spec §11 + PRQ-14 T1: the project depends on three open-licensed font families served from same-origin so iOS / Capacitor + offline runs don't fall back to system defaults.
+The project depends on three open-licensed font families served from same-origin so iOS / Capacitor + offline runs don't fall back to system defaults. Required by the brand spec in [`docs/superpowers/specs/2026-04-30-arcade-rail-shooter-design.md`](./superpowers/specs/2026-04-30-arcade-rail-shooter-design.md) (Departure Mono UI + Inter body + JetBrains Mono debug).
 
 ## Required files
 

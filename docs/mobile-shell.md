@@ -1,6 +1,13 @@
+---
+title: Mobile shell — generating android/ + ios/
+updated: 2026-04-30
+status: current
+domain: ops
+---
+
 # Mobile shell — generating android/ + ios/
 
-PRQ-16 M3c3 shipped the JS-side scaffolding (capacitor.config.ts, app/shell/lifecycle.ts, build:native script). Generating the actual `android/` + `ios/` directories requires native toolchains that don't run in CI (Android Studio + Xcode + JDK + simulators), so this is a one-time manual step.
+The JS-side scaffolding lives at `capacitor.config.ts` + `app/shell/lifecycle.ts` + the `build:native` script. Generating the actual `android/` + `ios/` directories requires native toolchains that don't run in CI (Android Studio + Xcode + JDK + simulators), so this is a one-time manual step.
 
 ## One-time generation
 
@@ -27,7 +34,7 @@ pnpm dlx @capacitor/assets generate
 pnpm exec cap sync
 ```
 
-Source: stamped `D` mark on paper-with-paper-clip per spec §11.3. Ink color `--ink` (#15181C), background `--paper` (#F4F1EA). Splash adds the tagline "There has been a reorganization" below.
+Source: stamped `D` mark on paper-with-paper-clip per the brand canon in `docs/superpowers/specs/2026-04-30-arcade-rail-shooter-design.md`. Ink color `--ink` (#15181C), background `--paper` (#F4F1EA). Splash adds the tagline "There has been a reorganization" below.
 
 ## Verify on iOS Simulator
 
@@ -38,7 +45,7 @@ pnpm exec cap open ios
 # In Xcode: select an iPhone 15 simulator, hit Run.
 ```
 
-The Landing page should render within ~2s (per spec §12 splash budget). Tap CLOCK IN; the game should boot. Open Safari → Develop → Simulator → DORD to attach the WebInspector and confirm `world_meta` round-trips through the native SQLite adapter.
+The Landing page should render within ~2s. Tap CLOCK IN; the game should boot. Open Safari → Develop → Simulator → DORD to attach the WebInspector and confirm score-table writes round-trip through the native SQLite adapter.
 
 ## Verify on Android Emulator
 
@@ -56,4 +63,4 @@ The lifecycle hooks land via `app/shell/lifecycle.ts`. Confirm:
 
 ## CI
 
-`.github/workflows/cd.yml` already runs `validate-deployed` against the GitHub Pages build. A future Android-debug-AAB job (PRQ-16 T6) gates on the presence of `android/gradlew`. Add it in M3c3 fold-forward once the native trees are committed.
+`.github/workflows/cd.yml` runs `validate-deployed` against the GitHub Pages build. A future Android-debug-AAB job gates on the presence of `android/gradlew` and lands once the native trees are committed.

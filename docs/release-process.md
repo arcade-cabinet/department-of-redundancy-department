@@ -1,10 +1,15 @@
-# Release process (PRQ-RC7)
+---
+title: Release Process
+updated: 2026-04-30
+status: current
+domain: ops
+---
+
+# Release process
 
 Automated via `release-please` + Conventional Commits. Tags + GitHub Releases ship from `main`; native binaries follow a manual sign-off step.
 
 ## Conventional commit prefixes
-
-Per `~/.claude/CLAUDE.md` Doctrine: every commit on `main` uses one of these:
 
 | Prefix | Bump | Use for |
 |---|---|---|
@@ -30,7 +35,7 @@ Per `~/.claude/CLAUDE.md` Doctrine: every commit on `main` uses one of these:
 ## Manual native sign-off
 
 1. Pull `main` after a tagged release.
-2. Run `pnpm build:native && pnpm exec cap sync` (per docs/mobile-shell.md).
+2. Run `pnpm build:native && pnpm exec cap sync` (per `docs/mobile-shell.md`).
 3. iOS: `pnpm exec cap open ios`; archive in Xcode → upload to App Store Connect → TestFlight.
 4. Android: `pnpm exec cap open android`; build signed AAB → upload to Play Console → Internal Testing.
 
@@ -45,9 +50,9 @@ Per `~/.claude/CLAUDE.md` Doctrine: every commit on `main` uses one of these:
 
 Before marking a release-PR green:
 
-- [ ] `pnpm test:node` (≥ 460 tests, depends on M-stage)
-- [ ] `pnpm test:browser` (≥ 17 tests)
-- [ ] `pnpm exec playwright test` headless + headed
+- [ ] `pnpm test:node` clean
+- [ ] `pnpm test:browser` clean (post Phase 4 lockdown lift)
+- [ ] `pnpm exec playwright test` headless (post Phase 4 lockdown lift)
 - [ ] `pnpm typecheck` clean
 - [ ] `pnpm exec biome check .` exit 0
 - [ ] Live `validate-deployed` job green on `main`

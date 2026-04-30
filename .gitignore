@@ -32,5 +32,9 @@ local-dev.sqlite
 # WASM blobs copied at build time by scripts/copy-wasm.mjs
 public/wasm/
 
+# Agent runtime state (per ~/.claude/CLAUDE.md "Durable state" — local working memory only)
+.agent-state/
+.claude/state/
+
 # OS
 Thumbs.db
