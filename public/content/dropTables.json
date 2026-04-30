@@ -1,0 +1,15 @@
+{
+	"tables": {
+		"laminate-desk-block": [{ "slug": "plank", "qty": 4, "prob": 1.0 }],
+		"placed-desk-block": [{ "slug": "plank", "qty": 4, "prob": 1.0 }],
+		"cubicle-wall": [{ "slug": "fabric", "qty": 2, "prob": 1.0 }],
+		"placed-wall-block": [{ "slug": "drywall-chunk", "qty": 1, "prob": 1.0 }],
+		"placed-stair-block": [{ "slug": "plank", "qty": 2, "prob": 1.0 }],
+		"drywall": [{ "slug": "drywall-chunk", "qty": 1, "prob": 1.0 }],
+		"supply-closet-wall": [
+			{ "slug": "metal-shard", "qty": 1, "prob": 0.7 },
+			{ "slug": "binder-clip", "qty": 1, "prob": 0.3 }
+		],
+		"placed-terminal": [{ "slug": "circuit-board", "qty": 1, "prob": 1.0 }]
+	}
+}
