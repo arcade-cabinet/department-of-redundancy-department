@@ -35,6 +35,7 @@
 		"prebuild:native": "pnpm prepare:public && pnpm assets:check",
 		"prepreview": "pnpm prepare:public",
 		"assets:convert": "blender --background --python scripts/convert-references.py && node scripts/compress-models.mjs",
+		"assets:tileset": "node scripts/build-tileset.mjs",
 		"assets:check": "node scripts/check-asset-manifest.mjs",
 		"cap:sync": "pnpm build:native && cap sync",
 		"drizzle:gen": "drizzle-kit generate",
@@ -94,6 +95,7 @@
 		"cross-env": "^10.1.0",
 		"drizzle-kit": "^0.31.10",
 		"playwright": "1.59.1",
+		"sharp": "^0.34.5",
 		"size-limit": "^12.1.0",
 		"typescript": "~6.0.3",
 		"vite": "^8.0.10",
@@ -109,6 +111,9 @@
 		"overrides": {
 			"vitest": "$vitest",
 			"@vitest/browser": "$@vitest/browser"
-		}
+		},
+		"onlyBuiltDependencies": [
+			"sharp"
+		]
 	}
 }

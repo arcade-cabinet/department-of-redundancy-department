@@ -5,6 +5,7 @@ import { loadManifest, type Manifest } from '@/content/manifest';
 import { PlayerCamera } from '@/render/camera/PlayerCamera';
 import { Lighting } from '@/render/lighting/Lighting';
 import { World } from '@/render/world/World';
+import { DrawCallHUD, useDrawCallHUDFlag } from '@/verify/DrawCallHUD';
 import { freshSeed } from '@/world/generator/rng';
 
 type Props = { onExit: () => void };
@@ -12,6 +13,7 @@ type Props = { onExit: () => void };
 export function Game({ onExit }: Props) {
 	const [manifest, setManifest] = useState<Manifest | null>(null);
 	const [manifestError, setManifestError] = useState<string | null>(null);
+	const showHUD = useDrawCallHUDFlag();
 	// Per spec §8.5: world_seed lives in @capacitor/preferences. PRQ-04 wires
 	// the persisted seed. For PRQ-02 we use a stable demo seed so the camera
 	// position can be hand-aligned to a known-open cubicle; freshSeed() is
@@ -85,16 +87,22 @@ export function Game({ onExit }: Props) {
 					antialias: true,
 				}}
 			>
+				{/* Voxel floor surface sits at world y=0.8 (2 carpet voxels × 0.4u);
+				    eye height 1.6 above feet → camera y=2.4. Position offset on z
+				    so the player starts a step back from the manager at the cubicle
+				    center, looking at them (yaw=π faces -Z which the scene faces by
+				    default, so PI looks back along +Z toward the manager). */}
 				<PlayerCamera
-					position={[0, 2.5]}
+					position={[0, 1.5]}
 					yaw={Math.PI}
 					pitch={0}
-					eyeHeight={1.6}
+					eyeHeight={2.4}
 					referenceFovDeg={70}
 				/>
 				<Suspense fallback={null}>
 					<Lighting />
 					{manifest && <World manifest={manifest} seed={seed} />}
+					{showHUD && <DrawCallHUD />}
 				</Suspense>
 			</Canvas>
 			<button
