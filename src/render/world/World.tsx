@@ -14,6 +14,8 @@ type Props = {
 	/** When true, render the chunked voxel world (PRQ-03+). When false,
 	 *  the original PRQ-02 mesh-walled demo. Default: true. */
 	voxels?: boolean;
+	/** Per-floor placement overlay (PRQ-11 T1+T5 wiring, M2c4). */
+	placements?: ReadonlyMap<string, import('@/world/blocks/BlockRegistry').BlockSlug>;
 };
 
 const CEILING_HEIGHT = 2.6;
@@ -37,11 +39,11 @@ useGLTF.preload('/assets/models/props/desk.glb');
 // a character or player's feet should sit so they don't clip the slab.
 const VOXEL_FLOOR_TOP_Y = 0.8;
 
-export function World({ manifest, seed, floor = 1, voxels = true }: Props) {
+export function World({ manifest, seed, floor = 1, voxels = true, placements }: Props) {
 	if (voxels) {
 		return (
 			<>
-				<ChunkLayer seed={seed} floor={floor} />
+				<ChunkLayer seed={seed} floor={floor} {...(placements !== undefined && { placements })} />
 				<Character slug="middle-manager" manifest={manifest} position={[0, VOXEL_FLOOR_TOP_Y, 0]} />
 			</>
 		);

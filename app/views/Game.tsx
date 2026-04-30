@@ -5,9 +5,15 @@ import { ACESFilmicToneMapping, SRGBColorSpace } from 'three';
 import { PlayerKinematic, type PlayerKinematicHandle } from '@/ai/core/PlayerKinematic';
 import { HrReaperEntity, type HrReaperHandle } from '@/ai/enemies/HrReaperEntity';
 import { MiddleManagerEntity } from '@/ai/enemies/MiddleManagerEntity';
+import { pickSpawnSet } from '@/ai/enemies/spawnDirector';
 import { planSpawns } from '@/ai/enemies/spawner';
 import { useNavMesh } from '@/ai/navmesh/useNavMesh';
+import { AttachListener } from '@/audio/AttachListener';
 import { audioCues } from '@/audio/cues';
+import { globalAudio } from '@/audio/GlobalAudio';
+import { wireAudioCues } from '@/audio/wireCues';
+import { place } from '@/building/place';
+import { radialIdToSlug } from '@/building/radialAction';
 import { clearAll, freshDebuffSet } from '@/combat/debuffs';
 import { type EnemyKillSlug, IDLE_DECAY_PER_SECOND, KILL_DELTAS } from '@/combat/threat';
 import { loadManifest, type Manifest } from '@/content/manifest';
@@ -51,7 +57,7 @@ import { isBossFloor, shouldLockUpDoor } from '@/world/floor/bossGate';
 import { routeTap } from '@/world/floor/floorRouter';
 import { useFloorState } from '@/world/floor/useFloorState';
 import { generateFloor } from '@/world/generator/floor';
-import { freshSeed } from '@/world/generator/rng';
+import { createRng, freshSeed } from '@/world/generator/rng';
 import { GameOver } from './GameOver';
 import { PauseMenu } from './PauseMenu';
 
@@ -71,6 +77,12 @@ export function Game({ onExit }: Props) {
 	const [gameOver, setGameOver] = useState(false);
 	const [killCount, setKillCount] = useState(0);
 	const [threat, setThreat] = useState(0);
+	const [playedSeconds, setPlayedSeconds] = useState(0);
+	useEffect(() => {
+		if (paused || gameOver) return;
+		const id = setInterval(() => setPlayedSeconds((s) => s + 1), 1000);
+		return () => clearInterval(id);
+	}, [paused, gameOver]);
 	// Idle decay: tick threat down at 0.05/min while not paused / dead.
 	useEffect(() => {
 		if (paused || gameOver) return;
@@ -132,6 +144,24 @@ export function Game({ onExit }: Props) {
 			setBossAlive(false);
 		}
 	}, [floorState.currentFloor, defeatedFloors]);
+
+	// PRQ-15 M2c7: wire the typed audioCues bus to AudioManager so
+	// every `audio:*` event from earlier PRQs (floor-arrival, door-*)
+	// fires a real Three.Audio source. Listener is shared via the
+	// globalAudio singleton; PauseMenu's master-volume slider drives
+	// the listener gain. Asset binaries land in M2c8 / M5 polish.
+	useEffect(() => {
+		const dispose = wireAudioCues();
+		// Pull persisted master volume so audio respects the slider
+		// across reloads. Falls back to 1 on storage error.
+		import('@/db/preferences')
+			.then(async (prefs) => {
+				const v = await prefs.get('volume_master');
+				globalAudio.setMaster(v);
+			})
+			.catch(() => {});
+		return dispose;
+	}, []);
 
 	// Clear debuffs on every floor-arrival cue (PRQ-13 reviewer fold:
 	// a 4s reaper-redaction shouldn't bleed onto the next floor).
@@ -199,13 +229,19 @@ export function Game({ onExit }: Props) {
 		return [best.x, 0.8, best.z];
 	}, [floorState.upDoorWorld, walkableCells]);
 
-	// Pre-compute deterministic spawn positions for the 3 floor-1 managers.
-	// generateFloor() is idempotent on the seed so this stays reactive-clean.
+	// Pre-compute deterministic spawn positions for the floor's enemies.
+	// Each spawn is paired with an archetype (middle-manager / policeman /
+	// hitman / swat) chosen by the threat-tier spawn director. The
+	// spawn-direction RNG is keyed off the floor seed so a re-roll on
+	// the same threat reproduces. `threat` is intentionally NOT in the
+	// dep list — re-pick on every floor change is the correct semantics;
+	// mid-floor threat climbs don't retro-spawn enemies.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: see above
 	const enemySpawns = useMemo(() => {
 		const result = generateFloor(seed, floorState.currentFloor);
 		const VOXEL_SIZE = 0.4;
 		const ORIGIN = -31 * VOXEL_SIZE;
-		return planSpawns({
+		const positions = planSpawns({
 			chunks: result.chunks,
 			seed,
 			floor: floorState.currentFloor,
@@ -214,6 +250,15 @@ export function Game({ onExit }: Props) {
 			originX: ORIGIN,
 			originZ: ORIGIN,
 		});
+		// Read threat at floor-enter time; the director picks tier by
+		// quantizing threat. Using a synchronous read here is fine —
+		// re-eval happens on every floor change (currentFloor dep).
+		const directorRng = createRng(`${seed}::floor-${floorState.currentFloor}::director`);
+		const archetypes = pickSpawnSet(threat, positions.length, directorRng);
+		return positions.map((p, i) => ({
+			...p,
+			archetype: archetypes[i]?.slug ?? ('middle-manager' as const),
+		}));
 	}, [seed, floorState.currentFloor]);
 
 	const getPlayerPosition = useCallback(
@@ -347,11 +392,74 @@ export function Game({ onExit }: Props) {
 		setPendingDir(null);
 	}, []);
 
-	// Player tapped a radial slot. PRQ-06 turns these into koota events
-	// (tap-engage, place-stair, etc.); for now we just log.
-	const onPickRadial = useCallback((opt: { id: string }) => {
-		console.log('radial pick:', opt.id);
-	}, []);
+	// Per-floor placement overlay. Map<voxelKey, BlockSlug> where
+	// voxelKey is `${vx},${vy},${vz}` in floor-space voxel coords
+	// (NOT world). The session-only persistence shape lands proper DB
+	// wiring in M3; for alpha, placements survive seed/floor regen
+	// only as long as Game.tsx is mounted.
+	const [placementsByFloor, setPlacementsByFloor] = useState<
+		ReadonlyMap<number, ReadonlyMap<string, import('@/world/blocks/BlockRegistry').BlockSlug>>
+	>(() => new Map());
+	const placements = placementsByFloor.get(floorState.currentFloor);
+
+	// Player tapped a radial slot. M2c4 wires the place-* options through
+	// to the building.place() core. Other ids (cancel, mine — future)
+	// fall through to the legacy log.
+	const onPickRadial = useCallback(
+		(opt: { id: string }) => {
+			const slug = radialIdToSlug(opt.id);
+			if (!slug || !radialAnchor) {
+				setRadialAnchor(null);
+				return;
+			}
+			const tapWorld = playerRef.current?.getTapWorld(radialAnchor.x, radialAnchor.y);
+			if (!tapWorld) {
+				setRadialAnchor(null);
+				return;
+			}
+			// World→voxel using the same VOXEL_SIZE/ORIGIN that ChunkLayer uses.
+			const VOXEL_SIZE = 0.4;
+			const ORIGIN = -31 * VOXEL_SIZE;
+			const vx = Math.round((tapWorld.x - ORIGIN) / VOXEL_SIZE);
+			const vz = Math.round((tapWorld.z - ORIGIN) / VOXEL_SIZE);
+			const vy = 2; // wall y-row above the carpet (FLOOR_FLOOR_Y_TOP+1)
+			const playerPos = playerRef.current?.getPosition() ?? { x: 0, y: 0.8, z: 0 };
+			const playerVx = Math.round((playerPos.x - ORIGIN) / VOXEL_SIZE);
+			const playerVz = Math.round((playerPos.z - ORIGIN) / VOXEL_SIZE);
+			// Derive a fresh ChunkData snapshot to gate the placement.
+			// Reuses ChunkLayer's overlay path in spirit — generate +
+			// apply existing placements, then check canPlace.
+			const result = generateFloor(seed, floorState.currentFloor);
+			const VOXELS_PER_CHUNK = 16;
+			const cx = Math.floor(vx / VOXELS_PER_CHUNK);
+			const cz = Math.floor(vz / VOXELS_PER_CHUNK);
+			const lx = vx - cx * VOXELS_PER_CHUNK;
+			const lz = vz - cz * VOXELS_PER_CHUNK;
+			const chunk = result.chunks[cz * 4 + cx];
+			if (!chunk) {
+				setRadialAnchor(null);
+				return;
+			}
+			const ok = place({
+				chunk,
+				target: { x: lx, y: vy, z: lz },
+				playerVoxel: { x: playerVx, y: 2, z: playerVz },
+				slug,
+			});
+			if (ok) {
+				const key = `${vx},${vy},${vz}`;
+				setPlacementsByFloor((prev) => {
+					const next = new Map(prev);
+					const floorMap = new Map(next.get(floorState.currentFloor) ?? []);
+					floorMap.set(key, slug);
+					next.set(floorState.currentFloor, floorMap);
+					return next;
+				});
+			}
+			setRadialAnchor(null);
+		},
+		[radialAnchor, seed, floorState.currentFloor],
+	);
 
 	// Demo: until the world-raycast lands, treat every hold as if it hit
 	// the floor. PRQ-06 swaps this for the real surfaceKind via raycast.
@@ -421,6 +529,7 @@ export function Game({ onExit }: Props) {
 					eyeHeight={2.4}
 					referenceFovDeg={70}
 				/>
+				<AttachListener />
 				<Suspense fallback={null}>
 					<Lighting />
 					<PauseProvider paused={paused || gameOver}>
@@ -432,7 +541,12 @@ export function Game({ onExit }: Props) {
 							paused={paused || gameOver}
 						>
 							{manifest && (
-								<World manifest={manifest} seed={seed} floor={floorState.currentFloor} />
+								<World
+									manifest={manifest}
+									seed={seed}
+									floor={floorState.currentFloor}
+									{...(placements !== undefined && { placements })}
+								/>
 							)}
 							<PlayerKinematic ref={playerRef} navMesh={navMesh} spawn={[0, 1.5]} />
 							<Door
@@ -474,10 +588,11 @@ export function Game({ onExit }: Props) {
 							{manifest &&
 								enemySpawns.map((s) => (
 									<MiddleManagerEntity
-										key={`mgr-${s.voxel.x}-${s.voxel.y}-${s.voxel.z}`}
+										key={`enemy-${s.voxel.x}-${s.voxel.y}-${s.voxel.z}`}
 										manifest={manifest}
 										navMesh={navMesh}
 										spawn={[s.world.x, 0.8, s.world.z]}
+										archetype={s.archetype}
 										getPlayerPosition={getPlayerPosition}
 										applyPlayerDamage={applyPlayerDamage}
 										onKill={onEnemyKill}
@@ -505,7 +620,17 @@ export function Game({ onExit }: Props) {
 				onPick={onPickRadial}
 				onClose={() => setRadialAnchor(null)}
 			/>
-			<PauseMenu open={paused} onResume={() => setPaused(false)} onQuit={onExit} />
+			<PauseMenu
+				open={paused}
+				onResume={() => setPaused(false)}
+				onQuit={onExit}
+				stats={{
+					floor: floorState.currentFloor,
+					threat,
+					kills: killCount,
+					playedSeconds,
+				}}
+			/>
 			<HpBar health={playerHealth} />
 			<WeaponIcon weaponSlug={currentWeaponSlug(equipped)} />
 			{(() => {
@@ -542,8 +667,14 @@ export function Game({ onExit }: Props) {
 						setPlayerHealth(freshHealth(PLAYER_MAX_HP));
 						setGameOver(false);
 						setKillCount(0);
+						setPlayedSeconds(0);
 					}}
 					onExit={onExit}
+					stats={{
+						kills: killCount,
+						deepestFloor: floorState.currentFloor,
+						playedSeconds,
+					}}
 				/>
 			)}
 			<button

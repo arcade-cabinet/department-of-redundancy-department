@@ -1,31 +1,41 @@
-import * as Dialog from '@radix-ui/react-dialog';
 import { useEffect, useState } from 'react';
+import { globalAudio } from '@/audio/GlobalAudio';
 import * as prefs from '@/db/preferences';
+import { Button, Dialog, Slider, Tabs } from '@/ui/primitives';
 
 type Props = {
 	open: boolean;
 	onResume: () => void;
 	onQuit: () => void;
+	/** Live in-game stats for the Stats tab. Optional so the host can
+	 *  defer wiring while the rest of the UI lands. */
+	stats?: {
+		floor: number;
+		threat: number;
+		kills: number;
+		playedSeconds: number;
+	};
 };
 
 /**
- * Pause overlay (PRQ-05 T8 stub). Radix Dialog with Resume / Settings
- * (volume + look-sensitivity sliders writing to @capacitor/preferences) /
- * Quit-to-Landing. Polish + visual treatment lands in PRQ-14.
+ * PauseMenu (PRQ-14 T5, M2c6). Three tabs:
  *
- * The host (Game.tsx) decides when to open it (ESC keystroke from
- * desktopFallback, or a top-right pause button on mobile in PRQ-14).
- * On open, koota's tick is paused upstream — this view doesn't manage
- * that itself.
+ *   - Stats: live floor / threat / kill count / played time. Mirrors
+ *     the EmployeeFile view but for the active run.
+ *   - Settings: master + SFX + music volume sliders + look sensitivity
+ *     slider, all writing to @capacitor/preferences in real time.
+ *   - Journal: collected memos. Alpha = empty list (PRQ-B5 Tracery
+ *     wires the actual entries).
+ *
+ * The host (Game.tsx) decides when to open it; on open the Physics
+ * world is paused upstream (PauseProvider).
  */
-export function PauseMenu({ open, onResume, onQuit }: Props) {
+export function PauseMenu({ open, onResume, onQuit, stats }: Props) {
 	const [vMaster, setVMaster] = useState<number | null>(null);
 	const [vSfx, setVSfx] = useState<number | null>(null);
 	const [vMusic, setVMusic] = useState<number | null>(null);
 	const [look, setLook] = useState<number | null>(null);
 
-	// Lazy-load on first open so we don't hit @capacitor/preferences before
-	// the rest of the boot completes.
 	useEffect(() => {
 		if (!open) return;
 		void Promise.all([
@@ -41,86 +51,105 @@ export function PauseMenu({ open, onResume, onQuit }: Props) {
 		});
 	}, [open]);
 
-	const sliderHandler =
+	const writePref =
 		<K extends 'volume_master' | 'volume_sfx' | 'volume_music' | 'look_sensitivity'>(
 			key: K,
 			setter: (v: number) => void,
 		) =>
-		(e: React.ChangeEvent<HTMLInputElement>) => {
-			const v = Number(e.target.value);
+		(vals: number[]) => {
+			const v = vals[0] ?? 0;
 			setter(v);
 			void prefs.set(key, v);
+			// PRQ-15 M2c7: master volume drives the GlobalAudio listener
+			// gain in real time so the player hears the slider immediately.
+			if (key === 'volume_master') globalAudio.setMaster(v);
 		};
 
 	return (
 		<Dialog.Root open={open} onOpenChange={(o) => !o && onResume()}>
 			<Dialog.Portal>
-				<Dialog.Overlay
-					data-testid="pause-overlay"
-					style={{
-						position: 'fixed',
-						inset: 0,
-						background: 'rgba(13, 15, 18, 0.7)',
-						zIndex: 1000,
-					}}
-				/>
-				<Dialog.Content
-					data-testid="pause-menu"
-					style={{
-						position: 'fixed',
-						top: '50%',
-						left: '50%',
-						transform: 'translate(-50%, -50%)',
-						minWidth: '20rem',
-						maxWidth: '90vw',
-						padding: '1.5rem',
-						background: 'var(--ink, #0d0f12)',
-						color: 'var(--paper, #e8e6df)',
-						border: '1px solid var(--paper, #e8e6df)',
-						font: '14px ui-monospace, monospace',
-						zIndex: 1001,
-					}}
-				>
-					<Dialog.Title style={{ margin: 0, marginBottom: '1rem' }}>PAUSED</Dialog.Title>
+				<Dialog.Overlay data-testid="pause-overlay" />
+				<Dialog.Content data-testid="pause-menu">
+					<Dialog.Title>PAUSED</Dialog.Title>
 
-					<section style={{ marginBottom: '1rem' }}>
-						<h3 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', opacity: 0.8 }}>Settings</h3>
-						<Slider
-							label="Master volume"
-							value={vMaster}
-							onChange={sliderHandler('volume_master', setVMaster)}
-							testId="vol-master"
-						/>
-						<Slider
-							label="SFX volume"
-							value={vSfx}
-							onChange={sliderHandler('volume_sfx', setVSfx)}
-							testId="vol-sfx"
-						/>
-						<Slider
-							label="Music volume"
-							value={vMusic}
-							onChange={sliderHandler('volume_music', setVMusic)}
-							testId="vol-music"
-						/>
-						<Slider
-							label="Look sensitivity"
-							value={look}
-							onChange={sliderHandler('look_sensitivity', setLook)}
-							min={0.1}
-							max={3}
-							step={0.05}
-							testId="look-sens"
-						/>
-					</section>
+					<Tabs.Root defaultValue="settings">
+						<Tabs.List>
+							<Tabs.Trigger value="stats" data-testid="pause-tab-stats">
+								Stats
+							</Tabs.Trigger>
+							<Tabs.Trigger value="settings" data-testid="pause-tab-settings">
+								Settings
+							</Tabs.Trigger>
+							<Tabs.Trigger value="journal" data-testid="pause-tab-journal">
+								Journal
+							</Tabs.Trigger>
+						</Tabs.List>
 
-					<div style={{ display: 'flex', gap: '0.5rem' }}>
-						<button type="button" data-testid="pause-resume" onClick={onResume} style={btnStyle}>
+						<Tabs.Content value="stats">
+							{stats ? (
+								<dl style={statsGrid}>
+									<dt style={statKey}>FLOOR</dt>
+									<dd style={statVal}>{stats.floor}</dd>
+									<dt style={statKey}>THREAT</dt>
+									<dd style={statVal}>{stats.threat.toFixed(1)}</dd>
+									<dt style={statKey}>KILLS</dt>
+									<dd style={statVal}>{stats.kills}</dd>
+									<dt style={statKey}>PLAYED</dt>
+									<dd style={statVal}>{formatTime(stats.playedSeconds)}</dd>
+								</dl>
+							) : (
+								<p style={{ opacity: 0.6 }}>No stats yet.</p>
+							)}
+						</Tabs.Content>
+
+						<Tabs.Content value="settings">
+							<SliderRow
+								label="Master volume"
+								value={vMaster}
+								onValueChange={writePref('volume_master', setVMaster)}
+								testId="vol-master"
+							/>
+							<SliderRow
+								label="SFX volume"
+								value={vSfx}
+								onValueChange={writePref('volume_sfx', setVSfx)}
+								testId="vol-sfx"
+							/>
+							<SliderRow
+								label="Music volume"
+								value={vMusic}
+								onValueChange={writePref('volume_music', setVMusic)}
+								testId="vol-music"
+							/>
+							<SliderRow
+								label="Look sensitivity"
+								value={look}
+								onValueChange={writePref('look_sensitivity', setLook)}
+								min={0.1}
+								max={3}
+								step={0.05}
+								testId="look-sens"
+							/>
+						</Tabs.Content>
+
+						<Tabs.Content value="journal">
+							<p style={{ opacity: 0.6 }}>No memos collected yet.</p>
+						</Tabs.Content>
+					</Tabs.Root>
+
+					<div
+						style={{
+							display: 'flex',
+							gap: 'var(--space-3)',
+							marginTop: 'var(--space-5)',
+						}}
+					>
+						<Button data-testid="pause-resume" variant="auditor" onClick={onResume}>
 							RESUME
-						</button>
-						<button type="button" data-testid="pause-quit" onClick={onQuit} style={btnStyle}>
+						</Button>
+						<Button data-testid="pause-quit" variant="ghost" onClick={onQuit}>
 							QUIT TO LANDING
-						</button>
+						</Button>
 					</div>
 				</Dialog.Content>
 			</Dialog.Portal>
@@ -128,54 +157,65 @@ export function PauseMenu({ open, onResume, onQuit }: Props) {
 	);
 }
 
-const btnStyle: React.CSSProperties = {
-	flex: 1,
-	padding: '0.5rem 1rem',
-	background: 'transparent',
-	color: 'inherit',
-	border: '1px solid currentColor',
-	font: 'inherit',
-	cursor: 'pointer',
-};
-
-function Slider({
-	label,
-	value,
-	onChange,
-	min = 0,
-	max = 1,
-	step = 0.05,
-	testId,
-}: {
+interface SliderRowProps {
 	label: string;
 	value: number | null;
-	onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+	onValueChange: (vals: number[]) => void;
 	min?: number;
 	max?: number;
 	step?: number;
 	testId: string;
-}) {
-	const id = `pause-slider-${testId}`;
+}
+
+function SliderRow({
+	label,
+	value,
+	onValueChange,
+	min = 0,
+	max = 1,
+	step = 0.05,
+	testId,
+}: SliderRowProps) {
 	return (
-		<div style={{ marginBottom: '0.5rem' }}>
-			<label
-				htmlFor={id}
-				style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}
+		<div style={{ marginBottom: 'var(--space-3)' }} data-testid={`pause-slider-${testId}`}>
+			<div
+				style={{
+					display: 'flex',
+					justifyContent: 'space-between',
+					fontSize: '0.85rem',
+					marginBottom: 'var(--space-1)',
+				}}
 			>
 				<span>{label}</span>
-				<span>{value !== null ? value.toFixed(2) : '—'}</span>
-			</label>
-			<input
-				id={id}
-				type="range"
-				data-testid={id}
+				<span style={{ fontFamily: 'var(--font-mono)', opacity: 0.7 }}>
+					{value !== null ? value.toFixed(2) : '—'}
+				</span>
+			</div>
+			<Slider
+				value={value !== null ? [value] : [0]}
 				min={min}
 				max={max}
 				step={step}
-				value={value ?? 0}
-				onChange={onChange}
-				style={{ width: '100%' }}
+				onValueChange={onValueChange}
 			/>
 		</div>
 	);
+}
+
+const statsGrid: React.CSSProperties = {
+	display: 'grid',
+	gridTemplateColumns: 'auto auto',
+	gap: 'var(--space-2) var(--space-5)',
+	margin: 0,
+	fontFamily: 'var(--font-mono)',
+	fontSize: '0.9rem',
+};
+
+const statKey: React.CSSProperties = { opacity: 0.6 };
+const statVal: React.CSSProperties = { margin: 0, textAlign: 'right' };
+
+function formatTime(seconds: number): string {
+	const m = Math.floor(seconds / 60);
+	const s = Math.floor(seconds % 60);
+	return `${m}:${s.toString().padStart(2, '0')}`;
 }

@@ -55,4 +55,20 @@ describe('spawn director', () => {
 		expect(set.length).toBe(1);
 		expect(set[0]?.slug).toBe('hitman');
 	});
+
+	// Regression for M2c2 reviewer concern (MEDIUM): Game.tsx's
+	// enemySpawns useMemo intentionally omits `threat` from its
+	// dep list — re-pick happens on floor-enter only, mid-floor threat
+	// climbs do NOT retro-spawn enemies. This test pins the downstream
+	// contract: pickSpawnSet always reads the threat argument it was
+	// called with, so a fresh useMemo eval (driven by currentFloor
+	// changing) always sees the latest threat.
+	it('always honors the threat arg passed in (no closure capture)', () => {
+		const lowThreat = pickSpawnSet(0, 3, createRng('regression'));
+		const highThreat = pickSpawnSet(8, 3, createRng('regression'));
+		const lowAll = lowThreat.every((s) => s.slug === 'middle-manager');
+		const highHasSwatOrSquad = highThreat.some((s) => s.slug === 'swat' || s.squad !== undefined);
+		expect(lowAll).toBe(true);
+		expect(highHasSwatOrSquad).toBe(true);
+	});
 });

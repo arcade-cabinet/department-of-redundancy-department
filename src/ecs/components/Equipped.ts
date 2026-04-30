@@ -89,7 +89,7 @@ export function recordFire(eq: Equipped, now: number): Equipped {
 
 export function canFire(eq: Equipped, cooldownMs: number, now: number): boolean {
 	const cur = eq.slots[eq.current];
-	if (!cur || !cur.slug) return false;
+	if (!cur?.slug) return false;
 	if (cur.ammo === 0) return false;
 	const elapsed = now - cur.lastFireAt;
 	return elapsed * 1000 >= cooldownMs;
