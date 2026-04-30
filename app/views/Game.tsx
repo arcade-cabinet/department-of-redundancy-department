@@ -74,6 +74,12 @@ export function Game({ onExit }: Props) {
 	const [gameOver, setGameOver] = useState(false);
 	const [killCount, setKillCount] = useState(0);
 	const [threat, setThreat] = useState(0);
+	const [playedSeconds, setPlayedSeconds] = useState(0);
+	useEffect(() => {
+		if (paused || gameOver) return;
+		const id = setInterval(() => setPlayedSeconds((s) => s + 1), 1000);
+		return () => clearInterval(id);
+	}, [paused, gameOver]);
 	// Idle decay: tick threat down at 0.05/min while not paused / dead.
 	useEffect(() => {
 		if (paused || gameOver) return;
@@ -592,7 +598,17 @@ export function Game({ onExit }: Props) {
 				onPick={onPickRadial}
 				onClose={() => setRadialAnchor(null)}
 			/>
-			<PauseMenu open={paused} onResume={() => setPaused(false)} onQuit={onExit} />
+			<PauseMenu
+				open={paused}
+				onResume={() => setPaused(false)}
+				onQuit={onExit}
+				stats={{
+					floor: floorState.currentFloor,
+					threat,
+					kills: killCount,
+					playedSeconds,
+				}}
+			/>
 			<HpBar health={playerHealth} />
 			<WeaponIcon weaponSlug={currentWeaponSlug(equipped)} />
 			{(() => {
@@ -629,8 +645,14 @@ export function Game({ onExit }: Props) {
 						setPlayerHealth(freshHealth(PLAYER_MAX_HP));
 						setGameOver(false);
 						setKillCount(0);
+						setPlayedSeconds(0);
 					}}
 					onExit={onExit}
+					stats={{
+						kills: killCount,
+						deepestFloor: floorState.currentFloor,
+						playedSeconds,
+					}}
 				/>
 			)}
 			<button
