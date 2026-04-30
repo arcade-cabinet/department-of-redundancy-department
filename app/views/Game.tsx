@@ -53,6 +53,7 @@ import { ThreatStrip } from '@/ui/chrome/ThreatStrip';
 import { WeaponIcon } from '@/ui/chrome/WeaponIcon';
 import { RadialMenu } from '@/ui/radial/RadialMenu';
 import { DrawCallHUD, useDrawCallHUDFlag } from '@/verify/DrawCallHUD';
+import { PerfProbe } from '@/verify/PerfProbe';
 import { isBossFloor, shouldLockUpDoor } from '@/world/floor/bossGate';
 import { routeTap } from '@/world/floor/floorRouter';
 import { useFloorState } from '@/world/floor/useFloorState';
@@ -554,6 +555,7 @@ export function Game({ onExit }: Props) {
 					referenceFovDeg={70}
 				/>
 				<AttachListener />
+				<PerfProbe />
 				<Suspense fallback={null}>
 					<Lighting />
 					<PauseProvider paused={paused || gameOver}>
