@@ -53,11 +53,13 @@ import { ThreatStrip } from '@/ui/chrome/ThreatStrip';
 import { WeaponIcon } from '@/ui/chrome/WeaponIcon';
 import { RadialMenu } from '@/ui/radial/RadialMenu';
 import { DrawCallHUD, useDrawCallHUDFlag } from '@/verify/DrawCallHUD';
+import { PerfProbe } from '@/verify/PerfProbe';
 import { isBossFloor, shouldLockUpDoor } from '@/world/floor/bossGate';
 import { routeTap } from '@/world/floor/floorRouter';
 import { useFloorState } from '@/world/floor/useFloorState';
 import { generateFloor } from '@/world/generator/floor';
 import { createRng, freshSeed } from '@/world/generator/rng';
+import { subscribeMobileLifecycle } from '../shell/lifecycle';
 import { GameOver } from './GameOver';
 import { PauseMenu } from './PauseMenu';
 
@@ -145,6 +147,33 @@ export function Game({ onExit }: Props) {
 		}
 	}, [floorState.currentFloor, defeatedFloors]);
 
+	// PRQ-16 M3c3: native app-lifecycle hooks. On Android/iOS this
+	// pauses the game when backgrounded + routes the OS back button
+	// through PauseMenu. No-op on web (no @capacitor/app at runtime).
+	useEffect(() => {
+		let dispose: () => void = () => {};
+		subscribeMobileLifecycle({
+			onPause: () => setPaused(true),
+			onResume: () => {
+				/* keep paused on resume; player must tap RESUME */
+			},
+			onBack: () => {
+				if (!paused) {
+					setPaused(true);
+					return true;
+				}
+				if (paused) {
+					setPaused(false);
+					return true;
+				}
+				return false;
+			},
+		}).then((d) => {
+			dispose = d;
+		});
+		return () => dispose();
+	}, [paused]);
+
 	// PRQ-15 M2c7: wire the typed audioCues bus to AudioManager so
 	// every `audio:*` event from earlier PRQs (floor-arrival, door-*)
 	// fires a real Three.Audio source. Listener is shared via the
@@ -189,6 +218,30 @@ export function Game({ onExit }: Props) {
 	}, [floorState.currentFloor]);
 
 	const upDoorLocked = shouldLockUpDoor({ floor: floorState.currentFloor, bossAlive });
+
+	// Debug-only test namespace (PRQ-17 M3c1). Gated on ?test=1 so
+	// production builds never expose internal state. e2e fixtures in
+	// e2e/fixtures/state.ts read this; never call from app code.
+	useEffect(() => {
+		if (typeof window === 'undefined') return;
+		const params = new URLSearchParams(window.location.search);
+		if (params.get('test') !== '1') return;
+		const w = window as unknown as { __dord?: object };
+		w.__dord = {
+			state: () => ({
+				floor: floorState.currentFloor,
+				threat,
+				kills: killCount,
+				playedSeconds,
+				playerHp: playerHealth.current,
+				bossAlive,
+			}),
+			damageBoss: (n: number) => reaperRef.current?.damage(n),
+		};
+		return () => {
+			delete (window as unknown as { __dord?: object }).__dord;
+		};
+	}, [floorState.currentFloor, threat, killCount, playedSeconds, playerHealth.current, bossAlive]);
 
 	// Walkable cells for the Reaper's teleport picker — pulled from
 	// yuka NavMesh region centroids. Empty until navMesh resolves;
@@ -530,6 +583,7 @@ export function Game({ onExit }: Props) {
 					referenceFovDeg={70}
 				/>
 				<AttachListener />
+				<PerfProbe />
 				<Suspense fallback={null}>
 					<Lighting />
 					<PauseProvider paused={paused || gameOver}>
