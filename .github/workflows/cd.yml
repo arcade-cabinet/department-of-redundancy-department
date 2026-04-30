@@ -55,19 +55,6 @@ jobs:
           GITHUB_PAGES: 'true'
           NODE_OPTIONS: '--max-old-space-size=4096'
 
-      - name: Restore LFS assets into dist (idempotent)
-        run: |
-          if git lfs ls-files | grep -q '^'; then
-            git lfs fetch --include="public/assets/audio/,public/assets/models/,public/assets/hdri/" || true
-            git lfs checkout public/assets/audio public/assets/models public/assets/hdri || true
-            for d in audio models hdri; do
-              if [ -d "public/assets/$d" ]; then
-                rm -rf "dist/assets/$d"
-                cp -r "public/assets/$d" "dist/assets/$d"
-              fi
-            done
-          fi
-
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
       - name: Upload Pages artifact
