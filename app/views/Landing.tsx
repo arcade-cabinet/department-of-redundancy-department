@@ -1,6 +1,23 @@
+import { useEffect, useState } from 'react';
+import * as prefs from '@/db/preferences';
+
 type Props = { onClockIn: () => void };
 
 export function Landing({ onClockIn }: Props) {
+	const [lastFloor, setLastFloor] = useState<number>(1);
+
+	useEffect(() => {
+		let alive = true;
+		void prefs.get('last_floor').then((v) => {
+			if (alive) setLastFloor(v);
+		});
+		return () => {
+			alive = false;
+		};
+	}, []);
+
+	const label = lastFloor > 1 ? `RESUME ON FLOOR ${lastFloor}` : 'CLOCK IN';
+
 	return (
 		<main
 			data-testid="landing"
@@ -39,7 +56,7 @@ export function Landing({ onClockIn }: Props) {
 					cursor: 'pointer',
 				}}
 			>
-				CLOCK IN
+				{label}
 			</button>
 		</main>
 	);
