@@ -1,13 +1,25 @@
 import { Canvas } from '@react-three/fiber';
+import { ACESFilmicToneMapping, SRGBColorSpace } from 'three';
+import { Lighting } from '@/render/lighting/Lighting';
 
 type Props = { onExit: () => void };
 
 export function Game({ onExit }: Props) {
 	return (
 		<div data-testid="game" style={{ position: 'relative', width: '100%', height: '100%' }}>
-			<Canvas style={{ background: 'var(--carpet)' }} camera={{ position: [0, 1.6, 3], fov: 70 }}>
-				<ambientLight intensity={0.6} />
-				<mesh position={[0, 0, 0]}>
+			<Canvas
+				style={{ background: 'var(--carpet)' }}
+				camera={{ position: [0, 1.6, 3], fov: 70 }}
+				shadows
+				gl={{
+					toneMapping: ACESFilmicToneMapping,
+					toneMappingExposure: 1.0,
+					outputColorSpace: SRGBColorSpace,
+					antialias: true,
+				}}
+			>
+				<Lighting />
+				<mesh position={[0, 0, 0]} castShadow receiveShadow>
 					<boxGeometry args={[1, 1, 1]} />
 					<meshStandardMaterial color="#C7B89A" />
 				</mesh>

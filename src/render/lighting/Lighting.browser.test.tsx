@@ -1,42 +1,61 @@
 import { Canvas, useThree } from '@react-three/fiber';
-import { render } from '@testing-library/react';
+import { render, waitFor } from '@testing-library/react';
 import { useEffect } from 'react';
 import { ACESFilmicToneMapping, SRGBColorSpace } from 'three';
 import { describe, expect, it } from 'vitest';
 import { Lighting } from './Lighting';
 
-function ToneProbe({
-	onReady,
-}: {
-	onReady: (gl: { toneMapping: number; outputColorSpace: string }) => void;
-}) {
-	const { gl } = useThree();
+type SceneSnapshot = {
+	toneMapping: number;
+	toneMappingExposure: number;
+	outputColorSpace: string;
+	hasFog: boolean;
+};
+
+function SceneProbe({ onReady }: { onReady: (s: SceneSnapshot) => void }) {
+	const { gl, scene } = useThree();
 	useEffect(() => {
-		onReady({ toneMapping: gl.toneMapping, outputColorSpace: gl.outputColorSpace });
-	}, [gl, onReady]);
+		onReady({
+			toneMapping: gl.toneMapping,
+			toneMappingExposure: gl.toneMappingExposure,
+			outputColorSpace: gl.outputColorSpace,
+			hasFog: scene.fog !== null,
+		});
+	}, [gl, scene, onReady]);
 	return null;
 }
 
 describe('Lighting', () => {
-	it('configures ACESFilmic tonemap + sRGB output on the renderer', async () => {
-		let snapshot: { toneMapping: number; outputColorSpace: string } | null = null;
+	it('renders under a Canvas with ACESFilmic + sRGB + no fog (locked spec §6)', async () => {
+		let snapshot: SceneSnapshot | null = null;
 		const { unmount } = render(
-			<Canvas>
+			<Canvas
+				gl={{
+					toneMapping: ACESFilmicToneMapping,
+					toneMappingExposure: 1.0,
+					outputColorSpace: SRGBColorSpace,
+				}}
+			>
 				<Lighting />
-				<ToneProbe onReady={(s) => (snapshot = s)} />
+				<SceneProbe
+					onReady={(s) => {
+						snapshot = s;
+					}}
+				/>
 			</Canvas>,
 		);
-		const deadline = Date.now() + 3_000;
-		while (snapshot === null && Date.now() < deadline) {
-			await new Promise((r) => setTimeout(r, 50));
-		}
+		await waitFor(() => expect(snapshot).not.toBeNull(), { timeout: 5000 });
 		unmount();
-		expect(snapshot).not.toBeNull();
-		expect((snapshot as unknown as { toneMapping: number }).toneMapping).toBe(
-			ACESFilmicToneMapping,
-		);
-		expect((snapshot as unknown as { outputColorSpace: string }).outputColorSpace).toBe(
-			SRGBColorSpace,
-		);
+
+		const s = snapshot as SceneSnapshot | null;
+		expect(s).not.toBeNull();
+		// biome-ignore lint/style/noNonNullAssertion: waitFor guarantees non-null
+		expect(s!.toneMapping).toBe(ACESFilmicToneMapping);
+		// biome-ignore lint/style/noNonNullAssertion: waitFor guarantees non-null
+		expect(s!.toneMappingExposure).toBe(1.0);
+		// biome-ignore lint/style/noNonNullAssertion: waitFor guarantees non-null
+		expect(s!.outputColorSpace).toBe(SRGBColorSpace);
+		// biome-ignore lint/style/noNonNullAssertion: waitFor guarantees non-null
+		expect(s!.hasFog).toBe(false);
 	});
 });

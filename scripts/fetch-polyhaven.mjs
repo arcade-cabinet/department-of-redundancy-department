@@ -82,6 +82,30 @@ async function fetchHdri() {
 // need; nor_dx, ARM, Bump, Displacement, Spec, blend, gltf, mtlx all get skipped.
 const TEXTURE_MAPS_KEEP = new Set(['Diffuse', 'nor_gl', 'Rough', 'AO']);
 
+function pickExt(variants) {
+	if (variants.jpg) return 'jpg';
+	if (variants.png) return 'png';
+	if (variants.exr) return 'exr';
+	return null;
+}
+
+async function fetchOneMap(localName, mapKey, mapData) {
+	if (typeof mapData !== 'object' || !mapData['2k']) return false;
+	const variants = mapData['2k'];
+	const ext = pickExt(variants);
+	if (!ext) return false;
+	const dest = join(texDir, localName, `${localName}_${mapKey}_2k.${ext}`);
+	try {
+		const r = await fetchBinary(variants[ext].url, dest);
+		if (!r.skipped)
+			console.log(`  ${localName}/${mapKey} ${(r.bytes / 1024 / 1024).toFixed(2)} MB`);
+		return true;
+	} catch (e) {
+		console.error(`  ${localName}/${mapKey} fail: ${e.message}`);
+		return false;
+	}
+}
+
 async function fetchTexture(localName, slug) {
 	const files = await fetchJson(`${POLY_BASE}/files/${slug}`).catch((e) => {
 		console.error(`  ${localName} (${slug}) lookup failed: ${e.message}`);
@@ -91,19 +115,7 @@ async function fetchTexture(localName, slug) {
 	let any = false;
 	for (const [mapKey, mapData] of Object.entries(files)) {
 		if (!TEXTURE_MAPS_KEEP.has(mapKey)) continue;
-		if (typeof mapData !== 'object' || !mapData['2k']) continue;
-		const variants = mapData['2k'];
-		const ext = variants.jpg ? 'jpg' : variants.png ? 'png' : variants.exr ? 'exr' : null;
-		if (!ext) continue;
-		const dest = join(texDir, localName, `${localName}_${mapKey}_2k.${ext}`);
-		try {
-			const r = await fetchBinary(variants[ext].url, dest);
-			any = true;
-			if (!r.skipped)
-				console.log(`  ${localName}/${mapKey} ${(r.bytes / 1024 / 1024).toFixed(2)} MB`);
-		} catch (e) {
-			console.error(`  ${localName}/${mapKey} fail: ${e.message}`);
-		}
+		if (await fetchOneMap(localName, mapKey, mapData)) any = true;
 	}
 	if (!any) console.log(`  ${localName}: no maps fetched (already on disk?)`);
 }
