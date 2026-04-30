@@ -1,8 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const baseURL = process.env.DORD_BASE_URL ?? 'http://localhost:5173/';
+// Trim trailing slash so spec calls like page.goto('/') resolve to <base>/
+// instead of <origin>/ when baseURL contains a path prefix (Pages deploy).
+const rawBase = process.env.DORD_BASE_URL ?? 'http://localhost:5173/';
+const baseURL = rawBase.endsWith('/') ? rawBase.slice(0, -1) : rawBase;
 const isExternalTarget =
-	!baseURL.startsWith('http://localhost') && !baseURL.startsWith('http://localhost');
+	!baseURL.startsWith('http://localhost') && !baseURL.startsWith('http://127.0.0.1');
 
 export default defineConfig({
 	testDir: 'e2e',

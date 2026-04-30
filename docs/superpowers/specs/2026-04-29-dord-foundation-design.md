@@ -703,6 +703,7 @@ Each PRQ is a single file in `docs/plans/prq-NN-<slug>.md`. Numbered tasks `T1..
 **Repo:** `arcade-cabinet/department-of-redundancy-department` (public)
 **Default branch:** `main`
 **License:** MIT (matches arcade-cabinet org default — confirm against grovekeeper/chonkers; we'll match whatever those use)
+**Branch protection:** managed at org level (arcade-cabinet Enterprise rulesets). Do NOT add per-repo branch-protection API calls in `scripts/setup-github.mjs`.
 
 ### 20.1 Pre-flight (one-time, by agent on first run of PRQ-00)
 
