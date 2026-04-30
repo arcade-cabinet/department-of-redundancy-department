@@ -281,6 +281,31 @@ export function Game({ onExit }: Props) {
 	const upDoorWorld = floorState.upDoorWorld;
 	const downDoorWorld = floorState.downDoorWorld;
 	const currentFloor = floorState.currentFloor;
+	// Pure routing helper: did this tap hit a tappable door, and which
+	// direction? Extracted so onGesture stays under the lint complexity
+	// threshold. All gating (pending, transition, locked-up) lives here.
+	const tryRouteDoor = useCallback(
+		(e: GestureEvent): 'up' | 'down' | null => {
+			if (e.kind !== 'tap') return null;
+			const tapWorld = playerRef.current?.getTapWorld(e.x, e.y);
+			if (!tapWorld) return null;
+			const dir = routeTap({
+				upDoor: upDoorWorld,
+				downDoor: downDoorWorld,
+				currentFloor,
+				playerPos: playerRef.current?.getPosition() ?? { x: 0, y: 0.8, z: 0 },
+				tapWorld,
+				tapMaxDistance: 1.5,
+				playerMaxDistance: 2.5,
+			});
+			if (!dir) return null;
+			if (pendingDir !== null || transitionActive) return null;
+			if (dir === 'up' && upDoorLocked) return null;
+			return dir;
+		},
+		[upDoorWorld, downDoorWorld, currentFloor, pendingDir, transitionActive, upDoorLocked],
+	);
+
 	const onGesture = useCallback(
 		(e: GestureEvent) => {
 			if (e.kind === 'hold') {
@@ -288,34 +313,16 @@ export function Game({ onExit }: Props) {
 				return;
 			}
 			if (e.kind !== 'tap') return;
-			// Door router: did this tap land on a stairwell door? If so, kick
-			// off the door-open animation; the Door's onOpened triggers the
-			// transition + swap. Otherwise fall through to tap-travel.
-			const tapWorld = playerRef.current?.getTapWorld(e.x, e.y);
-			if (tapWorld) {
-				const dir = routeTap({
-					upDoor: upDoorWorld,
-					downDoor: downDoorWorld,
-					currentFloor,
-					playerPos: playerRef.current?.getPosition() ?? { x: 0, y: 0.8, z: 0 },
-					tapWorld,
-					tapMaxDistance: 1.5,
-					playerMaxDistance: 2.5,
-				});
-				if (dir && pendingDir === null && !transitionActive) {
-					// Boss-gate: reject up-tap while the floor's Reaper is alive.
-					if (dir === 'up' && upDoorLocked) {
-						return;
-					}
-					setDoorOpening(dir);
-					setPendingDir(dir);
-					return;
-				}
+			const dir = tryRouteDoor(e);
+			if (dir) {
+				setDoorOpening(dir);
+				setPendingDir(dir);
+				return;
 			}
 			playerRef.current?.tap(e.x, e.y);
 			setTimeout(() => setPathWaypoints(playerRef.current?.path ?? []), 16);
 		},
-		[upDoorWorld, downDoorWorld, currentFloor, pendingDir, transitionActive],
+		[tryRouteDoor],
 	);
 
 	// Door open animation finished → kick off fade-cut.

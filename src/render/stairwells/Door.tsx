@@ -95,10 +95,7 @@ export function Door({ position, direction, open, locked = false, onOpened }: Do
 				/>
 			</mesh>
 			{locked && (
-				<mesh
-					position={[0, DOOR_HEIGHT / 2, LOCK_OVERLAY_Z]}
-					userData={{ doorLocked: true }}
-				>
+				<mesh position={[0, DOOR_HEIGHT / 2, LOCK_OVERLAY_Z]} userData={{ doorLocked: true }}>
 					<planeGeometry args={[DOOR_WIDTH * 1.05, DOOR_HEIGHT * 0.95]} />
 					<meshStandardMaterial
 						color="#7a1f23"

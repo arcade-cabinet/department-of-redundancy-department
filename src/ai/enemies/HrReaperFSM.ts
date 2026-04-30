@@ -72,66 +72,64 @@ export function createReaperFSM(now: number, position: Vec3World): ReaperFSM {
 
 export function tickReaper(fsm: ReaperFSM, input: ReaperTickInput): ReaperFSM {
 	if (fsm.state === 'death') return fsm;
+	if (fsm.state === 'idle') return tickIdle(fsm, input);
+	if (fsm.state === 'engage') return tickEngage(fsm, input);
+	if (fsm.state === 'teleport-windup') return tickTeleportWindup(fsm, input);
+	return fsm;
+}
 
+function tickIdle(fsm: ReaperFSM, input: ReaperTickInput): ReaperFSM {
 	const dist = distance(fsm.position, input.playerPos);
-	const inRange = dist <= REAPER_VISION_RANGE;
-
-	if (fsm.state === 'idle') {
-		if (inRange && input.hasLOS) {
-			return enterState(fsm, 'engage', input.now, { kind: 'face-player' });
-		}
-		return { ...fsm, action: { kind: 'idle' } };
+	if (dist <= REAPER_VISION_RANGE && input.hasLOS) {
+		return enterState(fsm, 'engage', input.now, { kind: 'face-player' });
 	}
+	return { ...fsm, action: { kind: 'idle' } };
+}
 
-	if (fsm.state === 'engage') {
-		// Teleport cooldown elapsed → enter windup.
-		if (input.now - fsm.lastTeleportAt >= REAPER_TELEPORT_COOLDOWN_S) {
-			return enterState(fsm, 'teleport-windup', input.now, { kind: 'teleport-windup' });
-		}
-		// Hitscan cadence.
-		if (input.now - fsm.lastFireAt >= REAPER_HITSCAN_CADENCE_S) {
-			return {
-				...fsm,
-				lastFireAt: input.now,
-				action: {
-					kind: 'fire-hitscan',
-					damage: REAPER_HITSCAN_DAMAGE,
-					targetPos: { ...input.playerPos },
-				},
-			};
-		}
-		return { ...fsm, action: { kind: 'face-player' } };
+function tickEngage(fsm: ReaperFSM, input: ReaperTickInput): ReaperFSM {
+	if (input.now - fsm.lastTeleportAt >= REAPER_TELEPORT_COOLDOWN_S) {
+		return enterState(fsm, 'teleport-windup', input.now, { kind: 'teleport-windup' });
 	}
+	if (input.now - fsm.lastFireAt >= REAPER_HITSCAN_CADENCE_S) {
+		return {
+			...fsm,
+			lastFireAt: input.now,
+			action: {
+				kind: 'fire-hitscan',
+				damage: REAPER_HITSCAN_DAMAGE,
+				targetPos: { ...input.playerPos },
+			},
+		};
+	}
+	return { ...fsm, action: { kind: 'face-player' } };
+}
 
-	if (fsm.state === 'teleport-windup') {
-		if (input.now - fsm.enteredAt >= REAPER_TELEPORT_WINDUP_S) {
-			// If the runtime can't find a valid teleport cell (tight floor,
-			// no walkable band ∈ [2,8]u from player), abort the teleport
-			// rather than landing on the player. Reset cooldown so the
-			// reaper retries in 12s.
-			if (!input.candidateTarget) {
-				return {
-					...fsm,
-					state: 'engage',
-					enteredAt: input.now,
-					lastTeleportAt: input.now,
-					action: { kind: 'face-player' },
-				};
-			}
-			const target = input.candidateTarget;
-			return {
-				...fsm,
-				state: 'engage',
-				position: { ...target },
-				enteredAt: input.now,
-				lastTeleportAt: input.now,
-				action: { kind: 'teleport-arrive', target: { ...target } },
-			};
-		}
+function tickTeleportWindup(fsm: ReaperFSM, input: ReaperTickInput): ReaperFSM {
+	if (input.now - fsm.enteredAt < REAPER_TELEPORT_WINDUP_S) {
 		return { ...fsm, action: { kind: 'teleport-windup' } };
 	}
-
-	return fsm;
+	// Windup elapsed. If the runtime can't find a valid teleport cell
+	// (tight floor, no walkable band ∈ [2,8]u from player), abort to
+	// engage rather than landing on the player. Reset cooldown so the
+	// reaper retries in 12s.
+	if (!input.candidateTarget) {
+		return {
+			...fsm,
+			state: 'engage',
+			enteredAt: input.now,
+			lastTeleportAt: input.now,
+			action: { kind: 'face-player' },
+		};
+	}
+	const target = input.candidateTarget;
+	return {
+		...fsm,
+		state: 'engage',
+		position: { ...target },
+		enteredAt: input.now,
+		lastTeleportAt: input.now,
+		action: { kind: 'teleport-arrive', target: { ...target } },
+	};
 }
 
 export function applyDamageToReaper(fsm: ReaperFSM, dmg: number): ReaperFSM {
