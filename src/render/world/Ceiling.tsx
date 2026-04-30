@@ -1,10 +1,12 @@
 import { useTexture } from '@react-three/drei';
-import { RepeatWrapping, SRGBColorSpace } from 'three';
+import { DoubleSide, RepeatWrapping, SRGBColorSpace } from 'three';
+import { useHdriHemispheres } from '@/render/lighting/useHdriHemispheres';
 
 const ALBEDO = '/assets/textures/ceiling-tile/ceiling-tile_Diffuse_2k.jpg';
 const NORMAL = '/assets/textures/ceiling-tile/ceiling-tile_nor_gl_2k.jpg';
 const ROUGH = '/assets/textures/ceiling-tile/ceiling-tile_Rough_2k.jpg';
 const AO = '/assets/textures/ceiling-tile/ceiling-tile_AO_2k.jpg';
+const HDRI_PATH = '/assets/hdri/unfinished_office_2k.hdr';
 
 type Props = {
 	size?: [number, number];
@@ -13,9 +15,15 @@ type Props = {
 };
 
 /**
- * Acoustic ceiling tile mesh, mirrored above the floor at the configured
- * height (default 2.6u — slightly above human eye level for a realistic
- * cubicle drop ceiling). Faces down so the player sees it from below.
+ * Acoustic ceiling tile mesh, mirrored above the floor. Faces down so
+ * the player sees it from below.
+ *
+ * The emissive map is the upper hemisphere of the HDRI projection — the
+ * ceiling literally glows with the HDR's luminance gradient, which is
+ * exactly what an "indoor ceiling reflecting bright fluorescents above"
+ * looks like in real life. emissiveIntensity is the dial; the rectArea
+ * fixtures from CubicleMaze sit just below this plane providing direct
+ * fill-light on top.
  */
 export function Ceiling({ size = [16, 16], height = 2.6, repeat = 4 }: Props) {
 	const tex = useTexture({
@@ -30,10 +38,21 @@ export function Ceiling({ size = [16, 16], height = 2.6, repeat = 4 }: Props) {
 	}
 	tex.map.colorSpace = SRGBColorSpace;
 
+	const { ceiling: hdrEmissive } = useHdriHemispheres(HDRI_PATH);
+
 	return (
 		<mesh rotation={[Math.PI / 2, 0, 0]} position={[0, height, 0]} receiveShadow>
+			{/* PlaneGeometry's natural normal is +Z. After [π/2, 0, 0]
+			    that becomes +Y (face pointing up, away from the player below).
+			    DoubleSide ensures the underside still renders + receives light. */}
 			<planeGeometry args={[size[0], size[1]]} />
-			<meshStandardMaterial {...tex} />
+			<meshStandardMaterial
+				{...tex}
+				emissiveMap={hdrEmissive}
+				emissive="#FFFFFF"
+				emissiveIntensity={0.45}
+				side={DoubleSide}
+			/>
 		</mesh>
 	);
 }

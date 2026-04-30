@@ -40,7 +40,8 @@ export function World({ manifest, seed }: Props) {
 				gridWidth={GRID_W}
 				gridHeight={GRID_H}
 				cellSize={CELL_SIZE}
-				wallHeight={1.2}
+				wallHeight={CEILING_HEIGHT - 0.01}
+				ceilingHeight={CEILING_HEIGHT}
 			/>
 		</>
 	);

@@ -93,6 +93,9 @@ importers:
       sql.js:
         specifier: ^1.14.1
         version: 1.14.1
+      suspend-react:
+        specifier: ^0.1.3
+        version: 0.1.3(react@19.2.5)
       tailwind-merge:
         specifier: ^3.5.0
         version: 3.5.0

@@ -2,6 +2,7 @@ import { Canvas } from '@react-three/fiber';
 import { Suspense, useEffect, useState } from 'react';
 import { ACESFilmicToneMapping, SRGBColorSpace } from 'three';
 import { loadManifest, type Manifest } from '@/content/manifest';
+import { PlayerCamera } from '@/render/camera/PlayerCamera';
 import { Lighting } from '@/render/lighting/Lighting';
 import { World } from '@/render/world/World';
 import { freshSeed } from '@/world/generator/rng';
@@ -11,8 +12,11 @@ type Props = { onExit: () => void };
 export function Game({ onExit }: Props) {
 	const [manifest, setManifest] = useState<Manifest | null>(null);
 	// Per spec §8.5: world_seed lives in @capacitor/preferences. PRQ-04 wires
-	// the persisted seed; for PRQ-02 we generate a fresh seed each mount.
-	const [seed] = useState<string>(() => freshSeed());
+	// the persisted seed. For PRQ-02 we use a stable demo seed so the camera
+	// position can be hand-aligned to a known-open cubicle; freshSeed() is
+	// kept available for the new-game path that PRQ-04 will own.
+	void freshSeed; // silence unused — wired in PRQ-04
+	const [seed] = useState<string>(() => 'Synergistic Bureaucratic Cubicle');
 	useEffect(() => {
 		loadManifest()
 			.then(setManifest)
@@ -23,7 +27,6 @@ export function Game({ onExit }: Props) {
 		<div data-testid="game" style={{ position: 'relative', width: '100%', height: '100%' }}>
 			<Canvas
 				style={{ background: '#0d0f12' }}
-				camera={{ position: [3.5, 1.6, 4.5], fov: 60 }}
 				shadows
 				gl={{
 					toneMapping: ACESFilmicToneMapping,
@@ -32,6 +35,13 @@ export function Game({ onExit }: Props) {
 					antialias: true,
 				}}
 			>
+				<PlayerCamera
+					position={[0, 2.5]}
+					yaw={Math.PI}
+					pitch={0}
+					eyeHeight={1.6}
+					referenceFovDeg={70}
+				/>
 				<Suspense fallback={null}>
 					<Lighting />
 					{manifest && <World manifest={manifest} seed={seed} />}

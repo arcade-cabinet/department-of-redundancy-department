@@ -20,6 +20,8 @@ type Props = {
 	/** Side length of one cubicle in world units (incl. partition thickness). */
 	cellSize?: number;
 	wallHeight?: number;
+	/** Required: ceiling Y so fixtures mount just under it. */
+	ceilingHeight?: number;
 };
 
 const PARTITION_THICKNESS = 0.05;
@@ -44,7 +46,8 @@ export function CubicleMaze({
 	gridWidth = 7,
 	gridHeight = 7,
 	cellSize = 2.6,
-	wallHeight = 1.2,
+	wallHeight = 2.6,
+	ceilingHeight = 2.6,
 }: Props) {
 	const maze = useMemo(
 		() => generateFloorMaze(gridWidth, gridHeight, seed),
@@ -94,9 +97,9 @@ export function CubicleMaze({
 				emitWallIf(walls, cell, 'east', cx + halfCell, wallY, cz, cellSize, wallHeight, false);
 
 			desks.push([cx, 0, cz - 0.6]);
-			if (cell.isCenter || (x + y) % 4 === 0) {
-				lights.push([cx, wallHeight + 1.4, cz]);
-			}
+			// One ceiling fixture per cubicle, mounted just below the ceiling
+			// so RectAreaLight + back-side facing down lights the cell.
+			lights.push([cx, ceilingHeight - 0.02, cz]);
 		}
 	}
 
@@ -137,6 +140,7 @@ export function CubicleMaze({
 					position={[lx, ly, lz]}
 					width={cellSize * 0.7}
 					height={cellSize * 0.4}
+					intensity={4.5}
 				/>
 			))}
 		</group>

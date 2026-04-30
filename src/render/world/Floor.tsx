@@ -1,25 +1,23 @@
 import { useTexture } from '@react-three/drei';
 import { RepeatWrapping, SRGBColorSpace } from 'three';
+import { useHdriHemispheres } from '@/render/lighting/useHdriHemispheres';
 
 const ALBEDO = '/assets/textures/carpet/carpet_Diffuse_2k.jpg';
 const NORMAL = '/assets/textures/carpet/carpet_nor_gl_2k.jpg';
 const ROUGH = '/assets/textures/carpet/carpet_Rough_2k.jpg';
 const AO = '/assets/textures/carpet/carpet_AO_2k.jpg';
+const HDRI_PATH = '/assets/hdri/unfinished_office_2k.hdr';
 
 type Props = {
-	/** Footprint in world units. Defaults to one chunk: 16×16. */
 	size?: [number, number];
-	/** How many tiles per chunk-edge — controls visual texel density. */
 	repeat?: number;
 };
 
 /**
- * Office carpet floor tile. Receives shadows from the directional light;
- * does not cast (it's the ground plane).
- *
- * Uses PolyHaven `dirty_carpet` 2k Diffuse + Normal + Roughness + AO.
- * Tiled `repeat` times across the footprint so a single 16u tile shows
- * the carpet weave pattern at desk-eye distance.
+ * Office carpet floor. Receives shadows from the directional light and
+ * the cubicle wall casters; emissive map is the lower hemisphere of the
+ * HDRI (see hdriProjection.ts) at low intensity, which paints the floor
+ * with the warm bounce-light tint of the office without needing IBL.
  */
 export function Floor({ size = [16, 16], repeat = 4 }: Props) {
 	const tex = useTexture({
@@ -34,10 +32,18 @@ export function Floor({ size = [16, 16], repeat = 4 }: Props) {
 	}
 	tex.map.colorSpace = SRGBColorSpace;
 
+	const { floor: hdrEmissive } = useHdriHemispheres(HDRI_PATH);
+
 	return (
 		<mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
 			<planeGeometry args={[size[0], size[1]]} />
-			<meshStandardMaterial {...tex} envMapIntensity={0.4} />
+			<meshStandardMaterial
+				{...tex}
+				emissiveMap={hdrEmissive}
+				emissive="#FFFFFF"
+				emissiveIntensity={0.12}
+				envMapIntensity={0.3}
+			/>
 		</mesh>
 	);
 }

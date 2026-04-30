@@ -1,27 +1,40 @@
-import { Environment } from '@react-three/drei';
-
-const HDRI_PATH = '/assets/hdri/unfinished_office_2k.hdr';
-
 /**
  * Render config from spec §6:
- * - HDRI Environment (PolyHaven unfinished_office)
- * - DirectionalLight from upper-Y, cool-white, casts shadows over the
- *   playable floor area (one chunk = 16×16u, so frustum is sized to span
- *   ≥32u on all sides).
- * - NO scene.fog (chunk culling gates draw distance — PRQ-03).
+ *
+ * - The HDRI is NOT loaded as drei <Environment/>. Instead the player is
+ *   always inside an enclosed cubicle maze, so the skybox is never
+ *   visible, and we get more visual mileage by projecting the HDRI's
+ *   upper hemisphere as the ceiling's emissiveMap and the lower
+ *   hemisphere as the floor's emissiveMap (see hdriProjection.ts +
+ *   useHdriHemispheres). The HDR luminance literally becomes the
+ *   indirect lighting — more grounded look than IBL.
+ *
+ * - <CeilingFixture/> RectAreaLights per cubicle (mounted by
+ *   <CubicleMaze/>) provide direct fluorescent fill on top of the
+ *   emissive ceiling.
+ *
+ * - <DeskLamp/> per occupied cubicle, distance-culled.
+ *
+ * - Low-intensity ambient light (#E8ECEE @ 0.12) prevents pitch-black
+ *   corners where rectAreas + emissive don't reach (e.g. inside a
+ *   cubicle with lights too far away to light the lower walls).
+ *
+ * - One directional light from upper-Y for shadow casting — cubicle
+ *   walls cast hard shadows over desks → scene reads as architectural
+ *   rather than uniformly flat.
+ *
+ * - NO scene.fog. Maze walls bound visibility.
  *
  * Tonemap + sRGB output are configured at the `<Canvas gl=...>` prop level
- * in `app/views/Game.tsx`, not here — that's the R3F idiom and avoids
- * mutating renderer state mid-tree where any drei helper could overwrite
- * it later.
+ * in `app/views/Game.tsx`, not here — R3F idiom, avoids mid-tree overwrites.
  */
 export function Lighting() {
 	return (
 		<>
-			<Environment files={HDRI_PATH} background={false} environmentIntensity={0.6} />
+			<ambientLight intensity={0.12} color="#E8ECEE" />
 			<directionalLight
 				position={[20, 30, 10]}
-				intensity={0.4}
+				intensity={0.35}
 				color="#E8ECEE"
 				castShadow
 				shadow-mapSize-width={2048}
