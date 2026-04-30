@@ -1,0 +1,30 @@
+{
+	"weapons": [
+		{
+			"slug": "stapler",
+			"name": "Stapler",
+			"kind": "melee",
+			"damage": 12,
+			"range": 1.5,
+			"cooldownMs": 400,
+			"spreadDeg": 0,
+			"facingMaxDeg": 30,
+			"audioCueOnFire": "stapler-thunk"
+		},
+		{
+			"slug": "three-hole-punch",
+			"name": "Three-Hole Punch",
+			"kind": "projectile",
+			"damage": 8,
+			"range": 16,
+			"cooldownMs": 800,
+			"ammoCap": 25,
+			"projectileSpeed": 6,
+			"burstCount": 3,
+			"burstIntervalMs": 80,
+			"projectileLifetimeMs": 1000,
+			"spreadDeg": 4,
+			"audioCueOnFire": "three-hole-burst"
+		}
+	]
+}
