@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { audioCues } from '@/audio/cues';
+import { audioCues, emit as emitAudioCue } from '@/audio/cues';
 import * as prefs from '@/db/preferences';
 import {
 	type DoorCoord,
@@ -81,14 +81,18 @@ export function useFloorState(opts: UseFloorStateOptions) {
 					warnUnimpl('respawnEnemies');
 				},
 				emitArrival: (f: number) => {
-					import('@/audio/cues').then((m) => m.emit({ type: 'floor-arrival', floor: f }));
+					// Synchronous emit. Earlier draft used a dynamic import
+					// which could resolve AFTER swap completed and fire too
+					// late (or out-of-order on slow connections). Static
+					// import is safe — cues.ts is part of the same chunk.
+					emitAudioCue({ type: 'floor-arrival', floor: f });
 				},
 				setLastFloor: async (f: number) => {
 					await prefs.set('last_floor', f).catch(() => {});
 				},
 				getSeed: async () => opts.seed,
 			};
-			void audioCues; // ensure module loaded so emitArrival's dynamic import resolves
+			void audioCues; // imported for the listener side; emit is now synchronous
 			const result = await swapFloor(direction, deps);
 			const spawnWorld = doorToWorld(result.spawn, voxelSize, originX, originZ);
 			setPendingSpawn(spawnWorld);

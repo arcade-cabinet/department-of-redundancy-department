@@ -41,16 +41,22 @@ export function Transition({
 			firedMidpoint.current = false;
 			setPhase('fade-in');
 		}
-		// Host aborted mid-transition: collapse to idle no matter the
-		// current phase. Without this, a cancel during fade-in left the
-		// overlay stuck opaque, deadlocking the input layer.
-		if (!active && phase !== 'idle') {
+		// Host aborted mid-transition: collapse to idle. Without this, a
+		// cancel during fade-in left the overlay stuck opaque,
+		// deadlocking the input layer. Note: natural fade-out completion
+		// also calls onComplete from the animation handler — that's
+		// fine, hosts treat it as a "swap done" signal and idempotent
+		// state resets.
+		if (!active && phase === 'fade-in') {
 			setPhase('idle');
 			if (onComplete) onComplete();
 		}
 	}, [active, phase, onComplete]);
 
-	const opacity = phase === 'fade-in' || (active && phase === 'fade-out') ? 1 : 0;
+	// Opacity is purely a function of phase. Letting `active` gate the
+	// fade-out value caused opacity to stay at 1 throughout fade-out
+	// (no animation, onAnimationComplete never fires, overlay stuck).
+	const opacity = phase === 'fade-in' ? 1 : 0;
 
 	return (
 		<motion.div
@@ -64,6 +70,11 @@ export function Transition({
 					firedMidpoint.current = true;
 					if (onMidpoint) onMidpoint();
 					setPhase('fade-out');
+					return;
+				}
+				if (phase === 'fade-out') {
+					setPhase('idle');
+					if (onComplete) onComplete();
 				}
 			}}
 			style={{

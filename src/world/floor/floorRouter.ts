@@ -1,5 +1,3 @@
-import type { DoorCoord } from '@/world/generator/floor';
-
 /**
  * Pure router that decides whether a tap landed on a stairwell door
  * and which direction it would transition. The R3F runtime computes
@@ -73,13 +71,5 @@ function dist(a: Vec3World, b: Vec3World): number {
 	return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-/** Convert voxel-space DoorCoord to world-space using DORD's standard
- *  voxel sizing (PRQ-02 baseline). Pulled out so other systems can
- *  reuse the same math. */
-export function voxelToWorld(d: DoorCoord, voxelSize: number, origin: Vec3World): Vec3World {
-	return {
-		x: origin.x + d.x * voxelSize,
-		y: origin.y + d.y * voxelSize,
-		z: origin.z + d.z * voxelSize,
-	};
-}
+// Note: voxel→world conversion lives in useFloorState.doorToWorld.
+// Was duplicated here in M1c1; collapsed in fold-forward.

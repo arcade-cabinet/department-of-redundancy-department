@@ -1,8 +1,16 @@
 /**
  * Debuff system (PRQ-13 T3). Pure-data: callers build a DebuffSet,
- * apply / tick / query it. The R3F runtime reads `speedMultiplier`
- * for player movement and `hasDebuff('reaper-redaction')` to toggle
- * the BlurOverlay post-FX.
+ * apply / tick / query it.
+ *
+ * **Time unit contract:** `now` and `endAt` are in **seconds**, NOT
+ * milliseconds. Callers tick from a useFrame elapsed-seconds clock
+ * (matches HrReaperFSM.tickInput.now).
+ *
+ * Today (M1) the debuff state lives + clears but is not yet read by
+ * any consumer. M2 (PRESENTATION) wires it through the BlurOverlay
+ * post-FX (`hasDebuff('reaper-redaction')`) and the player's speed
+ * multiplier (`speedMultiplier(set)`). The producer is in place so
+ * M2 only adds consumers.
  *
  * Alpha scope: only `reaper-redaction` (4s slow + camera blur on
  * Reaper hit). Beta adds trap debuffs and tier-escalating ailments.
