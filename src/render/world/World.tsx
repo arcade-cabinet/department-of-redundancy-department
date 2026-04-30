@@ -30,12 +30,17 @@ useGLTF.preload('/assets/models/props/desk.glb');
  * (voxels=false) preserves the PRQ-02 mesh-walled demo for visual
  * regression comparisons until the voxel renderer fully supersedes it.
  */
+// Carpet floor occupies voxel y=0..1. Top surface in world space is
+// (FLOOR_FLOOR_Y_TOP + 1) * voxelSize = 2 * 0.4 = 0.8 — the y where
+// a character or player's feet should sit so they don't clip the slab.
+const VOXEL_FLOOR_TOP_Y = 0.8;
+
 export function World({ manifest, seed, voxels = true }: Props) {
 	if (voxels) {
 		return (
 			<>
 				<ChunkLayer seed={seed} floor={1} />
-				<Character slug="middle-manager" manifest={manifest} position={[0, 0, 0]} />
+				<Character slug="middle-manager" manifest={manifest} position={[0, VOXEL_FLOOR_TOP_Y, 0]} />
 			</>
 		);
 	}

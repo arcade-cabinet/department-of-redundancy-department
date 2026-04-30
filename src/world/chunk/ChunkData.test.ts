@@ -63,6 +63,12 @@ describe('ChunkData', () => {
 		expect(() => ChunkData.fromBuffer(new Uint16Array(100))).toThrow(/size/i);
 	});
 
+	it('fromBuffer rejects subarray/view buffers (isolation contract)', () => {
+		const big = new Uint16Array(CHUNK_VOLUME * 2);
+		const view = big.subarray(0, CHUNK_VOLUME);
+		expect(() => ChunkData.fromBuffer(view)).toThrow(/isolated|subarray|view/i);
+	});
+
 	it('toBuffer returns the underlying typed array (for persistence)', () => {
 		const c = new ChunkData();
 		c.set(0, 0, 0, BLOCK_IDS.drywall);

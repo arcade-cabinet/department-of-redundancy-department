@@ -7,6 +7,7 @@ import {
 } from 'three-mesh-bvh';
 import { describe, expect, it } from 'vitest';
 import { BLOCK_IDS } from '../blocks/BlockRegistry';
+import { createRng } from '../generator/rng';
 import { CHUNK_SIZE, ChunkData } from './ChunkData';
 import { greedyMesh } from './greedyMesh';
 
@@ -55,16 +56,18 @@ describe('Chunk BVH raycast (browser)', () => {
 		const renderMesh = new Mesh(geometry);
 		const ray = new Raycaster();
 
+		// Per CLAUDE.md RNG rule: no Math.random() in DORD code (yuka is the
+		// only allowed exception). Seeded RNG also makes the bench's draw
+		// pattern reproducible, so a perf regression triages against an
+		// identical workload across runs.
+		const rng = createRng('bench-bvh-raycasts');
+
 		// Without the BVH, raycast would walk every triangle; with it,
 		// each ray is logarithmic in triangle count. Mean per ray drops
 		// from ~5–20ms to << 1ms on this size.
 		const start = performance.now();
 		for (let i = 0; i < RAYCAST_COUNT; i++) {
-			const origin = new Vector3(
-				Math.random() * CHUNK_SIZE,
-				CHUNK_SIZE * 2,
-				Math.random() * CHUNK_SIZE,
-			);
+			const origin = new Vector3(rng.next() * CHUNK_SIZE, CHUNK_SIZE * 2, rng.next() * CHUNK_SIZE);
 			const dir = new Vector3(0, -1, 0);
 			ray.set(origin, dir);
 			ray.intersectObject(renderMesh, false);

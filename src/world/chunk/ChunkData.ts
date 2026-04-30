@@ -24,10 +24,24 @@ export class ChunkData {
 
 	/** Adopt an existing buffer (e.g. from SQLite). Zero-copy: mutations
 	 *  through the chunk write back to `buf`, which the persistence layer
-	 *  may then re-blob without an intermediate clone. */
+	 *  may then re-blob without an intermediate clone.
+	 *
+	 *  IMPORTANT: callers must hand over an isolated allocation, NOT a
+	 *  subarray/slice view of a larger buffer. We assert that here —
+	 *  if drizzle ever returns chunk blobs as views into a SQLite read
+	 *  buffer, mutations could otherwise corrupt unrelated chunks
+	 *  sharing the underlying ArrayBuffer. The persistence layer
+	 *  (PRQ-04) is responsible for `new Uint16Array(blob.slice())` if
+	 *  the source isn't already isolated. */
 	static fromBuffer(buf: Uint16Array): ChunkData {
 		if (buf.length !== CHUNK_VOLUME) {
 			throw new Error(`ChunkData buffer size ${buf.length} ≠ expected ${CHUNK_VOLUME}`);
+		}
+		if (buf.byteOffset !== 0 || buf.buffer.byteLength !== buf.byteLength) {
+			throw new Error(
+				'ChunkData.fromBuffer requires an isolated Uint16Array, not a subarray/view. ' +
+					'Wrap with `new Uint16Array(buf)` to copy if the source is shared.',
+			);
 		}
 		const c = new ChunkData();
 		c.buf = buf;

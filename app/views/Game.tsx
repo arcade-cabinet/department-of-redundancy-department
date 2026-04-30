@@ -87,11 +87,16 @@ export function Game({ onExit }: Props) {
 					antialias: true,
 				}}
 			>
+				{/* Voxel floor surface sits at world y=0.8 (2 carpet voxels × 0.4u);
+				    eye height 1.6 above feet → camera y=2.4. Position offset on z
+				    so the player starts a step back from the manager at the cubicle
+				    center, looking at them (yaw=π faces -Z which the scene faces by
+				    default, so PI looks back along +Z toward the manager). */}
 				<PlayerCamera
-					position={[0, 2.5]}
+					position={[0, 1.5]}
 					yaw={Math.PI}
 					pitch={0}
-					eyeHeight={1.6}
+					eyeHeight={2.4}
 					referenceFovDeg={70}
 				/>
 				<Suspense fallback={null}>

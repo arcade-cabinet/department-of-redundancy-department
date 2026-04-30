@@ -1,11 +1,6 @@
 import { useMemo } from 'react';
 import { Chunk } from '@/world/chunk/Chunk';
-import {
-	FLOOR_CHUNKS_X,
-	FLOOR_VOXELS_X,
-	FLOOR_VOXELS_Z,
-	generateFloor,
-} from '@/world/generator/floor';
+import { FLOOR_CHUNKS_X, generateFloor } from '@/world/generator/floor';
 
 type Props = {
 	seed: string;
@@ -16,29 +11,35 @@ type Props = {
 	voxelSize?: number;
 };
 
+/** Voxel coordinates of the maze center cubicle's center cell.
+ *  7×7 maze → center cubicle (3,3); 9-voxel footprint → center voxel
+ *  is at `3*9+4 = 31` per axis. Exported so World/Game can place the
+ *  player + manager at the cubicle center via `position=[0, ..., 0]`. */
+export const VOXEL_CENTER_X = 31;
+export const VOXEL_CENTER_Z = 31;
+
 /**
  * Mounts every chunk produced by the seeded floor generator. Replaces
  * the static `<Floor/>` + `<Ceiling/>` + maze-walls of the PRQ-02 demo
  * with a chunked voxel world.
  *
- * This component is pure projection: the generator is deterministic,
- * the chunk meshes are memoized, and re-rendering with the same
- * `(seed, floor)` is a no-op.
+ * The world is positioned so voxel (VOXEL_CENTER_X, _, VOXEL_CENTER_Z)
+ * — the center of the maze's center cubicle — sits at world origin.
+ * Anything wanting to spawn there just uses `[0, _, 0]`.
  *
- * View-distance culling lands in PRQ-03 T5 alongside the draw-call HUD;
- * for now we mount every chunk on the active floor (16 chunks × ~6
- * draws each ≤ spec §12 budget of 250).
+ * View-distance culling lands later (PRQ-18 perf pass); for now we
+ * mount every chunk on the active floor (16 chunks × ~6 draws each ≤
+ * spec §12 budget of 250).
  */
 export function ChunkLayer({ seed, floor = 1, voxelSize = 0.4 }: Props) {
 	const result = useMemo(() => generateFloor(seed, floor), [seed, floor]);
 
+	// Translate by -voxelCenter so the maze center voxel lands at world (0, 0, 0).
+	const offsetX = -VOXEL_CENTER_X * voxelSize;
+	const offsetZ = -VOXEL_CENTER_Z * voxelSize;
+
 	return (
-		<group
-			scale={[voxelSize, voxelSize, voxelSize]}
-			// Center the floor on the world origin: 64 voxels × voxelSize
-			// is the floor extent; subtract half so x∈[-extent/2, +extent/2].
-			position={[(-FLOOR_VOXELS_X / 2) * voxelSize, 0, (-FLOOR_VOXELS_Z / 2) * voxelSize]}
-		>
+		<group scale={[voxelSize, voxelSize, voxelSize]} position={[offsetX, 0, offsetZ]}>
 			{result.chunks.map((chunk, i) => {
 				const cx = i % FLOOR_CHUNKS_X;
 				const cz = Math.floor(i / FLOOR_CHUNKS_X);
