@@ -1,8 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const baseURL = process.env.DORD_BASE_URL ?? 'http://127.0.0.1:5173/';
+const baseURL = process.env.DORD_BASE_URL ?? 'http://localhost:5173/';
 const isExternalTarget =
-	!baseURL.startsWith('http://127.0.0.1') && !baseURL.startsWith('http://localhost');
+	!baseURL.startsWith('http://localhost') && !baseURL.startsWith('http://localhost');
 
 export default defineConfig({
 	testDir: 'e2e',

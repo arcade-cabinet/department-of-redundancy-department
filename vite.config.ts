@@ -19,13 +19,13 @@ export default defineConfig({
 		port: 5173,
 		strictPort: false,
 	},
+	root: 'app',
+	publicDir: path.resolve(__dirname, 'public'),
 	build: {
-		outDir: 'dist',
+		outDir: path.resolve(__dirname, 'dist'),
+		emptyOutDir: true,
 		sourcemap: !isCapacitor,
 		target: 'es2023',
-		rollupOptions: {
-			input: path.resolve(__dirname, 'app/index.html'),
-		},
 	},
 	optimizeDeps: {
 		exclude: ['sql.js'],
