@@ -19,3 +19,5 @@ export const tokens = {
 } as const;
 
 export type Tokens = typeof tokens;
+export type { Radius, Spacing } from './scales';
+export { motion, radius, shadow, spacing } from './scales';

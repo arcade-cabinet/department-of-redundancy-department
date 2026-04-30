@@ -1,6 +1,49 @@
 @import "tailwindcss";
 
+/* Self-hosted fonts (PRQ-14 T1). The .woff2 binaries are populated by
+ * `pnpm run assets:fonts` (a separate provisioning step that pulls
+ * from the open licensed sources — Departure Mono, Inter,
+ * JetBrains Mono). The font-face declarations here name the expected
+ * paths so the build doesn't break if the binaries are missing — the
+ * stack falls back to system mono / sans gracefully. */
+@font-face {
+	font-family: "Departure Mono";
+	src: url("/assets/fonts/DepartureMono-Regular.woff2") format("woff2");
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: "Inter";
+	src: url("/assets/fonts/Inter-Regular.woff2") format("woff2");
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: "Inter";
+	src: url("/assets/fonts/Inter-Medium.woff2") format("woff2");
+	font-weight: 500;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: "Inter";
+	src: url("/assets/fonts/Inter-SemiBold.woff2") format("woff2");
+	font-weight: 600;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: "JetBrains Mono";
+	src: url("/assets/fonts/JetBrainsMono-Regular.woff2") format("woff2");
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+
 :root {
+	/* Color (locked from PRQ-00). */
 	--ink: #15181c;
 	--paper: #f4f1ea;
 	--carpet: #5c6670;
@@ -11,6 +54,40 @@
 	--approval-green: #3f8e5a;
 	--terminal-amber: #e0a33c;
 	--toner-cyan: #2ea8c9;
+
+	/* Typography. */
+	--font-display: "Departure Mono", ui-monospace, SFMono-Regular, monospace;
+	--font-body: "Inter", system-ui, -apple-system, sans-serif;
+	--font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+	/* Spacing scale (PRQ-14 T2 mirror of src/ui/tokens/scales.ts). */
+	--space-0: 0px;
+	--space-1: 4px;
+	--space-2: 8px;
+	--space-3: 12px;
+	--space-4: 16px;
+	--space-5: 24px;
+	--space-6: 32px;
+	--space-7: 48px;
+	--space-8: 64px;
+
+	/* Radius. */
+	--radius-0: 0px;
+	--radius-1: 2px;
+	--radius-2: 4px;
+	--radius-3: 8px;
+
+	/* Shadow. */
+	--shadow-paper-drop: 0 1px 2px rgba(21, 24, 28, 0.18), 0 2px 4px rgba(21, 24, 28, 0.1);
+	--shadow-deep: 0 8px 24px rgba(21, 24, 28, 0.36), 0 2px 6px rgba(21, 24, 28, 0.2);
+
+	/* Motion durations (ms). */
+	--motion-instant: 80ms;
+	--motion-fast: 160ms;
+	--motion-base: 240ms;
+	--motion-slow: 480ms;
+	--ease-entrance: cubic-bezier(0.2, 0.8, 0.2, 1);
+	--ease-exit: cubic-bezier(0.4, 0, 1, 1);
 }
 
 html,
@@ -21,7 +98,7 @@ body,
 	height: 100%;
 	background: var(--ink);
 	color: var(--paper);
-	font-family: Inter, system-ui, -apple-system, sans-serif;
+	font-family: var(--font-body);
 	overflow: hidden;
 }
 
