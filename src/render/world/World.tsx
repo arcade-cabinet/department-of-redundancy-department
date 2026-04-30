@@ -1,55 +1,47 @@
-import { Gltf, useGLTF } from '@react-three/drei';
+import { useGLTF } from '@react-three/drei';
 import type { Manifest } from '@/content/manifest';
-import { Character } from '@/render/characters/Character';
-import { CeilingFixture } from '@/render/lighting/CeilingFixture';
-import { DeskLamp } from '@/render/lighting/DeskLamp';
 import { Ceiling } from './Ceiling';
-import { CubicleBank } from './CubicleBank';
+import { CubicleMaze } from './CubicleMaze';
 import { Floor } from './Floor';
 
 type Props = {
 	manifest: Manifest;
+	seed: string;
 };
 
 const CEILING_HEIGHT = 2.6;
+const GRID_W = 7;
+const GRID_H = 7;
+const CELL_SIZE = 2.6;
+// World extent must cover the entire maze.
+const FLOOR_EXTENT = Math.max(GRID_W, GRID_H) * CELL_SIZE + 2;
 
-// Pre-fetch the prop GLBs so the demo scene doesn't wait on network.
 useGLTF.preload('/assets/models/props/desk.glb');
 
 /**
- * The PRQ-02 demo scene: one cubicle bank in the center of a 16×16 chunk
- * with floor + ceiling + ceiling fixture + desk lamp + a desk + a
- * middle-manager standing in front of the desk. This is the goalpost
- * scene that must visibly exceed `references/poc.html`.
+ * The PRQ-02 demo scene: a procedurally generated cubicle maze (Beppo
+ * Growing-Tree algorithm seeded by the world seed). One cubicle per
+ * grid cell, partitions form the maze walls, perimeter exits become
+ * the four side stairwell-doors. The center cubicle hosts the manager
+ * + ceiling fixture.
  */
-export function World({ manifest }: Props) {
+export function World({ manifest, seed }: Props) {
 	return (
 		<>
-			<Floor size={[16, 16]} repeat={4} />
-			<Ceiling size={[16, 16]} height={CEILING_HEIGHT} repeat={4} />
-
-			{/* One cubicle bank, centered */}
-			<CubicleBank position={[0, 0, 0]} width={2.4} depth={2.4} wallHeight={1.2} />
-
-			{/* One desk inside the bank */}
-			<Gltf src="/assets/models/props/desk.glb" position={[0, 0, -0.6]} castShadow receiveShadow />
-
-			{/* Middle manager standing in front of the desk, facing the camera */}
-			<Character
-				slug="middle-manager"
+			<Floor size={[FLOOR_EXTENT, FLOOR_EXTENT]} repeat={Math.ceil(FLOOR_EXTENT / 4)} />
+			<Ceiling
+				size={[FLOOR_EXTENT, FLOOR_EXTENT]}
+				height={CEILING_HEIGHT}
+				repeat={Math.ceil(FLOOR_EXTENT / 4)}
+			/>
+			<CubicleMaze
 				manifest={manifest}
-				position={[0, 0, 0.5]}
-				rotationY={Math.PI}
+				seed={seed}
+				gridWidth={GRID_W}
+				gridHeight={GRID_H}
+				cellSize={CELL_SIZE}
+				wallHeight={1.2}
 			/>
-
-			{/* Lighting fixtures */}
-			<CeilingFixture
-				position={[0, CEILING_HEIGHT - 0.01, 0]}
-				width={3.2}
-				height={1.0}
-				intensity={1.4}
-			/>
-			<DeskLamp position={[0.5, 0.9, -0.6]} active intensity={0.8} distance={4} />
 		</>
 	);
 }

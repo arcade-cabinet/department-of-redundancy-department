@@ -4,11 +4,15 @@ import { ACESFilmicToneMapping, SRGBColorSpace } from 'three';
 import { loadManifest, type Manifest } from '@/content/manifest';
 import { Lighting } from '@/render/lighting/Lighting';
 import { World } from '@/render/world/World';
+import { freshSeed } from '@/world/generator/rng';
 
 type Props = { onExit: () => void };
 
 export function Game({ onExit }: Props) {
 	const [manifest, setManifest] = useState<Manifest | null>(null);
+	// Per spec §8.5: world_seed lives in @capacitor/preferences. PRQ-04 wires
+	// the persisted seed; for PRQ-02 we generate a fresh seed each mount.
+	const [seed] = useState<string>(() => freshSeed());
 	useEffect(() => {
 		loadManifest()
 			.then(setManifest)
@@ -30,7 +34,7 @@ export function Game({ onExit }: Props) {
 			>
 				<Suspense fallback={null}>
 					<Lighting />
-					{manifest && <World manifest={manifest} />}
+					{manifest && <World manifest={manifest} seed={seed} />}
 				</Suspense>
 			</Canvas>
 			<button

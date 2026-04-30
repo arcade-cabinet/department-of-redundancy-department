@@ -80,6 +80,13 @@ Mean-streets parity: `ci.yml` (PR-only), `cd.yml` (push:main → Pages), `releas
 
 All visuals through R3F + drei. No bare three.js mounts. Use drei's `<Gltf/>` (or `useGLTF`) for all loaded models. Character meshes wrapped in `<Character slug="..."/>` (introduced in PRQ-07).
 
+## RNG rule
+
+- **No `Math.random()`** outside `node_modules/yuka/**`. Every random draw in DORD code goes through `createRng(seed)` from `src/world/generator/rng.ts` (the org-standard `Rng` interface, verbatim from mean-streets).
+- **One entropy boundary** — `freshSeed()` is called once at new-game creation; the seed lives in `world_meta.seed` (spec §8) and drives every replay-relevant draw deterministically.
+- **Two tracks**: gameplay (deterministic, scoped per consumer) + cosmetic (seeded once at boot from `crypto.getRandomValues()`, used for non-gameplay-visible jitter/sparkle).
+- **Yuka exception**: yuka itself uses `Math.random()` internally for steering jitter / FSM tie-breaks. That's allowed — gameplay determinism is enforced at the *spawn placement* boundary, not at per-frame AI tick.
+
 ## Out of scope
 
 See spec §16. No multiplayer, no skeletal animations, no viewmodel arms, no day/night, no outdoor biomes for alpha.

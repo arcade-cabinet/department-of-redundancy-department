@@ -1,5 +1,18 @@
 {
 	"version": 1,
+	"ban_patterns": [
+		{
+			"pattern": "Math\\.random",
+			"scope": "src/**",
+			"exclude": [
+				"src/**/*.test.ts",
+				"src/**/*.test.tsx",
+				"src/**/*.browser.test.ts",
+				"src/**/*.browser.test.tsx"
+			],
+			"override": "// allow-math-random: <≥10-word reason>"
+		}
+	],
 	"coverage_rules": [
 		{
 			"scope": "src/render/**",

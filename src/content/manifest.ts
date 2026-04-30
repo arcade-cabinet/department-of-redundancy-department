@@ -23,21 +23,24 @@ export type Manifest = {
 	traps: Record<string, ManifestEntry>;
 };
 
-let cached: Manifest | null = null;
+let pending: Promise<Manifest> | null = null;
 
 /**
- * Asynchronously load the manifest. Cached after first call.
+ * Asynchronously load the manifest. Caches the in-flight promise (not just
+ * the resolved value) so concurrent callers — including React 18 StrictMode
+ * double-invokes — share a single network fetch.
  *
  * In Vitest browser tests Vite serves `public/` at the root, so the path
  * resolves identically to production.
  */
-export async function loadManifest(): Promise<Manifest> {
-	if (cached) return cached;
-	const r = await fetch('/assets/models/manifest.json');
-	if (!r.ok) throw new Error(`Failed to load manifest: ${r.status}`);
-	const m = (await r.json()) as Manifest;
-	cached = m;
-	return m;
+export function loadManifest(): Promise<Manifest> {
+	if (pending) return pending;
+	pending = (async () => {
+		const r = await fetch('/assets/models/manifest.json');
+		if (!r.ok) throw new Error(`Failed to load manifest: ${r.status}`);
+		return (await r.json()) as Manifest;
+	})();
+	return pending;
 }
 
 /** Lookup a slug, throwing if absent. */

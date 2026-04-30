@@ -1,5 +1,6 @@
 import { useGLTF } from '@react-three/drei';
 import { useMemo } from 'react';
+import { clone as cloneSkeletal } from 'three/addons/utils/SkeletonUtils.js';
 import type { Manifest } from '@/content/manifest';
 
 type Props = {
@@ -28,13 +29,15 @@ export function Character({ slug, manifest, position = [0, 0, 0], rotationY = 0 
 	if (!entry) throw new Error(`Manifest missing character/${slug}`);
 	const { scene } = useGLTF(entry.path);
 	// Clone so parallel instances don't mutate shared transforms.
-	const cloned = useMemo(() => scene.clone(true), [scene]);
+	// SkeletonUtils.clone correctly rebinds skeletons for skinned meshes
+	// (plain Object3D.clone leaves bone references pointing at the source);
+	// it falls through to a normal deep clone for non-skinned scenes.
+	const cloned = useMemo(() => cloneSkeletal(scene), [scene]);
 	// Cast shadows on every mesh in the cloned tree.
-	cloned.traverse((obj) => {
-		const m = obj as { isMesh?: boolean; castShadow?: boolean; receiveShadow?: boolean };
-		if (m.isMesh) {
-			m.castShadow = true;
-			m.receiveShadow = true;
+	cloned.traverse((obj: { isMesh?: boolean; castShadow?: boolean; receiveShadow?: boolean }) => {
+		if (obj.isMesh) {
+			obj.castShadow = true;
+			obj.receiveShadow = true;
 		}
 	});
 	return (
