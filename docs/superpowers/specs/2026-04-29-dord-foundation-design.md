@@ -534,8 +534,8 @@ No console-font default. The display-mono is the *bureaucratic* typographic note
 | Draw calls | ≤ 250 | ≤ 500 |
 | Active point lights | ≤ 8 | ≤ 16 |
 | Heap | ≤ 350 MB | ≤ 700 MB |
-| GLB total weight | ≤ 12 MB | ≤ 12 MB |
-| HDRI | 2k, ≤ 4 MB | 2k, ≤ 4 MB |
+| GLB total weight | informational only — driven by lazy-load + caching, not a hard cap |
+| HDRI | 2k default; downsize per device-tier at runtime if needed |
 | Initial JS bundle (gzip) | ≤ 350 KB | ≤ 350 KB |
 
 Enforced via:
