@@ -198,6 +198,10 @@ export class EncounterDirector {
 		return this.state.rail.phase === 'finished';
 	}
 
+	getEnemy(enemyId: string): Enemy | undefined {
+		return this.state.enemies.get(enemyId);
+	}
+
 	hitEnemy(enemyId: string, target: 'head' | 'body' | 'justice'): void {
 		const enemy = this.state.enemies.get(enemyId);
 		if (!enemy) return;
