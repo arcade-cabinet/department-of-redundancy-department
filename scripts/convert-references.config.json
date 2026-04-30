@@ -10,8 +10,7 @@
 			"tags": ["enemy", "tier-0"]
 		},
 		"policeman": {
-			"sources": ["Policeman_cg/Animations/Policeman_T_Pose.dae"],
-			"bake": { "atlasSize": 256 },
+			"sources": ["Policeman_cg/Policeman_Tpose.obj"],
 			"scale": 1.0,
 			"footprintCells": [1, 2, 1],
 			"tags": ["enemy", "tier-1"]
@@ -23,8 +22,7 @@
 			"tags": ["enemy", "tier-1.5"]
 		},
 		"swat": {
-			"sources": ["Character_14_CG/Ch_14_Tpose.dae", "Character_14_CG/Character_14_glt.gltf"],
-			"bake": { "atlasSize": 256 },
+			"sources": ["Character_14_CG/Character_14_glt.gltf", "Character_14_CG/Character_14.obj"],
 			"scale": 1.0,
 			"footprintCells": [1, 2, 1],
 			"tags": ["enemy", "tier-2"]

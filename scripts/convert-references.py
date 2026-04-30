@@ -72,23 +72,20 @@ def hash_inputs(source_paths: list[Path], options: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
-_FORMAT_PREF = {".glb": 5, ".gltf": 4, ".obj": 3, ".dae": 2}
+_FORMAT_PREF = {".glb": 5, ".gltf": 4, ".obj": 3}
 
 
 def score_source(path: Path) -> int:
-    """Higher is better. Animations not counted (we strip them anyway)."""
+    """Higher is better. Animations are not counted (we strip them anyway).
+    DAE is unsupported on Blender 5 and gets the lowest score so the picker
+    never selects it when an OBJ/GLTF alternative is present in the same
+    sources list."""
     if not path.exists():
         return -1
     score = _FORMAT_PREF.get(path.suffix.lower(), 0) * 100
-    # Prefer files with unified texture sidecars (small dirs / .mtl present)
-    parent = path.parent
-    if path.suffix.lower() == ".obj" and (parent / (path.stem + ".mtl")).exists():
+    # Prefer files with unified texture sidecars (.mtl + .png next to .obj)
+    if path.suffix.lower() == ".obj" and (path.parent / (path.stem + ".mtl")).exists():
         score += 50
-    if path.suffix.lower() == ".dae":
-        # Per-bone PNG dirs have lots of "*_diffuse.png" siblings — visible signal
-        bone_pngs = list(parent.glob("*_diffuse.png"))
-        if bone_pngs:
-            score += min(20, len(bone_pngs))
     return score
 
 
@@ -115,6 +112,11 @@ def clean_scene() -> None:
 
 
 def import_source(path: Path) -> None:
+    """Import a source file. Blender 5 dropped DAE/Collada support — every
+    reference pack ships an OBJ or GLTF alternative, so DAE is intentionally
+    not handled. The smart picker filters DAE out via score_source returning
+    a low score, but we explicitly raise here to fail loudly if config drift
+    points at one."""
     suffix = path.suffix.lower()
     if suffix == ".gltf" or suffix == ".glb":
         bpy.ops.import_scene.gltf(filepath=str(path))
@@ -125,7 +127,9 @@ def import_source(path: Path) -> None:
         else:
             bpy.ops.import_scene.obj(filepath=str(path))
     elif suffix == ".dae":
-        bpy.ops.wm.collada_import(filepath=str(path))
+        raise ValueError(
+            f"DAE not supported in Blender 5: {path}. Use the pack's OBJ alternative."
+        )
     else:
         raise ValueError(f"Unsupported source extension: {suffix}")
 
@@ -174,6 +178,26 @@ def apply_scale(obj, factor: float) -> None:
     apply_transforms(obj)
 
 
+def normalize_to_target_height(obj, target_y: float) -> None:
+    """Uniform-scale `obj` so its bounding-box Y extent equals `target_y` units.
+
+    Source assets use wildly inconsistent units (Voxel Props Pack ~70u tall;
+    Kento ~22u; trap pack ~70u). After this pass, characters land at 1.8u,
+    props at the cell-grid (1u per cell), and traps at ≤1.5u.
+    """
+    bbox = [obj.matrix_world @ v.co for v in obj.data.vertices]
+    if not bbox:
+        return
+    min_y = min(v.y for v in bbox)
+    max_y = max(v.y for v in bbox)
+    height = max_y - min_y
+    if height < 1e-6:
+        return
+    factor = target_y / height
+    obj.scale = (obj.scale[0] * factor, obj.scale[1] * factor, obj.scale[2] * factor)
+    apply_transforms(obj)
+
+
 def strip_animations() -> None:
     for action in list(bpy.data.actions):
         bpy.data.actions.remove(action, do_unlink=True)
@@ -198,19 +222,6 @@ def apply_vertex_tint(obj, tint: list[float]) -> None:
                 existing[2] * tint[2],
                 existing[3] * tint[3],
             )
-
-
-# ---------------------------------------------------------------------------
-# DAE atlas-bake path (T2 — populated in T2 commit)
-# ---------------------------------------------------------------------------
-
-
-def bake_dae_atlas(source: Path, atlas_size: int) -> None:
-    """Stub for DAE atlas-bake. Real implementation lands in PRQ-01 T2."""
-    # The DAE import already brings in the per-bone materials. For now, leave
-    # the model as imported — Blender will export it with all textures embedded.
-    # The atlas bake is a future optimization (smaller GLB, fewer draw calls).
-    pass
 
 
 # ---------------------------------------------------------------------------
@@ -293,9 +304,6 @@ def convert_slug(
     import_source(src)
     strip_animations()
 
-    if src.suffix.lower() == ".dae" and entry.get("bake"):
-        bake_dae_atlas(src, entry["bake"].get("atlasSize", 256))
-
     merge_meshes()
     meshes = get_mesh_objects()
     if not meshes:
@@ -303,6 +311,20 @@ def convert_slug(
 
     # Pick the merged result (largest by vertex count)
     obj = max(meshes, key=lambda m: len(m.data.vertices))
+
+    # Normalize to a sensible default height per group, then apply per-slug scale.
+    # Defaults: characters 1.8u (rough human height), props 2.0u (one cell tall
+    # for tabletop items, three cells for staircases — declare height in cells
+    # via footprintCells[1]), traps 1.0u.
+    footprint_cells = options.get("footprintCells", [1, 1, 1])
+    if group == "characters":
+        default_height = 1.8
+    elif group == "props":
+        # For props the Y footprint cell count is the visual height in units
+        default_height = float(footprint_cells[1])
+    else:  # traps and anything else
+        default_height = 1.0
+    normalize_to_target_height(obj, default_height)
     apply_scale(obj, options["scale"])
     set_origin_to_ground(obj)
     apply_transforms(obj)

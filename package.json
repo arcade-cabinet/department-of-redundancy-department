@@ -34,7 +34,7 @@
 		"prebuild": "pnpm prepare:public && pnpm assets:check",
 		"prebuild:native": "pnpm prepare:public && pnpm assets:check",
 		"prepreview": "pnpm prepare:public",
-		"assets:convert": "blender --background --python scripts/convert-references.py",
+		"assets:convert": "blender --background --python scripts/convert-references.py && node scripts/compress-models.mjs",
 		"assets:check": "node scripts/check-asset-manifest.mjs",
 		"cap:sync": "pnpm build:native && cap sync",
 		"drizzle:gen": "drizzle-kit generate",
