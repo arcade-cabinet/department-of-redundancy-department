@@ -1,12 +1,12 @@
 {
-  "_comment": "Per-weapon transforms for parenting the GLB to the FPS hands' Hand.R bone. Slug → grip-relative offset + rotation (radians, XYZ Euler) + uniform scale. Tuned visually against the PSX hands rig in Blender; the runtime applies these when mounting the weapon as a child of the right-hand bone. All weapons were extracted with their local origin at the bottom-rear-center of the grip (see scripts/extract-weapons.py).",
-  "_units": "meters; the runtime parents to a hand-bone whose transform is in centimeter-ish units, so a uniform scale of ~10 brings the weapon back to visual parity with the hand.",
-  "weapons": {
-    "ak47":         { "scale": 10, "position": [0, 0, 0], "rotationEuler": [0, 0, -1.5708] },
-    "shotgun":      { "scale": 10, "position": [0, 0, 0], "rotationEuler": [0, 0, -1.5708] },
-    "mac10":        { "scale": 10, "position": [0, 0, 0], "rotationEuler": [0, 0, -1.5708] },
-    "bazooka":      { "scale": 10, "position": [0, 0.4, 0], "rotationEuler": [0, 0, -1.5708] },
-    "flamethrower": { "scale": 10, "position": [0, 0, 0], "rotationEuler": [0, 0, -1.5708] },
-    "mgd-pm9":      { "scale": 10, "position": [0, 0, 0], "rotationEuler": [0, 0, -1.5708] }
-  }
+	"_comment": "Per-weapon transforms for parenting the GLB to the FPS hands' Hand.R bone. Slug → grip-relative offset + rotation (radians, XYZ Euler) + uniform scale. Tuned visually against the PSX hands rig in Blender; the runtime applies these when mounting the weapon as a child of the right-hand bone. All weapons were extracted with their local origin at the bottom-rear-center of the grip (see scripts/extract-weapons.py).",
+	"_units": "meters; the runtime parents to a hand-bone whose transform is in centimeter-ish units, so a uniform scale of ~10 brings the weapon back to visual parity with the hand.",
+	"weapons": {
+		"ak47": { "scale": 10, "position": [0, 0, 0], "rotationEuler": [0, 0, -1.5708] },
+		"shotgun": { "scale": 10, "position": [0, 0, 0], "rotationEuler": [0, 0, -1.5708] },
+		"mac10": { "scale": 10, "position": [0, 0, 0], "rotationEuler": [0, 0, -1.5708] },
+		"bazooka": { "scale": 10, "position": [0, 0.4, 0], "rotationEuler": [0, 0, -1.5708] },
+		"flamethrower": { "scale": 10, "position": [0, 0, 0], "rotationEuler": [0, 0, -1.5708] },
+		"mgd-pm9": { "scale": 10, "position": [0, 0, 0], "rotationEuler": [0, 0, -1.5708] }
+	}
 }
