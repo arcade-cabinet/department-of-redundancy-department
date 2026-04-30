@@ -1,5 +1,3 @@
-import { RectAreaLight } from 'three';
-import { RectAreaLightHelper } from 'three/addons/helpers/RectAreaLightHelper.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 
 // Initialize RectAreaLight uniforms once. Three.js doesn't auto-load these and
@@ -24,6 +22,10 @@ type Props = {
  * materials (MeshStandardMaterial / MeshPhysicalMaterial), which matches
  * our locked render config.
  *
+ * Note: RectAreaLight does NOT cast shadows in three.js — that's by design
+ * upstream, not a config gap on our end. Shadow casting comes from the
+ * `<directionalLight/>` in `<Lighting/>`.
+ *
  * The N-fixture-per-bank cull is naturally handled by view-frustum culling
  * once chunks evict; for tighter control, the `<DeskLamp/>` distance-cull
  * primitive can be reused if profiling shows RectAreaLight perf as the
@@ -44,7 +46,3 @@ export function CeilingFixture({
 		/>
 	);
 }
-
-// Re-export the three.js types so callers don't need to import them
-// separately when wiring debug helpers.
-export { RectAreaLight, RectAreaLightHelper };

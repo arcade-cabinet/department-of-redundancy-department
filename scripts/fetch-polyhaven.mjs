@@ -82,17 +82,10 @@ async function fetchHdri() {
 // need; nor_dx, ARM, Bump, Displacement, Spec, blend, gltf, mtlx all get skipped.
 const TEXTURE_MAPS_KEEP = new Set(['Diffuse', 'nor_gl', 'Rough', 'AO']);
 
-function pickExt(variants) {
-	if (variants.jpg) return 'jpg';
-	if (variants.png) return 'png';
-	if (variants.exr) return 'exr';
-	return null;
-}
-
 async function fetchOneMap(localName, mapKey, mapData) {
 	if (typeof mapData !== 'object' || !mapData['2k']) return false;
 	const variants = mapData['2k'];
-	const ext = pickExt(variants);
+	const ext = variants.jpg ? 'jpg' : variants.png ? 'png' : variants.exr ? 'exr' : null;
 	if (!ext) return false;
 	const dest = join(texDir, localName, `${localName}_${mapKey}_2k.${ext}`);
 	try {
