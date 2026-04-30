@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BLOCK_IDS, BLOCK_REGISTRY, BLOCK_SLUGS, type BlockSlug, getBlock } from './BlockRegistry';
-import { TILESET_TILE_COUNT } from './tileset';
+import { slotUV, TILESET_GRID, TILESET_SLOTS, TILESET_TILE_COUNT } from './tileset';
 
 const REQUIRED_SLUGS: BlockSlug[] = [
 	'air',
@@ -73,6 +73,64 @@ describe('BlockRegistry', () => {
 		const ids = REQUIRED_SLUGS.map((s) => BLOCK_IDS[s]);
 		expect(new Set(ids).size).toBe(REQUIRED_SLUGS.length);
 		expect(Math.max(...ids)).toBeLessThan(REQUIRED_SLUGS.length);
+	});
+
+	// Positional id lock — these ids are persisted to SQLite via spec §8.1
+	// chunks.dirty_blob (Uint16Array). Reordering BLOCK_DEFS would silently
+	// flip ids and corrupt every save on user devices. This test fails
+	// loudly the moment the order shifts, forcing a migration discussion
+	// rather than letting a refactor through unnoticed.
+	it('BLOCK_IDS positional lock (save-format contract)', () => {
+		const ID_LOCK: Record<BlockSlug, number> = {
+			air: 0,
+			'carpet-floor': 1,
+			'ceiling-tile': 2,
+			'cubicle-wall': 3,
+			drywall: 4,
+			'laminate-desk-block': 5,
+			'up-door-frame': 6,
+			'down-door-frame': 7,
+			'supply-closet-wall': 8,
+			'placed-stair-block': 9,
+			'placed-wall-block': 10,
+			'placed-desk-block': 11,
+			'placed-terminal': 12,
+		};
+		for (const [slug, expected] of Object.entries(ID_LOCK)) {
+			expect(BLOCK_IDS[slug as BlockSlug], `id drift for ${slug}`).toBe(expected);
+		}
+	});
+
+	// Tileset slot positions are baked into the committed atlas webp.
+	// Reordering TILESET_SLOTS without rebuilding the atlas would point
+	// every block's faceUVs at the wrong tile. This test catches that.
+	it('TILESET_SLOTS positional lock (atlas contract)', () => {
+		const SLOT_LOCK = [
+			'air',
+			'carpet',
+			'ceiling-tile',
+			'cubicle-wall',
+			'drywall',
+			'laminate',
+			'whiteboard',
+			'door-frame',
+			'supply-metal',
+			'placed-stair',
+			'placed-wall',
+			'placed-desk',
+			'placed-terminal',
+			'reserved-13',
+			'reserved-14',
+			'reserved-15',
+		] as const;
+		expect(TILESET_SLOTS.length).toBe(SLOT_LOCK.length);
+		expect(TILESET_GRID).toBe(4);
+		for (let i = 0; i < SLOT_LOCK.length; i++) {
+			expect(TILESET_SLOTS[i], `slot drift at index ${i}`).toBe(SLOT_LOCK[i]);
+		}
+		// And spot-check the UV math: 'carpet' is index 1 → col 1 row 0 →
+		// origin (0.25, 0).
+		expect(slotUV('carpet')).toEqual([0.25, 0]);
 	});
 
 	it('BLOCK_SLUGS round-trips ids back to slugs', () => {

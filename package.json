@@ -111,6 +111,9 @@
 		"overrides": {
 			"vitest": "$vitest",
 			"@vitest/browser": "$@vitest/browser"
-		}
+		},
+		"onlyBuiltDependencies": [
+			"sharp"
+		]
 	}
 }
