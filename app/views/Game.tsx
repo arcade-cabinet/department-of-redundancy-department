@@ -1,15 +1,25 @@
 import { Canvas } from '@react-three/fiber';
+import { Suspense, useEffect, useState } from 'react';
 import { ACESFilmicToneMapping, SRGBColorSpace } from 'three';
+import { loadManifest, type Manifest } from '@/content/manifest';
 import { Lighting } from '@/render/lighting/Lighting';
+import { World } from '@/render/world/World';
 
 type Props = { onExit: () => void };
 
 export function Game({ onExit }: Props) {
+	const [manifest, setManifest] = useState<Manifest | null>(null);
+	useEffect(() => {
+		loadManifest()
+			.then(setManifest)
+			.catch((e) => console.error('manifest load:', e));
+	}, []);
+
 	return (
 		<div data-testid="game" style={{ position: 'relative', width: '100%', height: '100%' }}>
 			<Canvas
-				style={{ background: 'var(--carpet)' }}
-				camera={{ position: [0, 1.6, 3], fov: 70 }}
+				style={{ background: '#0d0f12' }}
+				camera={{ position: [3.5, 1.6, 4.5], fov: 60 }}
 				shadows
 				gl={{
 					toneMapping: ACESFilmicToneMapping,
@@ -18,11 +28,10 @@ export function Game({ onExit }: Props) {
 					antialias: true,
 				}}
 			>
-				<Lighting />
-				<mesh position={[0, 0, 0]} castShadow receiveShadow>
-					<boxGeometry args={[1, 1, 1]} />
-					<meshStandardMaterial color="#C7B89A" />
-				</mesh>
+				<Suspense fallback={null}>
+					<Lighting />
+					{manifest && <World manifest={manifest} />}
+				</Suspense>
 			</Canvas>
 			<button
 				type="button"
