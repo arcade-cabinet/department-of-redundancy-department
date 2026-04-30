@@ -7,39 +7,35 @@ domain: quality
 
 # Testing
 
-Test pyramid per `~/.claude/profiles/ts-browser-game.md`. **Specs reify spec lines** — each design-canon claim has an assertion.
+Test pyramid per `~/.claude/profiles/ts-browser-game.md`. **Tests reify spec lines** — each design-canon claim has an assertion.
 
 | Layer | Runner | Scope | Path |
 |---|---|---|---|
-| Unit | Vitest (node project) | pure logic — rail traversal, score math, beat timelines, RNG | `tests/unit/`, colocated `*.test.ts` |
-| Browser | Vitest (browser project, Playwright Chromium) | R3F components, BVH raycast, Rapier collisions | `tests/browser/` |
-| E2E | Playwright | full-run journeys — Lobby → Boardroom | `tests/e2e/` |
-| Visual | Playwright `toHaveScreenshot` | reticle states, HUD, level frames | `tests/visual/__screenshots__/` |
-| Audio | Vitest browser + `OfflineAudioContext` | per-cue envelope, timing | `tests/audio/` |
+| Unit | Vitest (node) | pure logic — rail traversal, fire-program tick math, screenplay director state, score math | colocated `*.test.ts` next to the module |
 
-Harness scenes (`tests/harness/`) hold deterministic single-element scenes for visual regression — one HUD panel, one beat, one reticle state.
+The current canonical example is `src/rail/Rail.test.ts` (25 tests covering the camera-rail state machine).
+
+## What we test
+
+- **Rail state machine** (`src/rail/Rail.ts`) — segment math, dwell entry/exit, overflow handling, finished state, degenerate segments.
+- **Spawn-rail traversal** (`src/encounter/SpawnRail.ts`) — same shape but for short waypoint paths.
+- **Fire-program tape** (`src/encounter/EncounterDirector.ts`'s `tickEnemy`) — event emission ordering, per-difficulty mutation, pre-aggro hold.
+- **Game state transitions** (`src/game/GameState.ts`) — start-run → damage → continue → game-over flow.
+
+## What we do not test (yet)
+
+- Visual regression (no `tests/visual/`). Babylon GUI rendering needs a real GPU surface; deferred until perf-pass.
+- E2E (no Playwright). Adding once the playable run is stable end-to-end.
+- Audio envelope tests. Web Audio determinism via `OfflineAudioContext` is sound but has no v1 hooks.
 
 ## CI mapping
 
-`.github/workflows/ci.yml` runs four jobs: `core` (typecheck + lint + node tests), `browser`, `e2e-smoke`, `bundle-size`.
-
-## Lockdown protocol (active until Phase 4 lift gate)
-
-While the OOM lockdown is active per `.agent-state/directive.md`, only `pnpm typecheck` + `pnpm lint` + `pnpm test:node` run locally. `pnpm test:browser` and any `pnpm dev` / headed playwright are forbidden. Lift criteria are in the directive.
-
-## Determinism rules
-
-1. Seed all RNG via `createRng(seed)` from `src/shared/rng.ts`. Engine accepts `?seed=N`.
-2. Fixed timestep — `?frame=N` advances exactly N 60Hz ticks.
-3. Animations disabled in test mode (Playwright `animations: 'disabled'` + engine-level tween gating).
-4. Wait for fonts: `await page.evaluate(() => document.fonts.ready)`.
-5. Mask volatile regions (FPS counters, timestamps) via `mask:` in `toHaveScreenshot`.
-6. `retries: 0` for visual tests locally — flake means determinism is broken.
+`.github/workflows/ci.yml` runs `pnpm typecheck` + `pnpm lint` + `pnpm test:node`. Visual / browser tests are deferred — see "What we do not test (yet)".
 
 ## Forbidden
 
-- `.skip(`, `.todo(`, `.fixme(`, `xtest(`, `xit(`
-- `TODO:`, `FIXME:`, `throw new Error('not implemented')`
-- `Math.random()`, `Date.now()`, `performance.now()` outside the engine clock/RNG facade
-- Hand-edited baseline PNGs (regenerate via `--update-snapshots`, eyeball the diff)
-- `retries: N` on visual tests to mask flake
+- `.skip(`, `.todo(`, `.fixme(`, `xtest(`, `xit(` — write the test or delete it.
+- `TODO:`, `FIXME:`, `throw new Error('not implemented')` — fix or delete.
+- `Math.random()`, `Date.now()` — gameplay is deterministic by design (no PRNG); tests use `performance.now()` only at run-start in `GameState.startRun`.
+- Hand-edited baseline PNGs.
+- `retries: N` on visual tests to mask flake.

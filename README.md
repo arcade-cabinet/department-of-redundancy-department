@@ -2,19 +2,23 @@
 
 > *Time Crisis in cubicles.*
 >
-> Mobile-first arcade rail shooter set in a haunted corporate office. The rail moves you past cubicles in first-person. Aim, fire, reload, take cover, swap weapons, survive Lobby → Stairway A → Open Plan → Stairway B → HR Corridor → Stairway C → Executive Suites → Boardroom (Reaper). Coin-op cabinet experience in your pocket.
+> Mobile-first arcade rail shooter set in a haunted corporate office. The rail carries you past cubicles in first-person. Aim, fire, reload, take cover, swap weapons, survive Lobby → Stairway A → Open Plan → Stairway B → HR Corridor → Stairway C → Executive Suites → Boardroom (Reaper). The arcade-cabinet experience in your pocket.
 >
-> Capacitor-wrapped for native iOS / Android. R3F + drei + Rapier renderer. Persistent SQLite high-score table.
+> Built on Babylon.js. Capacitor-wrapped for native iOS / Android. High scores via `Capacitor.Preferences` — no save blob, no SQLite. It's an arcade game.
 
-**Status:** rail-shooter pivot in progress (Phase 1 vertical slice).
+**Status:** Babylon pivot in progress.
 **Live deploy:** https://arcade-cabinet.github.io/department-of-redundancy-department/
 
 ## Read first
 
-- **Top-level design:** [`docs/superpowers/specs/2026-04-30-arcade-rail-shooter-design.md`](./docs/superpowers/specs/2026-04-30-arcade-rail-shooter-design.md)
-- **Design canon (12 docs):** [`docs/superpowers/specs/arcade-rail-shooter/`](./docs/superpowers/specs/arcade-rail-shooter/)
-- **Build plan / PRQ ledger:** [`docs/superpowers/plans/2026-04-30-arcade-rail-shooter-build.md`](./docs/superpowers/plans/2026-04-30-arcade-rail-shooter-build.md)
-- **Roadmap:** [`docs/ROADMAP.md`](./docs/ROADMAP.md)
+- **Overview:** [`docs/spec/00-overview.md`](./docs/spec/00-overview.md)
+- **Pacing & time math:** [`docs/spec/01-pacing-and-time-math.md`](./docs/spec/01-pacing-and-time-math.md)
+- **Encounter vocabulary:** [`docs/spec/02-encounter-vocabulary.md`](./docs/spec/02-encounter-vocabulary.md) — archetypes + fire programs
+- **Difficulty & modifiers:** [`docs/spec/03-difficulty-and-modifiers.md`](./docs/spec/03-difficulty-and-modifiers.md)
+- **Construction primitives:** [`docs/spec/04-construction-primitives.md`](./docs/spec/04-construction-primitives.md)
+- **Screenplay language:** [`docs/spec/05-screenplay-language.md`](./docs/spec/05-screenplay-language.md) — cue-verb reference
+- **Per-level screenplays:** [`docs/spec/levels/`](./docs/spec/levels/)
+- **Paper playtest:** [`docs/spec/playtest-2026-04-30.md`](./docs/spec/playtest-2026-04-30.md)
 - **Architecture:** [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
 - **Testing:** [`docs/TESTING.md`](./docs/TESTING.md)
 
@@ -33,11 +37,9 @@ pnpm dev
 | `pnpm build` | Production build |
 | `pnpm typecheck` | `tsc --noEmit` |
 | `pnpm lint` | Biome check |
+| `pnpm lint:fix` | Biome check --write (organize imports + format) |
 | `pnpm test:node` | Vitest node project |
-| `pnpm test:browser` | Vitest browser project (real GPU + R3F) |
-| `pnpm test:e2e:ci` | Playwright smoke |
-| `pnpm assets:convert` | Blender bpy: `references/` → GLB |
-| `pnpm assets:check` | Verify manifest entries match disk |
+| `pnpm cap:sync` | Capacitor sync to native shells |
 
 ## License
 

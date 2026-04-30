@@ -6,21 +6,33 @@ All notable changes to this project. Format: [Keep a Changelog](https://keepacha
 
 ### Changed
 
-- **Pivot to arcade rail shooter** (2026-04-30). DORD is now a mobile-first rail shooter in the Time Crisis / House of the Dead / Virtua Cop lineage — single canonical 9-level run (Lobby → Boardroom), 5 verbs, 3-state reticle, hand-crafted levels. The pre-pivot voxel/floor/maze/navmesh world has been removed. Canon: `docs/superpowers/specs/arcade-rail-shooter/`.
-- All pre-pivot plan documents (`docs/plans/prq-*.md`, `docs/plans/EXECUTION.md`, `docs/plans/AUTONOMY.md`, `docs/plans/MONOLITHIC-PR-CONSOLIDATION.md`, `docs/ROADMAP.md` M1-M7) deleted; replaced by the build plan at `docs/superpowers/plans/2026-04-30-arcade-rail-shooter-build.md`.
-- All root + `docs/` documentation realigned to the rail-shooter design (see `docs/ARCHITECTURE.md`, `docs/DESIGN.md`, `docs/TESTING.md`, `docs/ROADMAP.md`, `README.md`, `AGENTS.md`, `STANDARDS.md`).
+- **Babylon pivot** (2026-04-30). Renderer migrated from React Three Fiber to Babylon.js. Native shell simplified to `@capacitor/core` + `@capacitor/preferences` (no `@capacitor/app` lifecycle — `document.visibilitychange` covers pause/resume). Single `<canvas id="game">` in root `index.html`; no React, no router, no views directory. Persistence via `Capacitor.Preferences` only — drizzle/SQLite/`@capacitor-community/sqlite` removed (it's an arcade game).
+- **Screenplay model locked.** Levels are now cue lists keyed off wall-clock + rail-events. Enemies are dumb props on spawn rails ticking authored fire-program tapes. The `EncounterDirector` is the only thing with agency. No FSM library, no AI library, no PRNG — gameplay is fully scripted. Canon: `docs/spec/05-screenplay-language.md` + `docs/spec/02-encounter-vocabulary.md`.
+- **Construction primitives model locked.** Levels are bags of `Wall` / `Floor` / `Ceiling` / `Door` / `Window` / `Shutter` / `Whiteboard` / `Pillar` / `Prop` / `Light` primitives that reference textures from the curated 240-PNG retro library + 5 PBR sets. No "big level GLB." Canon: `docs/spec/04-construction-primitives.md`.
+- Design canon migrated from `docs/superpowers/specs/arcade-rail-shooter/` to `docs/spec/` (flat). Top-level dated design + build-plan docs removed; per-PRQ catalogue replaced by ad-hoc TaskList entries off the canon.
 
 ### Removed
 
-- `src/world/{chunk,floor,blocks,traps,workbench}` — voxel chunk system, floor archetypes, voxel block registry, traps, workbench (PRQ-1.0).
-- `src/ai/{navmesh,enemies,perception}` — yuka navmesh + enemy entities + perception layer (replaced by rail-shooter encounter beats).
-- `src/render/{world,stairwells,characters,lighting,camera}` — voxel world meshing, stairwell streaming, character rig, scene lighting, kinematic player (replaced by R3F rail camera).
-- `src/{building,combat,content,narrator,ecs,verify}` — building/mining radials, hitscan adapter, drop tables, Tracery narrator, koota wiring, boot a11y verify (replaced or moved into focused rail-shooter modules).
-- `app/views/{EmployeeFile,WorkbenchPanel}` — pre-pivot pause-menu surfaces.
+- React + React Three Fiber + drei + Rapier renderer.
+- drizzle + sql.js + `@capacitor-community/sqlite` persistence.
+- yuka + koota + radix-ui + framer-motion + tailwind 4 + seedrandom.
+- The 60-PRQ build plan + Phase 1-6 catalogue + M1-M7 milestones (replaced by single-PR pivot + ad-hoc canon-driven tasks).
+- OOM lockdown protocol (Babylon's `dispose()` cascades replace the React-cleanup discipline).
+- Voxel/floor/maze/navmesh systems and weapon-progression Tasks 15-21 (gone in the prior pivot but still referenced in pre-pivot docs).
+- `app/`, `src/db/`, `src/i18n/`, `src/ui/`, `src/input/`, `src/shared/`, `src/audio/` directories.
 
 ### Added
 
-- `src/shared/rng.ts` — single-source `createRng(seed)` (preserved verbatim from the pre-pivot world generator).
+- `src/main.ts` — runtime boot (Babylon Engine + Game state machine + EncounterDirector + GUI overlays).
+- `src/preferences.ts` — `Capacitor.Preferences`-backed settings + high scores.
+- `src/encounter/` — screenplay director (`EncounterDirector`), enemies (`Enemy.ts`, `ARCHETYPES`), spawn rails (`SpawnRail.ts`), fire-program presets (`firePatterns.ts`), cue language (`cues.ts`).
+- `src/levels/` — level types (`types.ts`) + Lobby data (`lobby.ts`) + level registry (`index.ts`).
+- `src/game/` — top-level state machine (`Game.ts` + `GameState.ts`).
+- `src/gui/` — Babylon GUI overlays (Reticle, InsertCoinOverlay, ContinueOverlay, GameOverOverlay, SettingsOverlay).
+- `docs/spec/04-construction-primitives.md` — Wall/Floor/Door/Window/Shutter/etc. schemas.
+- `docs/spec/05-screenplay-language.md` — cue trigger + cue-action verb reference, 14 verbs.
+- `docs/spec/playtest-2026-04-30.md` — paper-playtest report with 8 friction edits + 2 schema extensions.
+- All 8 level docs (`docs/spec/levels/01-lobby.md` … `08-boardroom.md`) enriched with construction primitives, spawn-rail maps, camera-rail nodes, and cue lists.
 
 ## 1.0.0 (2026-04-30)
 

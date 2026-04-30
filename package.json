@@ -2,7 +2,7 @@
 	"name": "department-of-redundancy-department",
 	"version": "1.0.0",
 	"private": true,
-	"description": "DOOM meets Minecraft, in cubicles. Mobile-first first-person voxel-prop FPS.",
+	"description": "Mobile-first arcade rail shooter set in a haunted corporate office. Babylon.js + Capacitor.",
 	"type": "module",
 	"packageManager": "pnpm@10.33.0",
 	"engines": {
@@ -19,88 +19,32 @@
 		"lint:fix": "biome check --write .",
 		"format": "biome format --write .",
 		"test": "vitest run --passWithNoTests",
-		"test:node": "vitest run --project node --passWithNoTests",
-		"test:browser": "vitest run --project browser --passWithNoTests",
+		"test:node": "vitest run --passWithNoTests",
 		"test:watch": "vitest",
-		"pretest": "pnpm prepare:public",
-		"pretest:browser": "pnpm prepare:public",
 		"test:e2e": "playwright test",
 		"test:e2e:ci": "test -d e2e && playwright test --grep-invert @nightly || echo 'no e2e specs yet — skipping'",
-		"pretest:e2e": "pnpm prepare:public",
-		"pretest:e2e:ci": "pnpm prepare:public",
-		"copywasm": "node scripts/copy-wasm.mjs",
-		"prepare:public": "pnpm copywasm",
-		"predev": "pnpm prepare:public && pnpm assets:check",
-		"prebuild": "pnpm prepare:public && pnpm assets:check",
-		"prebuild:native": "pnpm prepare:public && pnpm assets:check",
-		"prepreview": "pnpm prepare:public",
-		"assets:convert": "blender --background --python scripts/convert-references.py && node scripts/compress-models.mjs",
-		"assets:tileset": "node scripts/build-tileset.mjs",
-		"assets:audio": "node scripts/curate-audio.mjs",
-		"assets:weapons": "blender --background --python scripts/extract-weapons.py",
-		"assets:hands": "blender --background --python scripts/extract-hands.py",
-		"assets:textures-retro": "node scripts/curate-textures.mjs",
-		"assets:cleanup-references": "node scripts/cleanup-references.mjs",
 		"assets:check": "node scripts/check-asset-manifest.mjs",
-		"cap:sync": "pnpm build:native && cap sync",
-		"drizzle:gen": "drizzle-kit generate",
-		"drizzle:push": "drizzle-kit push"
+		"cap:sync": "pnpm build:native && cap sync"
 	},
 	"dependencies": {
-		"@capacitor-community/sqlite": "^8.1.0",
+		"@babylonjs/core": "^8.46.0",
+		"@babylonjs/gui": "^8.46.0",
+		"@babylonjs/loaders": "^8.46.0",
 		"@capacitor/android": "^8.3.1",
 		"@capacitor/cli": "^8.3.1",
 		"@capacitor/core": "^8.3.1",
 		"@capacitor/device": "^8.0.2",
 		"@capacitor/haptics": "^8.0.2",
 		"@capacitor/ios": "^8.3.1",
-		"@capacitor/preferences": "^8.0.1",
-		"@radix-ui/react-dialog": "^1.1.15",
-		"@radix-ui/react-popover": "^1.1.15",
-		"@radix-ui/react-radio-group": "^1.3.8",
-		"@radix-ui/react-slider": "^1.3.6",
-		"@radix-ui/react-switch": "^1.2.6",
-		"@radix-ui/react-tabs": "^1.1.13",
-		"@react-three/drei": "^10.7.7",
-		"@react-three/fiber": "^9.6.1",
-		"@react-three/rapier": "^2.2.0",
-		"@tailwindcss/vite": "^4.2.4",
-		"clsx": "^2.1.1",
-		"drizzle-orm": "^0.45.2",
-		"framer-motion": "^12.38.0",
-		"jeep-sqlite": "^2.8.0",
-		"koota": "^0.6.6",
-		"react": "^19.2.5",
-		"react-dom": "^19.2.5",
-		"seedrandom": "^3.0.5",
-		"sql.js": "^1.14.1",
-		"suspend-react": "^0.1.3",
-		"tailwind-merge": "^3.5.0",
-		"tailwindcss": "^4.2.4",
-		"three": "~0.184.0",
-		"three-mesh-bvh": "^0.9.9",
-		"yuka": "^0.7.8"
+		"@capacitor/preferences": "^8.0.1"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.4.13",
 		"@playwright/test": "1.59.1",
 		"@size-limit/file": "^12.1.0",
-		"@testing-library/dom": "^10.4.1",
-		"@testing-library/react": "^16.3.2",
 		"@types/node": "^25.6.0",
-		"@types/react": "^19.2.14",
-		"@types/react-dom": "^19.2.3",
-		"@types/seedrandom": "^3.0.8",
-		"@types/sql.js": "^1.4.11",
-		"@types/three": "~0.184.0",
-		"@types/yuka": "^0.7.4",
-		"@vitejs/plugin-react": "^6.0.1",
-		"@vitest/browser": "^4.1.5",
-		"@vitest/browser-playwright": "^4.1.5",
 		"cross-env": "^10.1.0",
-		"drizzle-kit": "^0.31.10",
 		"playwright": "1.59.1",
-		"sharp": "^0.34.5",
 		"size-limit": "^12.1.0",
 		"typescript": "~6.0.3",
 		"vite": "^8.0.10",
@@ -109,16 +53,12 @@
 	"size-limit": [
 		{
 			"path": "dist/assets/*.js",
-			"limit": "350 KB"
+			"limit": "500 KB"
 		}
 	],
 	"pnpm": {
 		"overrides": {
-			"vitest": "$vitest",
-			"@vitest/browser": "$@vitest/browser"
-		},
-		"onlyBuiltDependencies": [
-			"sharp"
-		]
+			"vitest": "$vitest"
+		}
 	}
 }
