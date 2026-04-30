@@ -737,18 +737,13 @@ gh repo create arcade-cabinet/department-of-redundancy-department \
 
 ### 20.3 Repo settings to apply via `gh` (idempotent, in `scripts/setup-github.mjs`)
 
-```bash
-# Branch protection on main
-gh api -X PUT repos/arcade-cabinet/department-of-redundancy-department/branches/main/protection \
-  --input scripts/branch-protection.json
-# - require status checks: ci, e2e, perf, deploy-pages, post-deploy-validate
-# - require linear history (squash-merge only)
-# - dismiss stale reviews on push
-# - require conversation resolution
+> **Branch protection is org-managed** (arcade-cabinet Enterprise rulesets). The script does NOT call the per-repo branch-protection API — the org ruleset already enforces required-status-checks + squash-only + linear-history + no-direct-push-to-main across all org repos.
 
+```bash
 # Topics
 gh api -X PUT repos/arcade-cabinet/department-of-redundancy-department/topics \
-  -F names[]=game -F names[]=fps -F names[]=voxel -F names[]=r3f -F names[]=capacitor -F names[]=mobile-game
+  --raw-field 'names[]=game' --raw-field 'names[]=fps' --raw-field 'names[]=voxel' \
+  --raw-field 'names[]=r3f' --raw-field 'names[]=capacitor' --raw-field 'names[]=mobile-game'
 
 # Discussions on (for community)
 gh api -X PATCH repos/arcade-cabinet/department-of-redundancy-department \

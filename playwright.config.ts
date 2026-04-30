@@ -1,9 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// Trim trailing slash so spec calls like page.goto('/') resolve to <base>/
-// instead of <origin>/ when baseURL contains a path prefix (Pages deploy).
+// Ensure trailing slash so page.goto('') and relative-asset resolution both
+// land under the baseURL path (relevant when DORD_BASE_URL points at the
+// GitHub Pages deploy at /<repo>/, not at the bare origin). Specs use
+// page.goto('') (empty string) which resolves to baseURL itself —
+// page.goto('/') would resolve to origin and skip the Pages base path.
 const rawBase = process.env.DORD_BASE_URL ?? 'http://localhost:5173/';
-const baseURL = rawBase.endsWith('/') ? rawBase.slice(0, -1) : rawBase;
+const baseURL = rawBase.endsWith('/') ? rawBase : `${rawBase}/`;
 const isExternalTarget =
 	!baseURL.startsWith('http://localhost') && !baseURL.startsWith('http://127.0.0.1');
 
