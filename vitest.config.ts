@@ -33,7 +33,8 @@ export default defineConfig({
 					],
 					browser: {
 						enabled: true,
-						provider: playwright(),
+						// biome-ignore lint/suspicious/noExplicitAny: Vitest 4 type drift between dual pnpm peer-resolution paths
+						provider: playwright() as any,
 						headless: true,
 						instances: [{ browser: 'chromium' }],
 					},
