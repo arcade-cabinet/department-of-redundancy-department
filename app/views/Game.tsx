@@ -31,6 +31,8 @@ import type { GestureEvent } from '@/input/gesture';
 import { InputCanvas } from '@/input/InputCanvas';
 import { PlayerCamera } from '@/render/camera/PlayerCamera';
 import { Lighting } from '@/render/lighting/Lighting';
+import { Door } from '@/render/stairwells/Door';
+import { Transition } from '@/render/stairwells/Transition';
 import { NavMeshViz, useNavMeshVizFlag } from '@/render/world/NavMeshViz';
 import { PathViz, usePathVizFlag } from '@/render/world/PathViz';
 import { World } from '@/render/world/World';
@@ -42,6 +44,8 @@ import { ThreatStrip } from '@/ui/chrome/ThreatStrip';
 import { WeaponIcon } from '@/ui/chrome/WeaponIcon';
 import { RadialMenu } from '@/ui/radial/RadialMenu';
 import { DrawCallHUD, useDrawCallHUDFlag } from '@/verify/DrawCallHUD';
+import { routeTap } from '@/world/floor/floorRouter';
+import { useFloorState } from '@/world/floor/useFloorState';
 import { generateFloor } from '@/world/generator/floor';
 import { freshSeed } from '@/world/generator/rng';
 import { GameOver } from './GameOver';
@@ -98,24 +102,30 @@ export function Game({ onExit }: Props) {
 	// kept available for the new-game path that PRQ-04 will own.
 	void freshSeed; // silence unused — wired in PRQ-04
 	const [seed] = useState<string>(() => 'Synergistic Bureaucratic Cubicle');
-	const { navMesh } = useNavMesh(seed, 1);
+	const { state: floorState, swapTo } = useFloorState({ seed });
+	const { navMesh } = useNavMesh(seed, floorState.currentFloor);
+	// Stairwell transition state. `pendingDir` is set when a door tap
+	// fires; the Transition fades to opaque, runs swapTo, then fades out.
+	const [pendingDir, setPendingDir] = useState<'up' | 'down' | null>(null);
+	const [doorOpening, setDoorOpening] = useState<'up' | 'down' | null>(null);
+	const [transitionActive, setTransitionActive] = useState(false);
 
 	// Pre-compute deterministic spawn positions for the 3 floor-1 managers.
 	// generateFloor() is idempotent on the seed so this stays reactive-clean.
 	const enemySpawns = useMemo(() => {
-		const result = generateFloor(seed, 1);
+		const result = generateFloor(seed, floorState.currentFloor);
 		const VOXEL_SIZE = 0.4;
 		const ORIGIN = -31 * VOXEL_SIZE;
 		return planSpawns({
 			chunks: result.chunks,
 			seed,
-			floor: 1,
+			floor: floorState.currentFloor,
 			count: 3,
 			voxelSize: VOXEL_SIZE,
 			originX: ORIGIN,
 			originZ: ORIGIN,
 		});
-	}, [seed]);
+	}, [seed, floorState.currentFloor]);
 
 	const getPlayerPosition = useCallback(
 		() => playerRef.current?.getPosition() ?? { x: 0, y: 0.8, z: 0 },
@@ -176,16 +186,61 @@ export function Game({ onExit }: Props) {
 	// Translate gesture events: tap → tap-to-travel via the navmesh-driven
 	// vehicle; hold → radial menu; drag/drag-end reserved for drag-look
 	// (PRQ-08+ when pointer-lock + sensitivity wire in).
-	const onGesture = useCallback((e: GestureEvent) => {
-		if (e.kind === 'hold') {
-			setRadialAnchor({ x: e.x, y: e.y });
-			return;
-		}
-		if (e.kind === 'tap') {
+	const onGesture = useCallback(
+		(e: GestureEvent) => {
+			if (e.kind === 'hold') {
+				setRadialAnchor({ x: e.x, y: e.y });
+				return;
+			}
+			if (e.kind !== 'tap') return;
+			// Door router: did this tap land on a stairwell door? If so, kick
+			// off the door-open animation; the Door's onOpened triggers the
+			// transition + swap. Otherwise fall through to tap-travel.
+			const tapWorld = playerRef.current?.getTapWorld(e.x, e.y);
+			if (tapWorld) {
+				const dir = routeTap({
+					upDoor: floorState.upDoorWorld,
+					downDoor: floorState.downDoorWorld,
+					currentFloor: floorState.currentFloor,
+					playerPos: playerRef.current?.getPosition() ?? { x: 0, y: 0.8, z: 0 },
+					tapWorld,
+					tapMaxDistance: 1.5,
+					playerMaxDistance: 2.5,
+				});
+				if (dir && pendingDir === null && !transitionActive) {
+					setDoorOpening(dir);
+					setPendingDir(dir);
+					return;
+				}
+			}
 			playerRef.current?.tap(e.x, e.y);
-			// Capture the new path for PathViz on the next tick.
 			setTimeout(() => setPathWaypoints(playerRef.current?.path ?? []), 16);
-		}
+		},
+		[floorState, pendingDir, transitionActive],
+	);
+
+	// Door open animation finished → kick off fade-cut.
+	const onDoorOpened = useCallback(() => {
+		setDoorOpening(null);
+		setTransitionActive(true);
+	}, []);
+
+	// Fade-in midpoint → run swapTo + teleport player to the destination
+	// floor's opposite door (Up-Door of N → arrive at Down-Door of N+1).
+	const onTransitionMidpoint = useCallback(async () => {
+		if (!pendingDir) return;
+		const result = await swapTo(pendingDir);
+		const VOXEL_SIZE = 0.4;
+		const ORIGIN = -31 * VOXEL_SIZE;
+		const sx = ORIGIN + result.spawn.x * VOXEL_SIZE;
+		const sz = ORIGIN + result.spawn.z * VOXEL_SIZE;
+		playerRef.current?.teleport(sx, sz);
+	}, [pendingDir, swapTo]);
+
+	// Fade-out complete → clear pending state.
+	const onTransitionComplete = useCallback(() => {
+		setTransitionActive(false);
+		setPendingDir(null);
 	}, []);
 
 	// Player tapped a radial slot. PRQ-06 turns these into koota events
@@ -272,8 +327,32 @@ export function Game({ onExit }: Props) {
 							interpolate={false}
 							paused={paused || gameOver}
 						>
-							{manifest && <World manifest={manifest} seed={seed} />}
+							{manifest && (
+								<World manifest={manifest} seed={seed} floor={floorState.currentFloor} />
+							)}
 							<PlayerKinematic ref={playerRef} navMesh={navMesh} spawn={[0, 1.5]} />
+							<Door
+								position={[
+									floorState.upDoorWorld.x,
+									floorState.upDoorWorld.y,
+									floorState.upDoorWorld.z,
+								]}
+								direction="up"
+								open={doorOpening === 'up'}
+								onOpened={onDoorOpened}
+							/>
+							{floorState.currentFloor > 1 && (
+								<Door
+									position={[
+										floorState.downDoorWorld.x,
+										floorState.downDoorWorld.y,
+										floorState.downDoorWorld.z,
+									]}
+									direction="down"
+									open={doorOpening === 'down'}
+									onOpened={onDoorOpened}
+								/>
+							)}
 							{manifest &&
 								enemySpawns.map((s) => (
 									<MiddleManagerEntity
@@ -293,7 +372,15 @@ export function Game({ onExit }: Props) {
 					{showHUD && <DrawCallHUD />}
 				</Suspense>
 			</Canvas>
-			<InputCanvas onGesture={onGesture} enabled={!paused && radialAnchor === null} />
+			<InputCanvas
+				onGesture={onGesture}
+				enabled={!paused && radialAnchor === null && !transitionActive && pendingDir === null}
+			/>
+			<Transition
+				active={transitionActive}
+				onMidpoint={onTransitionMidpoint}
+				onComplete={onTransitionComplete}
+			/>
 			<RadialMenu
 				anchor={radialAnchor}
 				surface={radialSurface}
@@ -311,7 +398,7 @@ export function Game({ onExit }: Props) {
 					<AmmoCounter current={currentAmmo(equipped)} max={cap} weaponName={w?.name ?? slug} />
 				);
 			})()}
-			<FloorStamp floor={1} />
+			<FloorStamp floor={floorState.currentFloor} />
 			<ThreatStrip threat={threat} />
 			<Crosshair visible={false} />
 			<div

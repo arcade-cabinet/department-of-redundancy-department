@@ -9,6 +9,8 @@ import { Floor } from './Floor';
 type Props = {
 	manifest: Manifest;
 	seed: string;
+	/** Active floor index. Drives ChunkLayer regeneration on swap (PRQ-12). */
+	floor?: number;
 	/** When true, render the chunked voxel world (PRQ-03+). When false,
 	 *  the original PRQ-02 mesh-walled demo. Default: true. */
 	voxels?: boolean;
@@ -35,11 +37,11 @@ useGLTF.preload('/assets/models/props/desk.glb');
 // a character or player's feet should sit so they don't clip the slab.
 const VOXEL_FLOOR_TOP_Y = 0.8;
 
-export function World({ manifest, seed, voxels = true }: Props) {
+export function World({ manifest, seed, floor = 1, voxels = true }: Props) {
 	if (voxels) {
 		return (
 			<>
-				<ChunkLayer seed={seed} floor={1} />
+				<ChunkLayer seed={seed} floor={floor} />
 				<Character slug="middle-manager" manifest={manifest} position={[0, VOXEL_FLOOR_TOP_Y, 0]} />
 			</>
 		);
