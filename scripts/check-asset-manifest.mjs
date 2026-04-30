@@ -62,4 +62,14 @@ if (missing > 0) {
 	process.exit(1);
 }
 
+// Voxel block tileset (PRQ-03 T1). Committed to public/ so the dev/build
+// pipeline doesn't need sharp at runtime. Regenerate with `pnpm assets:tileset`.
+const tilesetPath = resolve(repoRoot, 'public/assets/textures/blocks-tileset.webp');
+if (!existsSync(tilesetPath)) {
+	console.error('\ncheck-asset-manifest: blocks-tileset.webp missing.');
+	console.error('Run `pnpm assets:tileset` to regenerate.');
+	process.exit(1);
+}
+console.log(`  tileset      blocks-tileset.webp ${fmtMB(statSync(tilesetPath).size)}`);
+
 console.log('check-asset-manifest: all entries present.');
