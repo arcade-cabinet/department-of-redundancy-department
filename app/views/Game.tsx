@@ -5,6 +5,7 @@ import { ACESFilmicToneMapping, SRGBColorSpace } from 'three';
 import { PlayerKinematic, type PlayerKinematicHandle } from '@/ai/core/PlayerKinematic';
 import { HrReaperEntity, type HrReaperHandle } from '@/ai/enemies/HrReaperEntity';
 import { MiddleManagerEntity } from '@/ai/enemies/MiddleManagerEntity';
+import { pickSpawnSet } from '@/ai/enemies/spawnDirector';
 import { planSpawns } from '@/ai/enemies/spawner';
 import { useNavMesh } from '@/ai/navmesh/useNavMesh';
 import { audioCues } from '@/audio/cues';
@@ -51,7 +52,7 @@ import { isBossFloor, shouldLockUpDoor } from '@/world/floor/bossGate';
 import { routeTap } from '@/world/floor/floorRouter';
 import { useFloorState } from '@/world/floor/useFloorState';
 import { generateFloor } from '@/world/generator/floor';
-import { freshSeed } from '@/world/generator/rng';
+import { createRng, freshSeed } from '@/world/generator/rng';
 import { GameOver } from './GameOver';
 import { PauseMenu } from './PauseMenu';
 
@@ -199,13 +200,19 @@ export function Game({ onExit }: Props) {
 		return [best.x, 0.8, best.z];
 	}, [floorState.upDoorWorld, walkableCells]);
 
-	// Pre-compute deterministic spawn positions for the 3 floor-1 managers.
-	// generateFloor() is idempotent on the seed so this stays reactive-clean.
+	// Pre-compute deterministic spawn positions for the floor's enemies.
+	// Each spawn is paired with an archetype (middle-manager / policeman /
+	// hitman / swat) chosen by the threat-tier spawn director. The
+	// spawn-direction RNG is keyed off the floor seed so a re-roll on
+	// the same threat reproduces. `threat` is intentionally NOT in the
+	// dep list — re-pick on every floor change is the correct semantics;
+	// mid-floor threat climbs don't retro-spawn enemies.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: see above
 	const enemySpawns = useMemo(() => {
 		const result = generateFloor(seed, floorState.currentFloor);
 		const VOXEL_SIZE = 0.4;
 		const ORIGIN = -31 * VOXEL_SIZE;
-		return planSpawns({
+		const positions = planSpawns({
 			chunks: result.chunks,
 			seed,
 			floor: floorState.currentFloor,
@@ -214,6 +221,15 @@ export function Game({ onExit }: Props) {
 			originX: ORIGIN,
 			originZ: ORIGIN,
 		});
+		// Read threat at floor-enter time; the director picks tier by
+		// quantizing threat. Using a synchronous read here is fine —
+		// re-eval happens on every floor change (currentFloor dep).
+		const directorRng = createRng(`${seed}::floor-${floorState.currentFloor}::director`);
+		const archetypes = pickSpawnSet(threat, positions.length, directorRng);
+		return positions.map((p, i) => ({
+			...p,
+			archetype: archetypes[i]?.slug ?? ('middle-manager' as const),
+		}));
 	}, [seed, floorState.currentFloor]);
 
 	const getPlayerPosition = useCallback(
@@ -474,10 +490,11 @@ export function Game({ onExit }: Props) {
 							{manifest &&
 								enemySpawns.map((s) => (
 									<MiddleManagerEntity
-										key={`mgr-${s.voxel.x}-${s.voxel.y}-${s.voxel.z}`}
+										key={`enemy-${s.voxel.x}-${s.voxel.y}-${s.voxel.z}`}
 										manifest={manifest}
 										navMesh={navMesh}
 										spawn={[s.world.x, 0.8, s.world.z]}
+										archetype={s.archetype}
 										getPlayerPosition={getPlayerPosition}
 										applyPlayerDamage={applyPlayerDamage}
 										onKill={onEnemyKill}

@@ -8,10 +8,11 @@ import { createPlayerVehicle } from '@/ai/core/PlayerVehicle';
 import { freshMemory, updateMemory, VisionCone } from '@/ai/perception/Vision';
 import { applyHitscanSpread } from '@/combat/hitscan';
 import type { Manifest } from '@/content/manifest';
-import { applyDamage, freshHealth, isDead, MANAGER_MAX_HP } from '@/ecs/components/Health';
+import { applyDamage, freshHealth, isDead } from '@/ecs/components/Health';
 import { usePaused } from '@/ecs/PauseContext';
 import { Character } from '@/render/characters/Character';
 import { createRng } from '@/world/generator/rng';
+import { archetypeStats, type EnemyArchetype } from './enemyArchetypes';
 import { type FSMState, freshFSM, tick as fsmTick, killFSM } from './MiddleManagerFSM';
 
 type Props = {
@@ -26,12 +27,17 @@ type Props = {
 	applyPlayerDamage: (n: number) => boolean;
 	/** Bumps the kills counter (PRQ-04 kills repo wired upstream). */
 	onKill: (slug: string) => void;
+	/** Enemy archetype slug — drives stats, character GLB, kill weight.
+	 *  Defaults to 'middle-manager' for backward-compat with the alpha
+	 *  spawn-3-managers fixture. M2c2 fold-forward: PRQ-10 archetype
+	 *  mounts (policeman/hitman/swat) reuse this same entity since the
+	 *  MiddleManagerFSM's idle/patrol/investigate/engage/reposition
+	 *  state space covers all four. Hitman's Stealth/Strike/Evade
+	 *  rhythm is approximated by the existing engage→reposition loop;
+	 *  a dedicated HitmanFSM lands in M5 BETA-POLISH if needed. */
+	archetype?: EnemyArchetype;
 };
 
-const VISION_FOV = Math.PI / 2; // 90°
-const VISION_RANGE = 12;
-const HITSCAN_DAMAGE = 8;
-const HITSCAN_ACCURACY = 0.6;
 const FLOOR_Y = 0.8;
 const PERCEPTION_HZ = 5;
 
@@ -60,17 +66,25 @@ export function MiddleManagerEntity({
 	getPlayerPosition,
 	applyPlayerDamage,
 	onKill,
+	archetype = 'middle-manager',
 }: Props) {
 	const { camera } = useThree();
+	const stats = useMemo(() => archetypeStats(archetype), [archetype]);
 	const bodyRef = useRef<RapierRigidBody>(null);
 	const groupRef = useRef<Group>(null);
-	const vehicle = useMemo(() => createPlayerVehicle({ maxSpeed: 1.0 }), []);
-	const visionCone = useMemo(() => new VisionCone({ fov: VISION_FOV, range: VISION_RANGE }), []);
+	const vehicle = useMemo(
+		() => createPlayerVehicle({ maxSpeed: stats.walkSpeed }),
+		[stats.walkSpeed],
+	);
+	const visionCone = useMemo(
+		() => new VisionCone({ fov: stats.visionFovRad, range: stats.visionRange }),
+		[stats.visionFovRad, stats.visionRange],
+	);
 	const memoryRef = useRef(freshMemory());
 	const fsmRef = useRef<FSMState>(freshFSM(0));
 	const lastPerceptionAt = useRef(0);
 	const visibleRef = useRef(false);
-	const [, setHealth] = useState(() => freshHealth(MANAGER_MAX_HP));
+	const [, setHealth] = useState(() => freshHealth(stats.maxHp));
 	const [characterState, setCharacterState] = useState<
 		'idle' | 'walk' | 'run' | 'attack' | 'hit' | 'death'
 	>('idle');
@@ -108,7 +122,7 @@ export function MiddleManagerEntity({
 				if (isDead(next) && !isDead(h)) {
 					fsmRef.current = killFSM(fsmRef.current, performance.now() / 1000);
 					setCharacterState('death');
-					onKill('middle-manager');
+					onKill(archetype);
 				} else if (next.damageFlashTimer > 0) {
 					setCharacterState('hit');
 				}
@@ -116,7 +130,7 @@ export function MiddleManagerEntity({
 			});
 		};
 		(group.userData as { damage?: (n: number) => void }).damage = damageFn;
-	}, [onKill]);
+	}, [onKill, archetype]);
 
 	const paused = usePaused();
 	useFrame(() => {
@@ -235,7 +249,7 @@ export function MiddleManagerEntity({
 		const ray = applyHitscanSpread({
 			origin: new YukaVector3(selfX, FLOOR_Y + 1, selfZ),
 			direction: aim,
-			accuracy: HITSCAN_ACCURACY,
+			accuracy: stats.weaponAccuracy,
 			rng: fireRngRef.current,
 		});
 		// Simple distance-from-ray hit check (T9+ will swap for a real
@@ -248,12 +262,12 @@ export function MiddleManagerEntity({
 		const offX = player.x - selfX;
 		const offZ = player.z - selfZ;
 		const fwdDist = ray.direction.x * offX + ray.direction.z * offZ;
-		if (fwdDist <= 0 || fwdDist > VISION_RANGE) return;
+		if (fwdDist <= 0 || fwdDist > stats.visionRange) return;
 		const cross = Math.abs(ray.direction.x * offZ - ray.direction.z * offX);
 		// `cross` is sin(theta) * |offset| → perpendicular distance from
 		// player to the ray line. <0.5u counts as a hit.
 		if (cross < 0.5) {
-			const playerDead = applyPlayerDamage(HITSCAN_DAMAGE);
+			const playerDead = applyPlayerDamage(stats.weaponDamage);
 			void playerDead; // routing in Game.tsx handles game-over
 		}
 		// Suppress unused-var warning for raycaster + camera until T9 swap.
@@ -275,11 +289,11 @@ export function MiddleManagerEntity({
 				<CapsuleCollider args={[0.5, 0.3]} />
 			</RigidBody>
 			<Character
-				slug="middle-manager"
+				slug={archetype}
 				manifest={manifest}
 				position={spawn}
 				state={characterState}
-				speed={characterState === 'walk' ? 1.0 : 0}
+				speed={characterState === 'walk' ? stats.walkSpeed : 0}
 			/>
 		</group>
 	);
