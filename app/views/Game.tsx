@@ -222,26 +222,43 @@ export function Game({ onExit }: Props) {
 	// Debug-only test namespace (PRQ-17 M3c1). Gated on ?test=1 so
 	// production builds never expose internal state. e2e fixtures in
 	// e2e/fixtures/state.ts read this; never call from app code.
-	useEffect(() => {
-		if (typeof window === 'undefined') return;
-		const params = new URLSearchParams(window.location.search);
-		if (params.get('test') !== '1') return;
-		const w = window as unknown as { __dord?: object };
-		w.__dord = {
-			state: () => ({
-				floor: floorState.currentFloor,
-				threat,
-				kills: killCount,
-				playedSeconds,
-				playerHp: playerHealth.current,
-				bossAlive,
-			}),
-			damageBoss: (n: number) => reaperRef.current?.damage(n),
+	//
+	// Installed eagerly during render (not in useEffect) so the test's
+	// readDordState can read it as soon as the canvas mounts. StrictMode
+	// double-mounting was making the useEffect-install path race the
+	// test's read. The snapshot ref is updated each render so state()
+	// always returns current values.
+	const dordSnapshotRef = useRef({
+		floor: floorState.currentFloor,
+		threat,
+		kills: killCount,
+		playedSeconds,
+		playerHp: playerHealth.current,
+		bossAlive,
+	});
+	dordSnapshotRef.current = {
+		floor: floorState.currentFloor,
+		threat,
+		kills: killCount,
+		playedSeconds,
+		playerHp: playerHealth.current,
+		bossAlive,
+	};
+	// Install eagerly during render. Eager (not in useEffect) because
+	// the test's readDordState polled but raced React's StrictMode
+	// double-mount under a built/preview server. The dordSnapshotRef
+	// updates each render so state() returns the latest values.
+	if (typeof window !== 'undefined') {
+		const w = window as unknown as {
+			__dord?: { state: () => unknown; damageBoss: (n: number) => void };
 		};
-		return () => {
-			delete (window as unknown as { __dord?: object }).__dord;
-		};
-	}, [floorState.currentFloor, threat, killCount, playedSeconds, playerHealth.current, bossAlive]);
+		if (window.location.search.includes('test=1')) {
+			w.__dord = w.__dord ?? {
+				state: () => ({ ...dordSnapshotRef.current }),
+				damageBoss: (n: number) => reaperRef.current?.damage(n),
+			};
+		}
+	}
 
 	// Walkable cells for the Reaper's teleport picker — pulled from
 	// yuka NavMesh region centroids. Empty until navMesh resolves;

@@ -3,7 +3,9 @@ import { expect, test } from '@playwright/test';
 test('@golden landing page renders and CLOCK IN navigates to game canvas', async ({ page }) => {
 	await page.goto(''); // empty resolves to baseURL exactly — '/' would drop the Pages base path
 	await expect(page.getByTestId('landing')).toBeVisible();
-	await expect(page.getByText(/Department of Redundancy Department/i)).toBeVisible();
+	// Title is split across two lines with <br/> — match each separately.
+	await expect(page.getByRole('heading')).toContainText(/Department of/i);
+	await expect(page.getByRole('heading')).toContainText(/Redundancy Department/i);
 	await page.getByTestId('clock-in').click();
 	await expect(page.getByTestId('game')).toBeVisible();
 });
