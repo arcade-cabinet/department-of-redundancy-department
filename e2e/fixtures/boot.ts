@@ -6,7 +6,8 @@ import type { Page } from '@playwright/test';
  *
  * Empty-string `goto('')` is intentional — it resolves to baseURL
  * exactly. `goto('/')` would drop the GitHub Pages base path on
- * deployed runs.
+ * deployed runs. The `query` option appends to baseURL so the
+ * `?test=1` debug-namespace gate survives the navigation.
  */
 
 export interface BootOptions {
@@ -14,11 +15,13 @@ export interface BootOptions {
 	enterGame?: boolean;
 	/** Max ms to wait for the canvas after CLOCK IN. Default 10s. */
 	timeoutMs?: number;
+	/** Query string to append (e.g. `?test=1`). Empty = baseURL only. */
+	query?: string;
 }
 
 export async function bootGame(page: Page, opts: BootOptions = {}): Promise<void> {
 	const timeout = opts.timeoutMs ?? 10_000;
-	await page.goto('');
+	await page.goto(opts.query ?? '');
 	await page.getByTestId('landing').waitFor({ state: 'visible', timeout });
 	if (opts.enterGame) {
 		await page.getByTestId('clock-in').click();

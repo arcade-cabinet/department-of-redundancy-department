@@ -30,11 +30,13 @@ export async function subscribeMobileLifecycle(handlers: LifecycleHandlers): Pro
 	const isCap = typeof window !== 'undefined' && (window as { Capacitor?: unknown }).Capacitor;
 	if (!isCap) return () => {};
 	try {
-		// Dynamic import keeps the dep optional. Web bundles tree-shake
-		// this out via the if-guard above. @ts-expect-error: dep is
-		// installed by the native build path; web build doesn't need it.
-		// @ts-expect-error: optional native dep
-		const mod = (await import('@capacitor/app').catch(() => null)) as { App?: CapacitorApp } | null;
+		// Dynamic import via string indirection so Vite/Rolldown's bundler
+		// doesn't try to resolve the optional `@capacitor/app` dep at
+		// build time. The native build path provides it; web doesn't.
+		const dep = '@capacitor/app';
+		const mod = await (Function('m', 'return import(m)') as (m: string) => Promise<unknown>)(dep)
+			.then((m) => m as { App?: CapacitorApp })
+			.catch(() => null);
 		if (!mod?.App) return () => {};
 		const App = mod.App;
 		const stateHandle = await App.addListener('appStateChange', (state) => {

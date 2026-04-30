@@ -21,6 +21,16 @@ export interface DordState {
 }
 
 export async function readDordState(page: Page): Promise<DordState> {
+	// __dord installs via a useEffect after the Game canvas mounts;
+	// poll briefly so a fast test doesn't race the install.
+	await page.waitForFunction(
+		() => {
+			const w = window as unknown as { __dord?: { state?: () => unknown } };
+			return typeof w.__dord?.state === 'function';
+		},
+		undefined,
+		{ timeout: 5000 },
+	);
 	return page.evaluate((): DordState => {
 		const w = window as unknown as { __dord?: { state(): DordState } };
 		if (!w.__dord) {

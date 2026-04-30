@@ -33,8 +33,9 @@ export function PerfProbe() {
 	const { gl } = useThree();
 	const lastFrameAt = useRef(performance.now());
 
-	useEffect(() => {
-		if (!isEnabled()) return;
+	// Install the perf reader eagerly during render. The previous
+	// useEffect form raced the test's first read.
+	if (isEnabled() && typeof window !== 'undefined') {
 		const w = window as unknown as { __dord?: { perf?: () => PerfSnapshot } };
 		w.__dord = w.__dord ?? {};
 		(w.__dord as { perf?: () => PerfSnapshot }).perf = () => ({
@@ -44,11 +45,14 @@ export function PerfProbe() {
 			textures: gl.info.memory.textures,
 			frameMs: performance.now() - lastFrameAt.current,
 		});
-	}, [gl]);
+	}
 
 	useFrame(() => {
 		lastFrameAt.current = performance.now();
 	});
+	// useEffect kept as a no-op placeholder so React doesn't flag the
+	// unused import; remove if PerfProbe ever needs no other lifecycle.
+	useEffect(() => {}, []);
 
 	return null;
 }
