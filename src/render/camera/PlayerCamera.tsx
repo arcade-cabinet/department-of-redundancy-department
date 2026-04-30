@@ -1,6 +1,6 @@
 import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
-import { MathUtils, type PerspectiveCamera as PerspectiveCameraImpl } from 'three';
+import { MathUtils, PerspectiveCamera as PerspectiveCameraImpl } from 'three';
 
 type Props = {
 	/** Player eye height in world units. Spec §5: 1.6u. */
@@ -55,15 +55,21 @@ export function PlayerCamera({
 	}, [size.width, size.height, referenceFovDeg]);
 
 	useEffect(() => {
-		const cam = camera as PerspectiveCameraImpl;
-		cam.position.set(position[0], eyeHeight, position[1]);
+		// Guard against r3f attaching an OrthographicCamera (e.g. via <Canvas orthographic>).
+		// fov/aspect only exist on PerspectiveCamera; flipping the projection on an ortho
+		// silently does nothing and the player would see a flat, broken view.
+		if (!(camera instanceof PerspectiveCameraImpl)) {
+			console.warn('PlayerCamera requires a PerspectiveCamera; got', camera.type);
+			return;
+		}
+		camera.position.set(position[0], eyeHeight, position[1]);
 		// Apply yaw then pitch via Euler order YXZ so pitch acts in camera
 		// space (look up/down) rather than rolling around the world axis.
-		cam.rotation.order = 'YXZ';
-		cam.rotation.set(pitch, yaw, 0);
-		cam.fov = targetFov;
-		cam.aspect = size.width / Math.max(1, size.height);
-		cam.updateProjectionMatrix();
+		camera.rotation.order = 'YXZ';
+		camera.rotation.set(pitch, yaw, 0);
+		camera.fov = targetFov;
+		camera.aspect = size.width / Math.max(1, size.height);
+		camera.updateProjectionMatrix();
 	}, [camera, size.width, size.height, position, eyeHeight, yaw, pitch, targetFov]);
 
 	return null;

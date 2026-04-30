@@ -83,7 +83,9 @@ async function fetchHdri() {
 const TEXTURE_MAPS_KEEP = new Set(['Diffuse', 'nor_gl', 'Rough', 'AO']);
 
 async function fetchOneMap(localName, mapKey, mapData) {
-	if (typeof mapData !== 'object' || !mapData['2k']) return false;
+	// `typeof null === 'object'` so the null check matters — PolyHaven
+	// occasionally returns null for some map slots on certain assets.
+	if (!mapData || typeof mapData !== 'object' || !mapData['2k']) return false;
 	const variants = mapData['2k'];
 	const ext = variants.jpg ? 'jpg' : variants.png ? 'png' : variants.exr ? 'exr' : null;
 	if (!ext) return false;

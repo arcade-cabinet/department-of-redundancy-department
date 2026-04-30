@@ -40,6 +40,10 @@ export function loadManifest(): Promise<Manifest> {
 		if (!r.ok) throw new Error(`Failed to load manifest: ${r.status}`);
 		return (await r.json()) as Manifest;
 	})();
+	// Drop the cached promise on failure so a retry succeeds without page reload.
+	pending.catch(() => {
+		pending = null;
+	});
 	return pending;
 }
 

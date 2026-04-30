@@ -32,20 +32,27 @@ export function Character({ slug, manifest, position = [0, 0, 0], rotationY = 0 
 	// SkeletonUtils.clone correctly rebinds skeletons for skinned meshes
 	// (plain Object3D.clone leaves bone references pointing at the source);
 	// it falls through to a normal deep clone for non-skinned scenes.
-	const cloned = useMemo(() => cloneSkeletal(scene), [scene]);
-	// Cast shadows on every mesh in the cloned tree.
-	cloned.traverse((obj: { isMesh?: boolean; castShadow?: boolean; receiveShadow?: boolean }) => {
-		if (obj.isMesh) {
-			obj.castShadow = true;
-			obj.receiveShadow = true;
-		}
-	});
+	// Shadow setup happens inside useMemo so the traversal runs once per
+	// scene clone, not on every render.
+	const cloned = useMemo(() => {
+		const c = cloneSkeletal(scene);
+		c.traverse((obj: { isMesh?: boolean; castShadow?: boolean; receiveShadow?: boolean }) => {
+			if (obj.isMesh) {
+				obj.castShadow = true;
+				obj.receiveShadow = true;
+			}
+		});
+		return c;
+	}, [scene]);
+	// Manifest anchor offsets the model so its foot lands at `position` even
+	// when the source GLB pivot sits at hip or head height. Added as a child
+	// group so we don't mutate the cloned scene's transform on each render.
+	const ax = entry.anchor[0];
+	const ay = entry.anchor[1];
+	const az = entry.anchor[2];
 	return (
-		<primitive
-			object={cloned}
-			position={position}
-			rotation={[0, rotationY, 0]}
-			scale={entry.scale}
-		/>
+		<group position={position} rotation={[0, rotationY, 0]} scale={entry.scale}>
+			<primitive object={cloned} position={[ax, ay, az]} />
+		</group>
 	);
 }

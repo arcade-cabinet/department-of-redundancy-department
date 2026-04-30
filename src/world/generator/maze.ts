@@ -48,13 +48,31 @@ const OPPOSITE: Record<Direction, Direction> = {
 	west: 'east',
 };
 
+/**
+ * Minimum maze dimension. We need at least one carvable interior cubicle
+ * surrounded by perimeter cubicles for the four exits, so 3×3 is the floor.
+ * Anything smaller would produce a maze with no valid exit row/column
+ * (carveExits' `slice(1, -1)` returns empty) or a center that overlaps the
+ * perimeter, so we clamp upward rather than throw.
+ */
+const MIN_MAZE_DIM = 3;
+
+function sanitizeDim(n: number): number {
+	if (!Number.isFinite(n) || n < MIN_MAZE_DIM) return MIN_MAZE_DIM;
+	const floored = Math.floor(n);
+	return floored % 2 === 0 ? floored + 1 : floored;
+}
+
 export function generateFloorMaze(
 	width: number,
 	height: number,
 	seedOrRng: string | Rng,
 ): FloorMaze {
-	if (width % 2 === 0) width++;
-	if (height % 2 === 0) height++;
+	// NaN/negative/zero/<3 would all break center indexing and exit-carving
+	// below. Force odd so the center cubicle is a single cell rather than
+	// straddling four.
+	width = sanitizeDim(width);
+	height = sanitizeDim(height);
 
 	const centerX = Math.floor(width / 2);
 	const centerY = Math.floor(height / 2);

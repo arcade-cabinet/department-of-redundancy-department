@@ -11,6 +11,7 @@ type Props = { onExit: () => void };
 
 export function Game({ onExit }: Props) {
 	const [manifest, setManifest] = useState<Manifest | null>(null);
+	const [manifestError, setManifestError] = useState<string | null>(null);
 	// Per spec §8.5: world_seed lives in @capacitor/preferences. PRQ-04 wires
 	// the persisted seed. For PRQ-02 we use a stable demo seed so the camera
 	// position can be hand-aligned to a known-open cubicle; freshSeed() is
@@ -19,9 +20,58 @@ export function Game({ onExit }: Props) {
 	const [seed] = useState<string>(() => 'Synergistic Bureaucratic Cubicle');
 	useEffect(() => {
 		loadManifest()
-			.then(setManifest)
-			.catch((e) => console.error('manifest load:', e));
+			.then((m) => {
+				setManifest(m);
+				setManifestError(null);
+			})
+			.catch((e: unknown) => {
+				const msg = e instanceof Error ? e.message : String(e);
+				console.error('manifest load:', msg);
+				setManifestError(msg);
+			});
 	}, []);
+
+	if (manifestError) {
+		return (
+			<div
+				data-testid="game-error"
+				role="alert"
+				style={{
+					position: 'absolute',
+					inset: 0,
+					display: 'flex',
+					flexDirection: 'column',
+					alignItems: 'center',
+					justifyContent: 'center',
+					gap: '1rem',
+					padding: '2rem',
+					background: 'var(--ink, #0d0f12)',
+					color: 'var(--paper, #e8e6df)',
+					fontFamily: 'inherit',
+					textAlign: 'center',
+				}}
+			>
+				<h2 style={{ margin: 0 }}>Failed to load asset manifest</h2>
+				<pre style={{ maxWidth: '60ch', whiteSpace: 'pre-wrap', opacity: 0.8 }}>
+					{manifestError}
+				</pre>
+				<button
+					type="button"
+					onClick={onExit}
+					style={{
+						padding: '0.5rem 1rem',
+						background: 'transparent',
+						color: 'inherit',
+						border: '1px solid currentColor',
+						fontFamily: 'inherit',
+						cursor: 'pointer',
+					}}
+				>
+					BACK TO LANDING
+				</button>
+			</div>
+		);
+	}
 
 	return (
 		<div data-testid="game" style={{ position: 'relative', width: '100%', height: '100%' }}>

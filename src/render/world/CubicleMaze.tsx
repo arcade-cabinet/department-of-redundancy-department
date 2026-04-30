@@ -1,9 +1,11 @@
 import { Gltf, useTexture } from '@react-three/drei';
-import { useMemo } from 'react';
-import { RepeatWrapping, SRGBColorSpace } from 'three';
+import { useFrame } from '@react-three/fiber';
+import { useMemo, useRef, useState } from 'react';
+import { RepeatWrapping, SRGBColorSpace, Vector3 } from 'three';
 import type { Manifest } from '@/content/manifest';
 import { Character } from '@/render/characters/Character';
 import { CeilingFixture } from '@/render/lighting/CeilingFixture';
+import { cullByDistance, type Lamp } from '@/render/lighting/PointLightCuller';
 import { type Cubicle, generateFloorMaze } from '@/world/generator/maze';
 
 const LAMINATE_ALBEDO = '/assets/textures/laminate/laminate_Diffuse_2k.jpg';
@@ -22,6 +24,8 @@ type Props = {
 	wallHeight?: number;
 	/** Required: ceiling Y so fixtures mount just under it. */
 	ceilingHeight?: number;
+	/** Max active RectAreaLight ceiling fixtures. Mobile budget per spec §6. */
+	maxActiveFixtures?: number;
 };
 
 const PARTITION_THICKNESS = 0.05;
@@ -48,6 +52,7 @@ export function CubicleMaze({
 	cellSize = 2.6,
 	wallHeight = 2.6,
 	ceilingHeight = 2.6,
+	maxActiveFixtures = 8,
 }: Props) {
 	const maze = useMemo(
 		() => generateFloorMaze(gridWidth, gridHeight, seed),
@@ -66,44 +71,34 @@ export function CubicleMaze({
 	}
 	tex.map.colorSpace = SRGBColorSpace;
 
-	// Convert maze grid to world coordinates: maze (0,0) → world center-of-grid.
-	const worldX = (gx: number) => (gx - (maze.width - 1) / 2) * cellSize;
-	const worldZ = (gy: number) => (gy - (maze.height - 1) / 2) * cellSize;
+	const deskEntry = manifest.props.desk;
+	if (!deskEntry) throw new Error('Manifest missing props/desk');
 
-	const halfCell = cellSize / 2;
-	const wallY = wallHeight / 2;
+	const { walls, desks, allLamps, centerWorld } = useMemo(
+		() => buildLayout(maze, cellSize, wallHeight, ceilingHeight),
+		[maze, cellSize, wallHeight, ceilingHeight],
+	);
 
-	const walls: { key: string; pos: [number, number, number]; size: [number, number, number] }[] =
-		[];
-	const desks: [number, number, number][] = [];
-	const lights: [number, number, number][] = [];
+	const [activeIds, setActiveIds] = useState<Set<string>>(
+		() => new Set(allLamps.slice(0, maxActiveFixtures).map((l) => l.id)),
+	);
+	const cameraPos = useRef(new Vector3());
+	const lastCullTime = useRef(0);
 
-	for (let y = 0; y < maze.height; y++) {
-		for (let x = 0; x < maze.width; x++) {
-			const cell = maze.cubicles[y]?.[x];
-			if (!cell) continue;
-			const cx = worldX(x);
-			const cz = worldZ(y);
-
-			// Dedupe wall ownership: each cubicle owns its NORTH and WEST walls
-			// (by convention). The SOUTH wall of (x,y) == the NORTH wall of
-			// (x, y+1); we only emit it from the northern owner. Same for
-			// EAST/WEST. Perimeter cubicles emit their outer side too.
-			emitWallIf(walls, cell, 'north', cx, wallY, cz - halfCell, cellSize, wallHeight, true);
-			emitWallIf(walls, cell, 'west', cx - halfCell, wallY, cz, cellSize, wallHeight, false);
-			if (y === maze.height - 1)
-				emitWallIf(walls, cell, 'south', cx, wallY, cz + halfCell, cellSize, wallHeight, true);
-			if (x === maze.width - 1)
-				emitWallIf(walls, cell, 'east', cx + halfCell, wallY, cz, cellSize, wallHeight, false);
-
-			desks.push([cx, 0, cz - 0.6]);
-			// One ceiling fixture per cubicle, mounted just below the ceiling
-			// so RectAreaLight + back-side facing down lights the cell.
-			lights.push([cx, ceilingHeight - 0.02, cz]);
+	// 49 RectAreaLights would be brutal on the fragment shader. Cull to the
+	// `maxActiveFixtures` closest to camera every 200ms (changes only when
+	// the player crosses a cubicle boundary; no per-frame churn). Mirror of
+	// the DeskLamp pattern (PointLightCuller.cullByDistance).
+	useFrame((state) => {
+		const now = state.clock.elapsedTime;
+		if (now - lastCullTime.current < 0.2) return;
+		lastCullTime.current = now;
+		state.camera.getWorldPosition(cameraPos.current);
+		const next = cullByDistance(allLamps, cameraPos.current, maxActiveFixtures);
+		if (next.size !== activeIds.size || [...next].some((id) => !activeIds.has(id))) {
+			setActiveIds(next);
 		}
-	}
-
-	const center = maze.center;
+	});
 
 	return (
 		<group>
@@ -114,11 +109,13 @@ export function CubicleMaze({
 				</mesh>
 			))}
 
-			{/* One desk per cubicle */}
+			{/* One desk per cubicle. Path comes from the manifest so the
+			    sourceHash validation in scripts/check-asset-manifest.mjs
+			    catches a desk-GLB drift before runtime. */}
 			{desks.map(([dx, dy, dz]) => (
 				<Gltf
 					key={`desk-${dx.toFixed(2)}-${dz.toFixed(2)}`}
-					src="/assets/models/props/desk.glb"
+					src={deskEntry.path}
 					position={[dx, dy, dz]}
 					castShadow
 					receiveShadow
@@ -129,26 +126,76 @@ export function CubicleMaze({
 			<Character
 				slug="middle-manager"
 				manifest={manifest}
-				position={[worldX(center.x), 0, worldZ(center.y) + 0.2]}
+				position={centerWorld}
 				rotationY={Math.PI}
 			/>
 
-			{/* Ceiling fixtures */}
-			{lights.map(([lx, ly, lz]) => (
-				<CeilingFixture
-					key={`fix-${lx.toFixed(2)}-${lz.toFixed(2)}`}
-					position={[lx, ly, lz]}
-					width={cellSize * 0.7}
-					height={cellSize * 0.4}
-					intensity={4.5}
-				/>
-			))}
+			{/* Ceiling fixtures — only the N closest to the camera are mounted
+			    to keep the active RectAreaLight count under the spec §6 budget. */}
+			{allLamps
+				.filter((l) => activeIds.has(l.id))
+				.map((l) => (
+					<CeilingFixture
+						key={`fix-${l.id}`}
+						position={[l.position.x, l.position.y, l.position.z]}
+						width={cellSize * 0.7}
+						height={cellSize * 0.4}
+						intensity={4.5}
+					/>
+				))}
 		</group>
 	);
 }
 
+type WallSpec = { key: string; pos: [number, number, number]; size: [number, number, number] };
+
+function buildLayout(
+	maze: ReturnType<typeof generateFloorMaze>,
+	cellSize: number,
+	wallHeight: number,
+	ceilingHeight: number,
+): {
+	walls: WallSpec[];
+	desks: [number, number, number][];
+	allLamps: Lamp[];
+	centerWorld: [number, number, number];
+} {
+	const halfCell = cellSize / 2;
+	const wallY = wallHeight / 2;
+	const wx = (gx: number) => (gx - (maze.width - 1) / 2) * cellSize;
+	const wz = (gy: number) => (gy - (maze.height - 1) / 2) * cellSize;
+
+	const wallList: WallSpec[] = [];
+	const deskList: [number, number, number][] = [];
+	const lampList: Lamp[] = [];
+
+	for (let y = 0; y < maze.height; y++) {
+		for (let x = 0; x < maze.width; x++) {
+			const cell = maze.cubicles[y]?.[x];
+			if (!cell) continue;
+			const cx = wx(x);
+			const cz = wz(y);
+			emitWallIf(wallList, cell, 'north', cx, wallY, cz - halfCell, cellSize, wallHeight, true);
+			emitWallIf(wallList, cell, 'west', cx - halfCell, wallY, cz, cellSize, wallHeight, false);
+			if (y === maze.height - 1)
+				emitWallIf(wallList, cell, 'south', cx, wallY, cz + halfCell, cellSize, wallHeight, true);
+			if (x === maze.width - 1)
+				emitWallIf(wallList, cell, 'east', cx + halfCell, wallY, cz, cellSize, wallHeight, false);
+			deskList.push([cx, 0, cz - 0.6]);
+			lampList.push({ id: `${x}-${y}`, position: { x: cx, y: ceilingHeight - 0.02, z: cz } });
+		}
+	}
+	const cc = maze.center;
+	return {
+		walls: wallList,
+		desks: deskList,
+		allLamps: lampList,
+		centerWorld: [wx(cc.x), 0, wz(cc.y) + 0.2],
+	};
+}
+
 function emitWallIf(
-	out: { key: string; pos: [number, number, number]; size: [number, number, number] }[],
+	out: WallSpec[],
 	cell: Cubicle,
 	side: 'north' | 'south' | 'east' | 'west',
 	x: number,

@@ -8,21 +8,16 @@ type Props = {
 };
 
 /**
- * Per-occupied-cubicle warm desk lamp. The active flag is computed once per
- * frame by the culler (`PointLightCuller.cullByDistance`) and passed down
- * as a prop. Inactive lamps render with intensity 0 so we don't pay the
- * per-light shader cost on materials that already evaluate the lighting
- * equation.
+ * Per-occupied-cubicle warm desk lamp. The active flag is computed by the
+ * culler (`PointLightCuller.cullByDistance`) and passed down as a prop.
  *
- * Why intensity-zero rather than unmount? PointLights are cheap to *mount*
- * but expensive to *evaluate per fragment*. three.js compiles shader
- * variants per active light count, so churning mounts every frame
- * recompiles shaders — a 60ms hitch each time. Mount once, gate via
- * intensity, recompile once at scene init.
- *
- * Note: the culler change rate (active flips) is much lower than 60Hz —
- * only when the player moves between cubicle banks. React reconciliation
- * handles the prop diff cleanly; no useFrame override needed.
+ * Inactive lamps unmount entirely. CodeRabbit (PR #8) flagged that
+ * three.js r184 still includes intensity=0 PointLights in the
+ * NUM_POINT_LIGHTS shader define and the per-fragment light loop, so
+ * gating via intensity defeated the cull's purpose. Unmounting is the
+ * right call — the cull is throttled to 5Hz (only fires when the player
+ * crosses a cubicle boundary) so the shader recompile cost is one-time
+ * per crossing, not per-frame.
  */
 export function DeskLamp({
 	position,
@@ -31,10 +26,11 @@ export function DeskLamp({
 	distance = 4,
 	color = '#FFD9A0',
 }: Props) {
+	if (!active) return null;
 	return (
 		<pointLight
 			position={position}
-			intensity={active ? intensity : 0}
+			intensity={intensity}
 			distance={distance}
 			color={color}
 			decay={2}

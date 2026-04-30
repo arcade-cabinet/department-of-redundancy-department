@@ -1,4 +1,11 @@
-import { RepeatWrapping, RGBAFormat, SRGBColorSpace, Texture } from 'three';
+import {
+	DataTexture,
+	RepeatWrapping,
+	RGBAFormat,
+	SRGBColorSpace,
+	type Texture,
+	UnsignedByteType,
+} from 'three';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 
 type HDRTextureData = { width: number; height: number; data: Float32Array };
@@ -27,11 +34,15 @@ export type HemisphereTextures = {
 	floor: Texture;
 };
 
-let cached: Promise<HemisphereTextures> | null = null;
+// Cache keyed on path so multiple HDRIs (when alpha → beta brings per-floor
+// archetypes) don't all collapse to the first one ever loaded. Was a single
+// promise before — flagged in CodeRabbit/Gemini review on PR #8.
+const cache = new Map<string, Promise<HemisphereTextures>>();
 
 export function loadHdriHemispheres(path: string): Promise<HemisphereTextures> {
-	if (cached) return cached;
-	cached = new Promise((resolve, reject) => {
+	const existing = cache.get(path);
+	if (existing) return existing;
+	const p = new Promise<HemisphereTextures>((resolve, reject) => {
 		new HDRLoader().load(
 			path,
 			(hdr: unknown) => {
@@ -45,7 +56,10 @@ export function loadHdriHemispheres(path: string): Promise<HemisphereTextures> {
 			(err: unknown) => reject(err instanceof Error ? err : new Error('HDRLoader failed')),
 		);
 	});
-	return cached;
+	// Drop from cache on failure so a retry can succeed without a page refresh.
+	p.catch(() => cache.delete(path));
+	cache.set(path, p);
+	return p;
 }
 
 function sampleHemispheres(hdr: HDRTexture): HemisphereTextures {
@@ -123,9 +137,11 @@ function projectHemisphere(
 		}
 	}
 
-	const tex = new Texture();
-	tex.image = { data: out, width: SIZE, height: SIZE } as unknown as ImageData;
-	tex.format = RGBAFormat;
+	// DataTexture is the supported GPU upload path for raw byte buffers in
+	// three.js r150+ — using bare Texture worked for many versions but is
+	// not officially documented and broke for some users. Per CodeRabbit
+	// review on PR #8.
+	const tex = new DataTexture(out, SIZE, SIZE, RGBAFormat, UnsignedByteType);
 	tex.colorSpace = SRGBColorSpace;
 	tex.wrapS = tex.wrapT = RepeatWrapping;
 	tex.needsUpdate = true;
