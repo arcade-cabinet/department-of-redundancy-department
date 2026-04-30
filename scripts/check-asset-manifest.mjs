@@ -28,7 +28,7 @@ let missing = 0;
 
 for (const group of groups) {
 	for (const [slug, entry] of Object.entries(manifest[group] ?? {})) {
-		const p = resolve(repoRoot, 'public' + entry.path);
+		const p = resolve(repoRoot, `public${entry.path}`);
 		const exists = existsSync(p);
 		const bytes = exists ? statSync(p).size : 0;
 		totalBytes += bytes;
