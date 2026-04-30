@@ -1,31 +1,44 @@
 import { useGLTF } from '@react-three/drei';
 import type { Manifest } from '@/content/manifest';
+import { Character } from '@/render/characters/Character';
 import { Ceiling } from './Ceiling';
+import { ChunkLayer } from './ChunkLayer';
 import { CubicleMaze } from './CubicleMaze';
 import { Floor } from './Floor';
 
 type Props = {
 	manifest: Manifest;
 	seed: string;
+	/** When true, render the chunked voxel world (PRQ-03+). When false,
+	 *  the original PRQ-02 mesh-walled demo. Default: true. */
+	voxels?: boolean;
 };
 
 const CEILING_HEIGHT = 2.6;
 const GRID_W = 7;
 const GRID_H = 7;
 const CELL_SIZE = 2.6;
-// World extent must cover the entire maze.
+// World extent must cover the entire maze (PRQ-02 path).
 const FLOOR_EXTENT = Math.max(GRID_W, GRID_H) * CELL_SIZE + 2;
 
 useGLTF.preload('/assets/models/props/desk.glb');
 
 /**
- * The PRQ-02 demo scene: a procedurally generated cubicle maze (Beppo
- * Growing-Tree algorithm seeded by the world seed). One cubicle per
- * grid cell, partitions form the maze walls, perimeter exits become
- * the four side stairwell-doors. The center cubicle hosts the manager
- * + ceiling fixture.
+ * The active world. Default mode (voxels=true, PRQ-03+) renders a
+ * chunked voxel floor via `<ChunkLayer/>`; the manager character spawns
+ * at the world origin (center of the voxel floor). Legacy mode
+ * (voxels=false) preserves the PRQ-02 mesh-walled demo for visual
+ * regression comparisons until the voxel renderer fully supersedes it.
  */
-export function World({ manifest, seed }: Props) {
+export function World({ manifest, seed, voxels = true }: Props) {
+	if (voxels) {
+		return (
+			<>
+				<ChunkLayer seed={seed} floor={1} />
+				<Character slug="middle-manager" manifest={manifest} position={[0, 0, 0]} />
+			</>
+		);
+	}
 	return (
 		<>
 			<Floor size={[FLOOR_EXTENT, FLOOR_EXTENT]} repeat={Math.ceil(FLOOR_EXTENT / 4)} />
