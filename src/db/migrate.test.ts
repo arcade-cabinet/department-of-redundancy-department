@@ -43,7 +43,7 @@ describe('migration runner', () => {
 		const runner = adapterFor(db);
 		const m0 = loadInitialMigration();
 
-		const r = runMigrations(runner, [m0]);
+		const r = await runMigrations(runner, [m0]);
 
 		expect(r.applied).toBe(1);
 		expect(r.appliedTags).toEqual(['0000_initial']);
@@ -72,8 +72,8 @@ describe('migration runner', () => {
 		const runner = adapterFor(db);
 		const m0 = loadInitialMigration();
 
-		runMigrations(runner, [m0]);
-		const r2 = runMigrations(runner, [m0]);
+		await runMigrations(runner, [m0]);
+		const r2 = await runMigrations(runner, [m0]);
 
 		expect(r2.applied).toBe(0);
 		expect(r2.appliedTags).toEqual([]);
@@ -87,7 +87,7 @@ describe('migration runner', () => {
 		const m0 = loadInitialMigration();
 
 		// Boot at version 1 (m0 already applied).
-		runMigrations(runner, [m0]);
+		await runMigrations(runner, [m0]);
 
 		// Add a hypothetical m1 — exercise the "newer migrations" path
 		// without committing a real second migration to the repo.
@@ -96,7 +96,7 @@ describe('migration runner', () => {
 			tag: '0001_test_only',
 			sql: 'CREATE TABLE __test_table (id INTEGER PRIMARY KEY); INSERT INTO __test_table (id) VALUES (42);',
 		};
-		const r = runMigrations(runner, [m0, m1]);
+		const r = await runMigrations(runner, [m0, m1]);
 
 		expect(r.applied).toBe(1);
 		expect(r.appliedTags).toEqual(['0001_test_only']);
@@ -106,7 +106,7 @@ describe('migration runner', () => {
 		expect(rows[0]?.values[0]?.[0]).toBe(42);
 	});
 
-	it('rejects out-of-order migrations', () => {
+	it('rejects out-of-order migrations', async () => {
 		const db: { exec: (s: string) => void } = { exec: () => {} };
 		const runner: MigrationRunnerInput = {
 			getCurrentVersion: () => null,
@@ -114,6 +114,6 @@ describe('migration runner', () => {
 		};
 		const m0: MigrationEntry = { idx: 0, tag: 'a', sql: '' };
 		const m_dup: MigrationEntry = { idx: 0, tag: 'b', sql: '' };
-		expect(() => runMigrations(runner, [m0, m_dup])).toThrow(/out of order/i);
+		await expect(runMigrations(runner, [m0, m_dup])).rejects.toThrow(/out of order/i);
 	});
 });

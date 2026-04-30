@@ -4,6 +4,7 @@ import {
 	type SQLiteDBConnection,
 } from '@capacitor-community/sqlite';
 import { drizzle, type SqliteRemoteDatabase } from 'drizzle-orm/sqlite-proxy';
+import { runMigrations } from './migrate';
 import { MIGRATIONS } from './migrations/_index';
 import * as schema from './schema';
 
@@ -60,32 +61,25 @@ async function init(): Promise<DBHandle> {
 		{ schema, casing: 'snake_case' },
 	);
 
-	// Migration runner. Capacitor SQLite's connection API is async, so
-	// we adapt the runner's sync exec via a top-level await pattern:
-	// pull schema_version synchronously from a cached query result, then
-	// run migrations one at a time. Acceptable on first-boot only.
-	const versionRes = await conn
-		.query('SELECT schema_version FROM world_meta WHERE id = 1')
-		.catch(() => null);
-	const currentVersion =
-		versionRes?.values?.[0]?.schema_version != null
-			? Number(versionRes.values[0].schema_version) - 1
-			: null;
-
-	for (const m of MIGRATIONS) {
-		if (currentVersion !== null && m.idx <= currentVersion) continue;
-		await conn.execute(m.sql);
-	}
-	if (MIGRATIONS.length > 0) {
-		const latest = MIGRATIONS.at(-1);
-		if (latest) {
-			await conn.run("INSERT OR IGNORE INTO world_meta (id, seed) VALUES (1, '');", []);
-			await conn.run(
-				`UPDATE world_meta SET schema_version = ?, updated_at = (unixepoch() * 1000) WHERE id = 1`,
-				[latest.idx + 1],
-			);
-		}
-	}
+	// Apply migrations through the SHARED async runner — same code path
+	// as the web adapter, eliminating the schema_version stamping drift
+	// that two parallel implementations would otherwise risk. Code
+	// reviewer feedback on PR #10.
+	await runMigrations(
+		{
+			getCurrentVersion: async () => {
+				const res = await conn
+					.query('SELECT schema_version FROM world_meta WHERE id = 1')
+					.catch(() => null);
+				const v = res?.values?.[0]?.schema_version;
+				return typeof v === 'number' ? v - 1 : null;
+			},
+			exec: async (text) => {
+				await conn.execute(text);
+			},
+		},
+		MIGRATIONS,
+	);
 
 	return {
 		db,
