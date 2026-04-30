@@ -18,7 +18,7 @@
 		"resolveJsonModule": true,
 		"verbatimModuleSyntax": true,
 		"noEmit": true,
-		"types": ["vite/client", "vitest/globals"],
+		"types": ["vite/client", "vitest/globals", "node"],
 		"paths": {
 			"@/*": ["./src/*"],
 			"@app/*": ["./app/*"]
@@ -32,6 +32,5 @@
 		"vite.config.ts",
 		"vitest.config.ts",
 		"playwright.config.ts"
-	],
-	"references": [{ "path": "./tsconfig.node.json" }]
+	]
 }
