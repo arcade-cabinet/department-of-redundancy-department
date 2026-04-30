@@ -20,6 +20,10 @@ export type PlayerKinematicHandle = {
 	tap(screenX: number, screenY: number): void;
 	clear(): void;
 	readonly path: readonly YukaVector3[];
+	/** Snapshot the kinematic body's current world translation. Returns
+	 *  zeros if the body hasn't mounted yet. Read by AI hosts that need
+	 *  the player's xyz without the React re-render churn of a state. */
+	getPosition(): { x: number; y: number; z: number };
 };
 
 const CAPSULE_HEIGHT = 1.0; // half-length of the cylindrical part
@@ -117,6 +121,12 @@ export const PlayerKinematic = forwardRef<PlayerKinematicHandle, Props>(function
 			},
 			get path() {
 				return pathRef.current;
+			},
+			getPosition() {
+				const body = bodyRef.current;
+				if (!body) return { x: 0, y: floorY, z: 0 };
+				const t = body.translation();
+				return { x: t.x, y: t.y, z: t.z };
 			},
 		}),
 		[navMesh, raycaster, camera, size, floorPlane, vehicle, floorY],

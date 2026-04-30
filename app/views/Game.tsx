@@ -3,8 +3,18 @@ import { Physics } from '@react-three/rapier';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ACESFilmicToneMapping, SRGBColorSpace } from 'three';
 import { PlayerKinematic, type PlayerKinematicHandle } from '@/ai/core/PlayerKinematic';
+import { MiddleManagerEntity } from '@/ai/enemies/MiddleManagerEntity';
+import { planSpawns } from '@/ai/enemies/spawner';
 import { useNavMesh } from '@/ai/navmesh/useNavMesh';
 import { loadManifest, type Manifest } from '@/content/manifest';
+import {
+	applyDamage,
+	freshHealth,
+	type Health,
+	isDead,
+	PLAYER_MAX_HP,
+	tickDamageFlash,
+} from '@/ecs/components/Health';
 import { subscribeKeyboard } from '@/input/desktopFallback';
 import type { GestureEvent } from '@/input/gesture';
 import { InputCanvas } from '@/input/InputCanvas';
@@ -13,9 +23,12 @@ import { Lighting } from '@/render/lighting/Lighting';
 import { NavMeshViz, useNavMeshVizFlag } from '@/render/world/NavMeshViz';
 import { PathViz, usePathVizFlag } from '@/render/world/PathViz';
 import { World } from '@/render/world/World';
+import { HpBar } from '@/ui/chrome/HpBar';
 import { RadialMenu } from '@/ui/radial/RadialMenu';
 import { DrawCallHUD, useDrawCallHUDFlag } from '@/verify/DrawCallHUD';
+import { generateFloor } from '@/world/generator/floor';
 import { freshSeed } from '@/world/generator/rng';
+import { GameOver } from './GameOver';
 import { PauseMenu } from './PauseMenu';
 
 type Props = { onExit: () => void };
@@ -30,6 +43,17 @@ export function Game({ onExit }: Props) {
 	const showPathViz = usePathVizFlag();
 	const playerRef = useRef<PlayerKinematicHandle>(null);
 	const [pathWaypoints, setPathWaypoints] = useState<readonly import('yuka').Vector3[]>([]);
+	const [playerHealth, setPlayerHealth] = useState<Health>(() => freshHealth(PLAYER_MAX_HP));
+	const [gameOver, setGameOver] = useState(false);
+	const [killCount, setKillCount] = useState(0);
+	// Tick the player damage flash timer down each frame.
+	useEffect(() => {
+		if (playerHealth.damageFlashTimer === 0) return;
+		const id = setInterval(() => {
+			setPlayerHealth((h) => tickDamageFlash(h, 16));
+		}, 16);
+		return () => clearInterval(id);
+	}, [playerHealth.damageFlashTimer]);
 	// Per spec §8.5: world_seed lives in @capacitor/preferences. PRQ-04 wires
 	// the persisted seed. For PRQ-02 we use a stable demo seed so the camera
 	// position can be hand-aligned to a known-open cubicle; freshSeed() is
@@ -37,6 +61,48 @@ export function Game({ onExit }: Props) {
 	void freshSeed; // silence unused — wired in PRQ-04
 	const [seed] = useState<string>(() => 'Synergistic Bureaucratic Cubicle');
 	const { navMesh } = useNavMesh(seed, 1);
+
+	// Pre-compute deterministic spawn positions for the 3 floor-1 managers.
+	// generateFloor() is idempotent on the seed so this stays reactive-clean.
+	const enemySpawns = useMemo(() => {
+		const result = generateFloor(seed, 1);
+		const VOXEL_SIZE = 0.4;
+		const ORIGIN = -31 * VOXEL_SIZE;
+		return planSpawns({
+			chunks: result.chunks,
+			seed,
+			floor: 1,
+			count: 3,
+			voxelSize: VOXEL_SIZE,
+			originX: ORIGIN,
+			originZ: ORIGIN,
+		});
+	}, [seed]);
+
+	const getPlayerPosition = useCallback(
+		() => playerRef.current?.getPosition() ?? { x: 0, y: 0.8, z: 0 },
+		[],
+	);
+
+	const applyPlayerDamage = useCallback((dmg: number): boolean => {
+		let dead = false;
+		setPlayerHealth((h) => {
+			const next = applyDamage(h, dmg);
+			if (isDead(next) && !isDead(h)) {
+				dead = true;
+				setGameOver(true);
+			}
+			return next;
+		});
+		return dead;
+	}, []);
+
+	const onEnemyKill = useCallback((slug: string) => {
+		setKillCount((n) => n + 1);
+		// PRQ-04 kills repo wiring lands when the koota world is in place;
+		// for now we just bump the local counter.
+		void slug;
+	}, []);
 	useEffect(() => {
 		loadManifest()
 			.then((m) => {
@@ -153,6 +219,18 @@ export function Game({ onExit }: Props) {
 					<Physics gravity={[0, -9.81, 0]} colliders={false} timeStep="vary" interpolate={false}>
 						{manifest && <World manifest={manifest} seed={seed} />}
 						<PlayerKinematic ref={playerRef} navMesh={navMesh} spawn={[0, 1.5]} />
+						{manifest &&
+							enemySpawns.map((s) => (
+								<MiddleManagerEntity
+									key={`mgr-${s.voxel.x}-${s.voxel.y}-${s.voxel.z}`}
+									manifest={manifest}
+									navMesh={navMesh}
+									spawn={[s.world.x, 0.8, s.world.z]}
+									getPlayerPosition={getPlayerPosition}
+									applyPlayerDamage={applyPlayerDamage}
+									onKill={onEnemyKill}
+								/>
+							))}
 					</Physics>
 					{showNavMeshViz && <NavMeshViz navMesh={navMesh} />}
 					{showPathViz && <PathViz waypoints={pathWaypoints} />}
@@ -167,6 +245,34 @@ export function Game({ onExit }: Props) {
 				onClose={() => setRadialAnchor(null)}
 			/>
 			<PauseMenu open={paused} onResume={() => setPaused(false)} onQuit={onExit} />
+			<HpBar health={playerHealth} />
+			<div
+				data-testid="kill-counter"
+				style={{
+					position: 'absolute',
+					bottom: 16,
+					right: 16,
+					padding: '0.25rem 0.6rem',
+					font: '11px ui-monospace, monospace',
+					color: 'var(--paper, #e8e6df)',
+					background: 'var(--ink, #0d0f12)',
+					border: '1px solid currentColor',
+					zIndex: 5,
+					pointerEvents: 'none',
+				}}
+			>
+				KILLS {killCount}
+			</div>
+			{gameOver && (
+				<GameOver
+					onRestart={() => {
+						setPlayerHealth(freshHealth(PLAYER_MAX_HP));
+						setGameOver(false);
+						setKillCount(0);
+					}}
+					onExit={onExit}
+				/>
+			)}
 			<button
 				type="button"
 				data-testid="exit"
