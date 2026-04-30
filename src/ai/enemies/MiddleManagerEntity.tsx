@@ -9,6 +9,7 @@ import { freshMemory, updateMemory, VisionCone } from '@/ai/perception/Vision';
 import { applyHitscanSpread } from '@/combat/hitscan';
 import type { Manifest } from '@/content/manifest';
 import { applyDamage, freshHealth, isDead, MANAGER_MAX_HP } from '@/ecs/components/Health';
+import { usePaused } from '@/ecs/PauseContext';
 import { Character } from '@/render/characters/Character';
 import { createRng } from '@/world/generator/rng';
 import { type FSMState, freshFSM, tick as fsmTick, killFSM } from './MiddleManagerFSM';
@@ -117,8 +118,9 @@ export function MiddleManagerEntity({
 		(group.userData as { damage?: (n: number) => void }).damage = damageFn;
 	}, [onKill]);
 
+	const paused = usePaused();
 	useFrame(() => {
-		if (despawned) return;
+		if (paused || despawned) return;
 		const body = bodyRef.current;
 		if (!body) return;
 		const pos = body.translation();
@@ -184,18 +186,25 @@ export function MiddleManagerEntity({
 
 		// Sync the Character state to the FSM. Death is set in damageFn
 		// when HP hits zero; transient 'hit' is also set there. Here we
-		// just map non-terminal states to walk vs idle.
+		// map non-terminal states. Reviewer feedback on PR #15: engage
+		// is "stand and fire" not "walk" — managers were hop-walking
+		// while shooting, which read wrong. Engage maps to 'idle' (or
+		// 'attack' on the firing frame, set below in the fire branch).
 		if (result.state.name !== 'death') {
 			const next: 'walk' | 'idle' =
 				result.state.name === 'patrol' ||
 				result.state.name === 'investigate' ||
-				result.state.name === 'reposition' ||
-				result.state.name === 'engage'
+				result.state.name === 'reposition'
 					? 'walk'
 					: 'idle';
-			if (characterState !== next && characterState !== 'hit') {
+			if (characterState !== next && characterState !== 'hit' && characterState !== 'attack') {
 				setCharacterState(next);
 			}
+		}
+		if (result.action.fireHitscan && characterState !== 'hit') {
+			setCharacterState('attack');
+			// Snap back to engage's idle pose after the brief attack lunge.
+			setTimeout(() => setCharacterState((s) => (s === 'attack' ? 'idle' : s)), 130);
 		}
 
 		// Move via vehicle if it has a path.
@@ -229,16 +238,20 @@ export function MiddleManagerEntity({
 			accuracy: HITSCAN_ACCURACY,
 			rng: fireRngRef.current,
 		});
-		// Simple distance-falloff hit check: closer to perfect-aim ray
-		// (within 0.5u of player) counts as a hit. T9+ swaps for a real
-		// BVH raycast against player capsule + chunk walls.
-		const playerOffset = new YukaVector3(
-			player.x - selfX,
-			FLOOR_Y + 1 - (FLOOR_Y + 1),
-			player.z - selfZ,
-		);
-		const cross = Math.abs(ray.direction.x * playerOffset.z - ray.direction.z * playerOffset.x);
-		// `cross` is sin(theta) * |offset| → distance from player to the ray line.
+		// Simple distance-from-ray hit check (T9+ will swap for a real
+		// BVH raycast against player capsule + world chunks).
+		// Reviewer feedback on PR #15: must reject targets BEHIND the
+		// shooter — the previous cross-product check was direction-
+		// agnostic so a wide spread cone could "hit" players directly
+		// behind. Forward-distance check (positive dot product) plus a
+		// max-range gate close that hole.
+		const offX = player.x - selfX;
+		const offZ = player.z - selfZ;
+		const fwdDist = ray.direction.x * offX + ray.direction.z * offZ;
+		if (fwdDist <= 0 || fwdDist > VISION_RANGE) return;
+		const cross = Math.abs(ray.direction.x * offZ - ray.direction.z * offX);
+		// `cross` is sin(theta) * |offset| → perpendicular distance from
+		// player to the ray line. <0.5u counts as a hit.
 		if (cross < 0.5) {
 			const playerDead = applyPlayerDamage(HITSCAN_DAMAGE);
 			void playerDead; // routing in Game.tsx handles game-over
