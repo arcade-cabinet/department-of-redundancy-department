@@ -96,7 +96,11 @@ export function useFloorState(opts: UseFloorStateOptions) {
 			const result = await swapFloor(direction, deps);
 			const spawnWorld = doorToWorld(result.spawn, voxelSize, originX, originZ);
 			setPendingSpawn(spawnWorld);
-			return result;
+			// Decorate the result with the world-space spawn so callers
+			// don't need to know the voxel→world math. CodeRabbit noted
+			// the prior shape leaked floor-coordinate constants into
+			// Game.tsx's transition callback.
+			return { ...result, spawnWorld };
 		},
 		[currentFloor, opts.seed, voxelSize, originX, originZ],
 	);

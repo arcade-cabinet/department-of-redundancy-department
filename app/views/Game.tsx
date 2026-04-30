@@ -333,14 +333,12 @@ export function Game({ onExit }: Props) {
 
 	// Fade-in midpoint → run swapTo + teleport player to the destination
 	// floor's opposite door (Up-Door of N → arrive at Down-Door of N+1).
+	// Use the world-space spawn returned by swapTo so we never duplicate
+	// the voxel→world math here.
 	const onTransitionMidpoint = useCallback(async () => {
 		if (!pendingDir) return;
-		const result = await swapTo(pendingDir);
-		const VOXEL_SIZE = 0.4;
-		const ORIGIN = -31 * VOXEL_SIZE;
-		const sx = ORIGIN + result.spawn.x * VOXEL_SIZE;
-		const sz = ORIGIN + result.spawn.z * VOXEL_SIZE;
-		playerRef.current?.teleport(sx, sz);
+		const { spawnWorld } = await swapTo(pendingDir);
+		playerRef.current?.teleport(spawnWorld.x, spawnWorld.z);
 	}, [pendingDir, swapTo]);
 
 	// Fade-out complete → clear pending state.

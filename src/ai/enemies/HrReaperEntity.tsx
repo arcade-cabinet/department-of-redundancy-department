@@ -79,6 +79,16 @@ export const HrReaperEntity = forwardRef<HrReaperHandle, Props>(function HrReape
 	const paused = usePaused();
 	const elapsedRef = useRef(0);
 
+	// Resync FSM + rigidbody when `spawn` prop changes. Game.tsx
+	// recomputes reaperSpawn after the navmesh resolves; without this
+	// the boss stays at the fallback door coord until a teleport.
+	useEffect(() => {
+		if (dead) return;
+		const next = { x: spawn[0], y: spawn[1], z: spawn[2] };
+		fsmRef.current = { ...fsmRef.current, position: next };
+		bodyRef.current?.setTranslation(next, true);
+	}, [dead, spawn]);
+
 	useImperativeHandle(
 		ref,
 		() => ({
