@@ -25,6 +25,14 @@ export type PlayerKinematicHandle = {
 	 *  zeros if the body hasn't mounted yet. Read by AI hosts that need
 	 *  the player's xyz without the React re-render churn of a state. */
 	getPosition(): { x: number; y: number; z: number };
+	/** Resolve a screen-space tap to a world-space hit on the walkable
+	 *  plane. Used by the floor router (PRQ-12) so the host can check
+	 *  for door taps before falling through to path-travel. */
+	getTapWorld(screenX: number, screenY: number): { x: number; y: number; z: number } | null;
+	/** Teleport the player capsule to a world-space xz position (y is
+	 *  pinned to floorY). Used by floor swap (PRQ-12) to land the
+	 *  player at the destination floor's opposite door. */
+	teleport(x: number, z: number): void;
 };
 
 const CAPSULE_HEIGHT = 1.0; // half-length of the cylindrical part
@@ -128,6 +136,27 @@ export const PlayerKinematic = forwardRef<PlayerKinematicHandle, Props>(function
 				if (!body) return { x: 0, y: floorY, z: 0 };
 				const t = body.translation();
 				return { x: t.x, y: t.y, z: t.z };
+			},
+			getTapWorld(screenX, screenY) {
+				const ndc = new Vector2((screenX / size.width) * 2 - 1, -((screenY / size.height) * 2 - 1));
+				raycaster.setFromCamera(ndc, camera);
+				const hit = raycaster.ray.intersectPlane(floorPlane, new ThreeVector3());
+				if (!hit) return null;
+				return { x: hit.x, y: hit.y, z: hit.z };
+			},
+			teleport(x, z) {
+				const body = bodyRef.current;
+				if (!body) return;
+				// setTranslation(true) snaps + wakes the body. We deliberately
+				// do NOT also call setNextKinematicTranslation here — the
+				// queued-next-translation would re-apply on the following
+				// physics step from a stale source and could ghost the
+				// capsule for one frame. Sync the yuka vehicle's internal
+				// position too so the next AI tick steers from the new pos.
+				body.setTranslation({ x, y: floorY, z }, true);
+				vehicle.sync(yukaScratch.current.set(x, floorY, z));
+				vehicle.clearPath();
+				pathRef.current = [];
 			},
 		}),
 		[navMesh, raycaster, camera, size, floorPlane, vehicle, floorY],

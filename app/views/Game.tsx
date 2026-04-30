@@ -3,9 +3,12 @@ import { Physics } from '@react-three/rapier';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ACESFilmicToneMapping, SRGBColorSpace } from 'three';
 import { PlayerKinematic, type PlayerKinematicHandle } from '@/ai/core/PlayerKinematic';
+import { HrReaperEntity, type HrReaperHandle } from '@/ai/enemies/HrReaperEntity';
 import { MiddleManagerEntity } from '@/ai/enemies/MiddleManagerEntity';
 import { planSpawns } from '@/ai/enemies/spawner';
 import { useNavMesh } from '@/ai/navmesh/useNavMesh';
+import { audioCues } from '@/audio/cues';
+import { clearAll, freshDebuffSet } from '@/combat/debuffs';
 import { type EnemyKillSlug, IDLE_DECAY_PER_SECOND, KILL_DELTAS } from '@/combat/threat';
 import { loadManifest, type Manifest } from '@/content/manifest';
 import { loadWeapons, type Weapon } from '@/content/weapons';
@@ -31,6 +34,8 @@ import type { GestureEvent } from '@/input/gesture';
 import { InputCanvas } from '@/input/InputCanvas';
 import { PlayerCamera } from '@/render/camera/PlayerCamera';
 import { Lighting } from '@/render/lighting/Lighting';
+import { Door } from '@/render/stairwells/Door';
+import { Transition } from '@/render/stairwells/Transition';
 import { NavMeshViz, useNavMeshVizFlag } from '@/render/world/NavMeshViz';
 import { PathViz, usePathVizFlag } from '@/render/world/PathViz';
 import { World } from '@/render/world/World';
@@ -42,6 +47,9 @@ import { ThreatStrip } from '@/ui/chrome/ThreatStrip';
 import { WeaponIcon } from '@/ui/chrome/WeaponIcon';
 import { RadialMenu } from '@/ui/radial/RadialMenu';
 import { DrawCallHUD, useDrawCallHUDFlag } from '@/verify/DrawCallHUD';
+import { isBossFloor, shouldLockUpDoor } from '@/world/floor/bossGate';
+import { routeTap } from '@/world/floor/floorRouter';
+import { useFloorState } from '@/world/floor/useFloorState';
 import { generateFloor } from '@/world/generator/floor';
 import { freshSeed } from '@/world/generator/rng';
 import { GameOver } from './GameOver';
@@ -98,24 +106,115 @@ export function Game({ onExit }: Props) {
 	// kept available for the new-game path that PRQ-04 will own.
 	void freshSeed; // silence unused — wired in PRQ-04
 	const [seed] = useState<string>(() => 'Synergistic Bureaucratic Cubicle');
-	const { navMesh } = useNavMesh(seed, 1);
+	const { state: floorState, swapTo } = useFloorState({ seed });
+	const { navMesh } = useNavMesh(seed, floorState.currentFloor);
+	// Stairwell transition state. `pendingDir` is set when a door tap
+	// fires; the Transition fades to opaque, runs swapTo, then fades out.
+	const [pendingDir, setPendingDir] = useState<'up' | 'down' | null>(null);
+	const [doorOpening, setDoorOpening] = useState<'up' | 'down' | null>(null);
+	const [transitionActive, setTransitionActive] = useState(false);
+	const reaperRef = useRef<HrReaperHandle>(null);
+	const [bossAlive, setBossAlive] = useState(false);
+	const [debuffs, setDebuffs] = useState(() => freshDebuffSet());
+	// Defeated boss floors. Persisted to drizzle in M3; for now lives
+	// in session memory so re-entering a cleared boss floor does NOT
+	// respawn the Reaper (PRQ-13 spec: single fight per encounter).
+	const [defeatedFloors, setDefeatedFloors] = useState<ReadonlySet<number>>(() => new Set());
+
+	// Spawn / despawn the boss as the player crosses into / out of a
+	// boss floor. Atomicity: bossAlive flips synchronously with the
+	// floor transition, satisfying the bossGate.ts contract.
+	useEffect(() => {
+		const f = floorState.currentFloor;
+		if (isBossFloor(f) && !defeatedFloors.has(f)) {
+			setBossAlive(true);
+		} else {
+			setBossAlive(false);
+		}
+	}, [floorState.currentFloor, defeatedFloors]);
+
+	// Clear debuffs on every floor-arrival cue (PRQ-13 reviewer fold:
+	// a 4s reaper-redaction shouldn't bleed onto the next floor).
+	useEffect(() => {
+		const off = audioCues.on((ev) => {
+			if (ev.type === 'floor-arrival') {
+				setDebuffs((d) => clearAll(d));
+			}
+		});
+		return off;
+	}, []);
+	// debuffs is read by M2 (BlurOverlay + speedMultiplier in
+	// PlayerKinematic). The state lives + clears NOW so M2 only has
+	// to add consumers, not the producer. The value is intentionally
+	// not wired into a visible effect yet — see M2 task list.
+	void debuffs;
+	const onReaperDeath = useCallback(() => {
+		setBossAlive(false);
+		setThreat(0); // PRQ-13 spec: defeating the Reaper resets threat
+		setDefeatedFloors((prev) => {
+			const next = new Set(prev);
+			next.add(floorState.currentFloor);
+			return next;
+		});
+	}, [floorState.currentFloor]);
+
+	const upDoorLocked = shouldLockUpDoor({ floor: floorState.currentFloor, bossAlive });
+
+	// Walkable cells for the Reaper's teleport picker — pulled from
+	// yuka NavMesh region centroids. Empty until navMesh resolves;
+	// HrReaperEntity gracefully aborts teleport when empty (FSM
+	// no-candidate guard from M1c2 fold-forward).
+	const walkableCells = useMemo(() => {
+		if (!navMesh) return [] as { x: number; y: number; z: number }[];
+		return navMesh.regions.map((r) => ({
+			x: r.centroid.x,
+			y: r.centroid.y,
+			z: r.centroid.z,
+		}));
+	}, [navMesh]);
+
+	// Pick a Reaper spawn point on a real walkable cell near the
+	// up-door rather than a hardcoded +2/+2 offset that could land
+	// inside a wall on certain seeds. Falls back to the door coord if
+	// the navmesh hasn't resolved yet (next render fixes it).
+	const reaperSpawn = useMemo<[number, number, number]>(() => {
+		const door = floorState.upDoorWorld;
+		if (walkableCells.length === 0) return [door.x, 0.8, door.z];
+		// Pick the closest walkable cell that is at least 2u from the
+		// door (so the player has room to enter and not bump into
+		// the boss on arrival).
+		let best: { x: number; y: number; z: number } | null = null;
+		let bestDist = Infinity;
+		for (const c of walkableCells) {
+			const dx = c.x - door.x;
+			const dz = c.z - door.z;
+			const d = Math.sqrt(dx * dx + dz * dz);
+			if (d < 2 || d > 6) continue;
+			if (d < bestDist) {
+				bestDist = d;
+				best = c;
+			}
+		}
+		if (!best) return [door.x, 0.8, door.z];
+		return [best.x, 0.8, best.z];
+	}, [floorState.upDoorWorld, walkableCells]);
 
 	// Pre-compute deterministic spawn positions for the 3 floor-1 managers.
 	// generateFloor() is idempotent on the seed so this stays reactive-clean.
 	const enemySpawns = useMemo(() => {
-		const result = generateFloor(seed, 1);
+		const result = generateFloor(seed, floorState.currentFloor);
 		const VOXEL_SIZE = 0.4;
 		const ORIGIN = -31 * VOXEL_SIZE;
 		return planSpawns({
 			chunks: result.chunks,
 			seed,
-			floor: 1,
+			floor: floorState.currentFloor,
 			count: 3,
 			voxelSize: VOXEL_SIZE,
 			originX: ORIGIN,
 			originZ: ORIGIN,
 		});
-	}, [seed]);
+	}, [seed, floorState.currentFloor]);
 
 	const getPlayerPosition = useCallback(
 		() => playerRef.current?.getPosition() ?? { x: 0, y: 0.8, z: 0 },
@@ -176,16 +275,76 @@ export function Game({ onExit }: Props) {
 	// Translate gesture events: tap → tap-to-travel via the navmesh-driven
 	// vehicle; hold → radial menu; drag/drag-end reserved for drag-look
 	// (PRQ-08+ when pointer-lock + sensitivity wire in).
-	const onGesture = useCallback((e: GestureEvent) => {
-		if (e.kind === 'hold') {
-			setRadialAnchor({ x: e.x, y: e.y });
-			return;
-		}
-		if (e.kind === 'tap') {
+	// Pin individual fields off floorState (object identity churns on
+	// every swap → would re-bind InputCanvas listeners). Pulling out
+	// the primitives keeps onGesture stable across non-swap renders.
+	const upDoorWorld = floorState.upDoorWorld;
+	const downDoorWorld = floorState.downDoorWorld;
+	const currentFloor = floorState.currentFloor;
+	// Pure routing helper: did this tap hit a tappable door, and which
+	// direction? Extracted so onGesture stays under the lint complexity
+	// threshold. All gating (pending, transition, locked-up) lives here.
+	const tryRouteDoor = useCallback(
+		(e: GestureEvent): 'up' | 'down' | null => {
+			if (e.kind !== 'tap') return null;
+			const tapWorld = playerRef.current?.getTapWorld(e.x, e.y);
+			if (!tapWorld) return null;
+			const dir = routeTap({
+				upDoor: upDoorWorld,
+				downDoor: downDoorWorld,
+				currentFloor,
+				playerPos: playerRef.current?.getPosition() ?? { x: 0, y: 0.8, z: 0 },
+				tapWorld,
+				tapMaxDistance: 1.5,
+				playerMaxDistance: 2.5,
+			});
+			if (!dir) return null;
+			if (pendingDir !== null || transitionActive) return null;
+			if (dir === 'up' && upDoorLocked) return null;
+			return dir;
+		},
+		[upDoorWorld, downDoorWorld, currentFloor, pendingDir, transitionActive, upDoorLocked],
+	);
+
+	const onGesture = useCallback(
+		(e: GestureEvent) => {
+			if (e.kind === 'hold') {
+				setRadialAnchor({ x: e.x, y: e.y });
+				return;
+			}
+			if (e.kind !== 'tap') return;
+			const dir = tryRouteDoor(e);
+			if (dir) {
+				setDoorOpening(dir);
+				setPendingDir(dir);
+				return;
+			}
 			playerRef.current?.tap(e.x, e.y);
-			// Capture the new path for PathViz on the next tick.
 			setTimeout(() => setPathWaypoints(playerRef.current?.path ?? []), 16);
-		}
+		},
+		[tryRouteDoor],
+	);
+
+	// Door open animation finished → kick off fade-cut.
+	const onDoorOpened = useCallback(() => {
+		setDoorOpening(null);
+		setTransitionActive(true);
+	}, []);
+
+	// Fade-in midpoint → run swapTo + teleport player to the destination
+	// floor's opposite door (Up-Door of N → arrive at Down-Door of N+1).
+	// Use the world-space spawn returned by swapTo so we never duplicate
+	// the voxel→world math here.
+	const onTransitionMidpoint = useCallback(async () => {
+		if (!pendingDir) return;
+		const { spawnWorld } = await swapTo(pendingDir);
+		playerRef.current?.teleport(spawnWorld.x, spawnWorld.z);
+	}, [pendingDir, swapTo]);
+
+	// Fade-out complete → clear pending state.
+	const onTransitionComplete = useCallback(() => {
+		setTransitionActive(false);
+		setPendingDir(null);
 	}, []);
 
 	// Player tapped a radial slot. PRQ-06 turns these into koota events
@@ -272,8 +431,46 @@ export function Game({ onExit }: Props) {
 							interpolate={false}
 							paused={paused || gameOver}
 						>
-							{manifest && <World manifest={manifest} seed={seed} />}
+							{manifest && (
+								<World manifest={manifest} seed={seed} floor={floorState.currentFloor} />
+							)}
 							<PlayerKinematic ref={playerRef} navMesh={navMesh} spawn={[0, 1.5]} />
+							<Door
+								position={[
+									floorState.upDoorWorld.x,
+									floorState.upDoorWorld.y,
+									floorState.upDoorWorld.z,
+								]}
+								direction="up"
+								open={doorOpening === 'up'}
+								locked={upDoorLocked}
+								onOpened={onDoorOpened}
+							/>
+							{isBossFloor(floorState.currentFloor) && bossAlive && manifest && (
+								<HrReaperEntity
+									ref={reaperRef}
+									manifest={manifest}
+									spawn={reaperSpawn}
+									walkableCells={walkableCells}
+									getPlayerPosition={getPlayerPosition}
+									applyPlayerDamage={applyPlayerDamage}
+									onDeath={onReaperDeath}
+									seed={seed}
+									floor={floorState.currentFloor}
+								/>
+							)}
+							{floorState.currentFloor > 1 && (
+								<Door
+									position={[
+										floorState.downDoorWorld.x,
+										floorState.downDoorWorld.y,
+										floorState.downDoorWorld.z,
+									]}
+									direction="down"
+									open={doorOpening === 'down'}
+									onOpened={onDoorOpened}
+								/>
+							)}
 							{manifest &&
 								enemySpawns.map((s) => (
 									<MiddleManagerEntity
@@ -293,7 +490,15 @@ export function Game({ onExit }: Props) {
 					{showHUD && <DrawCallHUD />}
 				</Suspense>
 			</Canvas>
-			<InputCanvas onGesture={onGesture} enabled={!paused && radialAnchor === null} />
+			<InputCanvas
+				onGesture={onGesture}
+				enabled={!paused && radialAnchor === null && !transitionActive && pendingDir === null}
+			/>
+			<Transition
+				active={transitionActive}
+				onMidpoint={onTransitionMidpoint}
+				onComplete={onTransitionComplete}
+			/>
 			<RadialMenu
 				anchor={radialAnchor}
 				surface={radialSurface}
@@ -311,7 +516,7 @@ export function Game({ onExit }: Props) {
 					<AmmoCounter current={currentAmmo(equipped)} max={cap} weaponName={w?.name ?? slug} />
 				);
 			})()}
-			<FloorStamp floor={1} />
+			<FloorStamp floor={floorState.currentFloor} />
 			<ThreatStrip threat={threat} />
 			<Crosshair visible={false} />
 			<div
