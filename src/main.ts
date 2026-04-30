@@ -350,8 +350,8 @@ function tick(): void {
 	lastTickMs = now;
 
 	const state = game.getState();
-	if (state.phase === 'playing' && director && !director.isFinished) {
-		director.tick(dtMs);
+	if (state.phase === 'playing') {
+		if (director && !director.isFinished) director.tick(dtMs);
 		tickCivilians(dtMs);
 	}
 
@@ -429,16 +429,15 @@ canvas.addEventListener('pointerdown', (e) => {
 	const pick = pickAt(e.clientX, e.clientY);
 	if (pick.kind === 'enemy' && pick.enemyId && pick.target) {
 		director.hitEnemy(pick.enemyId, pick.target);
-		// Wake up dwell-locked enemies on first shot, mirroring the on-alert
-		// pre-aggro semantics for dumb-prop enemies.
-		director.emitAlert();
 	} else if (pick.kind === 'civilian') {
 		game.hitCivilian();
 		const mesh = pick.civilianId ? scene?.getMeshByName(`civilian-${pick.civilianId}`) : null;
 		mesh?.dispose();
 		if (pick.civilianId) activeCivilians.delete(pick.civilianId);
 	}
-	// Air shots are no-ops (no ammo cost yet — wired in reload slice).
+	// Any actual shot — at an enemy or a civilian — wakes pre-aggro enemies.
+	// Air shots are no-ops and don't alert (no ammo cost either; reload slice).
+	if (pick.kind !== 'air') director.emitAlert();
 });
 
 engine.runRenderLoop(tick);
