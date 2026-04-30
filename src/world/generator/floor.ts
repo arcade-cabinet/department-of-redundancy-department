@@ -79,9 +79,12 @@ export function generateFloor(seed: string, floor: number): FloorResult {
 	wallCount += paintMazeWalls(chunks, maze);
 
 	// Place door frames at two distinct cubicle centers picked
-	// deterministically from the floor RNG. Door frames overwrite
-	// whatever wall voxel was there (they ARE the wall opening).
-	const { up, down } = pickDoorCells(floorRng);
+	// deterministically. Use a per-consumer sub-Rng (`::doors`) so any
+	// future change to maze draw count cannot silently shift door
+	// positions and break replay determinism. Mirrors the per-scope
+	// Rng pattern from rng.ts ("each scope gets its own Rng").
+	const doorRng: Rng = createRng(`${seed}::floor-${floor}::doors`);
+	const { up, down } = pickDoorCells(doorRng);
 	const upDoor: DoorCoord = {
 		x: up.gx * CUBICLE_FOOTPRINT + 4,
 		y: DOOR_Y,

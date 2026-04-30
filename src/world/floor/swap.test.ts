@@ -52,6 +52,38 @@ describe('swapFloor', () => {
 		expect(order).toEqual(['flush', 'set']);
 	});
 
+	it('generates the destination before mutating current_floor / threat', async () => {
+		const order: string[] = [];
+		const d = deps({
+			generate: vi.fn((seed: string, floor: number) => {
+				order.push('generate');
+				return generateFloor(seed, floor);
+			}),
+			setCurrentFloor: vi.fn(async (_f: number) => {
+				order.push('setCurrentFloor');
+			}),
+			applyThreatDecay: vi.fn(async (_d: number) => {
+				order.push('applyThreatDecay');
+			}),
+		});
+		await swapFloor('up', d);
+		expect(order.indexOf('generate')).toBeLessThan(order.indexOf('setCurrentFloor'));
+		expect(order.indexOf('generate')).toBeLessThan(order.indexOf('applyThreatDecay'));
+	});
+
+	it('on generator failure, current_floor and threat are left untouched', async () => {
+		const d = deps({
+			generate: vi.fn(() => {
+				throw new Error('generator boom');
+			}),
+		});
+		await expect(swapFloor('up', d)).rejects.toThrow(/boom/);
+		expect(d.setCurrentFloor).not.toHaveBeenCalled();
+		expect(d.applyThreatDecay).not.toHaveBeenCalled();
+		expect(d.setLastFloor).not.toHaveBeenCalled();
+		expect(d.emitArrival).not.toHaveBeenCalled();
+	});
+
 	it('applies -0.5 threat decay on every floor change', async () => {
 		const d = deps();
 		const r = await swapFloor('up', d);

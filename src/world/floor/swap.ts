@@ -10,18 +10,19 @@ import { type DoorCoord, type FloorResult, generateFloor } from '@/world/generat
  *   - audio bus for emitArrival,
  *   - @capacitor/preferences for setLastFloor.
  *
- * Swap rules (spec §4 + §19.2):
+ * Swap rules (spec §4 + §19.2). Generation comes BEFORE any state
+ * mutation so a generator failure (OOM, bad seed) leaves
+ * `current_floor` and `threat` untouched:
  *   1. Flush dirty chunks (so what the player did on this floor persists).
- *   2. Bump current_floor (up = +1, down = -1; never below 1).
- *   3. Apply -0.5 threat decay (cooling-off effect of leaving the floor).
- *   4. Hand caller the persisted chunk blobs for the destination so it
- *      can restore them on top of the freshly generated baseline.
- *   5. Generate destination from `(seed, destFloor)` — pristine cells
- *      are recomputed; the caller overlays persisted ones.
- *   6. Re-run the spawn director.
- *   7. Mirror current_floor to last_floor (PRQ-12 T6).
- *   8. Emit floor-arrival event (PRQ-12 T5).
- *   9. Return the spawn coord = opposite door of the destination floor.
+ *   2. Validate destination floor (never below 1).
+ *   3. Generate destination from `(seed, destFloor)` and load any
+ *      persisted chunk blobs — the caller overlays the persisted
+ *      blobs on top of the pristine baseline.
+ *   4. Commit: bump current_floor, apply -0.5 threat decay, mirror to
+ *      last_floor (PRQ-12 T6).
+ *   5. Re-run the spawn director.
+ *   6. Emit floor-arrival event (PRQ-12 T5).
+ *   7. Return the spawn coord = opposite door of the destination floor.
  *      Up-Door of N → arrive at Down-Door of N+1, and vice versa.
  */
 
@@ -62,16 +63,22 @@ export async function swapFloor(direction: SwapDirection, deps: SwapDeps): Promi
 	const destFloor = direction === 'up' ? current + 1 : current - 1;
 	if (destFloor < 1) throw new Error('cannot descend below floor 1');
 
+	// Flush before generation so the dirty save reflects the floor the
+	// player is leaving, not the one they're entering.
 	await deps.flushDirty();
-	await deps.setCurrentFloor(destFloor);
-	await deps.applyThreatDecay(FLOOR_THREAT_DECAY);
 
+	// Generate first. If this throws, current_floor and threat stay
+	// where they are — the swap is atomic from the player's POV.
 	const seed = await deps.getSeed();
 	const dest = deps.generate(seed, destFloor);
 	const persisted = await deps.listPersistedChunks(destFloor);
 
-	await deps.respawnEnemies(destFloor);
+	// Generation succeeded — commit state mutations.
+	await deps.setCurrentFloor(destFloor);
+	await deps.applyThreatDecay(FLOOR_THREAT_DECAY);
 	await deps.setLastFloor(destFloor);
+
+	await deps.respawnEnemies(destFloor);
 	deps.emitArrival(destFloor);
 
 	const spawn = direction === 'up' ? dest.downDoor : dest.upDoor;

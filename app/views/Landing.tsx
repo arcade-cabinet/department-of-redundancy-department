@@ -8,9 +8,14 @@ export function Landing({ onClockIn }: Props) {
 
 	useEffect(() => {
 		let alive = true;
-		void prefs.get('last_floor').then((v) => {
-			if (alive) setLastFloor(v);
-		});
+		prefs
+			.get('last_floor')
+			.then((v) => {
+				if (alive) setLastFloor(v);
+			})
+			.catch(() => {
+				// Storage unreachable — fall back to default of 1 (already set).
+			});
 		return () => {
 			alive = false;
 		};

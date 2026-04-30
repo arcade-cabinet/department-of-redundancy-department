@@ -29,5 +29,7 @@ export const audioCues = {
 };
 
 export function emit(event: AudioCueEvent): void {
-	for (const fn of listeners) fn(event);
+	// Snapshot to an array first so a listener calling off() (its own
+	// or another's) mid-emit doesn't trip Set mutation-during-iteration.
+	for (const fn of [...listeners]) fn(event);
 }
