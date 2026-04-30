@@ -1,0 +1,26 @@
+{
+	"characters": {
+		"middle-manager": {
+			"anchor": [
+				0,
+				0,
+				0
+			],
+			"footprintCells": [
+				1,
+				2,
+				1
+			],
+			"path": "/assets/models/characters/middle-manager.glb",
+			"scale": 1.0,
+			"sourceHash": "sha256:1467facfaf555e4d7a28637aa3d652b63fd93e9c7be3c7f9fa0c0f35d45da2d5",
+			"tags": [
+				"enemy",
+				"tier-0"
+			]
+		}
+	},
+	"props": {},
+	"traps": {},
+	"version": 1
+}
