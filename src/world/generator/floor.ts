@@ -41,6 +41,12 @@ const MAZE_H = 7;
  *  leaves a 1-voxel hallway band on the +x / +z perimeter. */
 const CUBICLE_FOOTPRINT = 9;
 
+export interface DoorCoord {
+	x: number;
+	y: number;
+	z: number;
+}
+
 export interface FloorResult {
 	chunks: ChunkData[];
 	maze: FloorMaze;
@@ -48,7 +54,15 @@ export interface FloorResult {
 	seed: string;
 	/** Diagnostic: count of cubicle-wall voxels written. */
 	wallCount: number;
+	/** Stairwell door positions (PRQ-12). Up-Door of floor N takes the
+	 *  player to Down-Door of floor N+1, and vice versa. Voxel coords
+	 *  in floor-space (0..FLOOR_VOXELS_X-1, ...). */
+	upDoor: DoorCoord;
+	downDoor: DoorCoord;
 }
+
+/** Voxel y-row where door frames sit (ground level above the carpet). */
+const DOOR_Y = FLOOR_FLOOR_Y_TOP + 1;
 
 export function generateFloor(seed: string, floor: number): FloorResult {
 	// Mix seed + floor so each floor has a distinct draw order while
@@ -63,9 +77,49 @@ export function generateFloor(seed: string, floor: number): FloorResult {
 	let wallCount = 0;
 	wallCount += paintFloorAndCeiling(chunks);
 	wallCount += paintMazeWalls(chunks, maze);
+
+	// Place door frames at two distinct cubicle centers picked
+	// deterministically. Use a per-consumer sub-Rng (`::doors`) so any
+	// future change to maze draw count cannot silently shift door
+	// positions and break replay determinism. Mirrors the per-scope
+	// Rng pattern from rng.ts ("each scope gets its own Rng").
+	const doorRng: Rng = createRng(`${seed}::floor-${floor}::doors`);
+	const { up, down } = pickDoorCells(doorRng);
+	const upDoor: DoorCoord = {
+		x: up.gx * CUBICLE_FOOTPRINT + 4,
+		y: DOOR_Y,
+		z: up.gy * CUBICLE_FOOTPRINT + 4,
+	};
+	const downDoor: DoorCoord = {
+		x: down.gx * CUBICLE_FOOTPRINT + 4,
+		y: DOOR_Y,
+		z: down.gy * CUBICLE_FOOTPRINT + 4,
+	};
+	writeVoxel(chunks, upDoor.x, upDoor.y, upDoor.z, BLOCK_IDS['up-door-frame']);
+	writeVoxel(chunks, downDoor.x, downDoor.y, downDoor.z, BLOCK_IDS['down-door-frame']);
+
 	for (const c of chunks) c.clearDirty();
 
-	return { chunks, maze, floor, seed, wallCount };
+	return { chunks, maze, floor, seed, wallCount, upDoor, downDoor };
+}
+
+/** Pick two distinct cubicle cells from the maze grid for the up/down
+ *  doors. Order: up first, then down (independent draws). */
+function pickDoorCells(rng: Rng): {
+	up: { gx: number; gy: number };
+	down: { gx: number; gy: number };
+} {
+	const ux = rng.int(0, MAZE_W - 1);
+	const uy = rng.int(0, MAZE_H - 1);
+	let dx: number;
+	let dy: number;
+	// Re-roll until we land on a cubicle distinct from up. Rng is
+	// uniform so worst-case expected draws ≈ 1/(1 - 1/49) ≈ 1.02.
+	do {
+		dx = rng.int(0, MAZE_W - 1);
+		dy = rng.int(0, MAZE_H - 1);
+	} while (dx === ux && dy === uy);
+	return { up: { gx: ux, gy: uy }, down: { gx: dx, gy: dy } };
 }
 
 function chunkAt(chunks: ChunkData[], cx: number, cz: number): ChunkData {
