@@ -5,6 +5,7 @@ import { loadManifest, type Manifest } from '@/content/manifest';
 import { PlayerCamera } from '@/render/camera/PlayerCamera';
 import { Lighting } from '@/render/lighting/Lighting';
 import { World } from '@/render/world/World';
+import { DrawCallHUD, useDrawCallHUDFlag } from '@/verify/DrawCallHUD';
 import { freshSeed } from '@/world/generator/rng';
 
 type Props = { onExit: () => void };
@@ -12,6 +13,7 @@ type Props = { onExit: () => void };
 export function Game({ onExit }: Props) {
 	const [manifest, setManifest] = useState<Manifest | null>(null);
 	const [manifestError, setManifestError] = useState<string | null>(null);
+	const showHUD = useDrawCallHUDFlag();
 	// Per spec §8.5: world_seed lives in @capacitor/preferences. PRQ-04 wires
 	// the persisted seed. For PRQ-02 we use a stable demo seed so the camera
 	// position can be hand-aligned to a known-open cubicle; freshSeed() is
@@ -95,6 +97,7 @@ export function Game({ onExit }: Props) {
 				<Suspense fallback={null}>
 					<Lighting />
 					{manifest && <World manifest={manifest} seed={seed} />}
+					{showHUD && <DrawCallHUD />}
 				</Suspense>
 			</Canvas>
 			<button
