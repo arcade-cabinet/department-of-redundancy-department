@@ -3,6 +3,7 @@ import { Physics } from '@react-three/rapier';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ACESFilmicToneMapping, SRGBColorSpace } from 'three';
 import { PlayerKinematic, type PlayerKinematicHandle } from '@/ai/core/PlayerKinematic';
+import { type EnemyVariant, enemyVariantStats } from '@/ai/enemies/enemyVariants';
 import { HrReaperEntity, type HrReaperHandle } from '@/ai/enemies/HrReaperEntity';
 import { type EnemyHandle, MiddleManagerEntity } from '@/ai/enemies/MiddleManagerEntity';
 import { pickSpawnSet } from '@/ai/enemies/spawnDirector';
@@ -17,6 +18,7 @@ import { wireAudioCues } from '@/audio/wireCues';
 import { checkMine, completeMine } from '@/building/mine';
 import { place } from '@/building/place';
 import { radialIdToSlug } from '@/building/radialAction';
+import { discoverRecipe, freshRecipeBook, knownRecipeSlugs } from '@/building/recipes';
 import { freshAutoEngage, setEngageTarget } from '@/combat/autoEngage';
 import { clearAll, freshDebuffSet } from '@/combat/debuffs';
 import { PickupEntity } from '@/combat/PickupEntity';
@@ -73,7 +75,9 @@ import { routeTap } from '@/world/floor/floorRouter';
 import { useFloorState } from '@/world/floor/useFloorState';
 import { blockIdAt, worldToVoxel } from '@/world/floor/voxelLookup';
 import { generateFloor } from '@/world/generator/floor';
+import { floorArchetypeFor } from '@/world/generator/floorArchetype';
 import { createRng, freshSeed } from '@/world/generator/rng';
+import { pickTrapSet } from '@/world/traps/traps';
 import { subscribeMobileLifecycle } from '../shell/lifecycle';
 import { GameOver } from './GameOver';
 import { PauseMenu } from './PauseMenu';
@@ -239,6 +243,39 @@ export function Game({ onExit }: Props) {
 		if (!h) return;
 		h.enqueue((tx) => worldRepo.setCurrentFloor(tx, floorState.currentFloor));
 	}, [floorState.currentFloor]);
+
+	// Directive item #13 + PRQ-B2: floorArchetype log on floor entry.
+	// The actual maze-shape variation lands in M5 polish — this commit
+	// makes the archetype observable so traps/variants picking can
+	// branch on it.
+	useEffect(() => {
+		const archetype = floorArchetypeFor(floorState.currentFloor);
+		console.info(`[floor] archetype=${archetype} floor=${floorState.currentFloor}`);
+	}, [floorState.currentFloor]);
+
+	// Directive item #11 + PRQ-B3: pick a deterministic trap set per
+	// floor based on threat tier (1-3 traps). Logged for now; a future
+	// commit mounts TrapEntity meshes at picked positions.
+	useEffect(() => {
+		const trapCount = Math.min(3, Math.max(1, Math.floor(threat / 3) + 1));
+		const trapRng = createRng(`${seed}::floor-${floorState.currentFloor}::traps`);
+		const traps = pickTrapSet(trapCount, trapRng);
+		console.info(`[floor] traps=${traps.join(',')}`);
+	}, [seed, floorState.currentFloor, threat]);
+
+	// Directive item #12 + PRQ-B1: alpha-friendly recipe book starts
+	// with every recipe discovered. The radial menu's gate uses
+	// canCraftRecipe to decide whether to show place options. Future
+	// commits add a Combine action to the Supply Closet that calls
+	// discoverRecipe.
+	const recipeBook = useMemo(() => {
+		let book = freshRecipeBook();
+		for (const slug of knownRecipeSlugs()) {
+			book = discoverRecipe(book, slug as Parameters<typeof discoverRecipe>[1]);
+		}
+		return book;
+	}, []);
+	void recipeBook; // wired by radial gate consumers next pass
 	useEffect(() => {
 		const h = saveHandleRef.current;
 		if (!h) return;
@@ -391,8 +428,9 @@ export function Game({ onExit }: Props) {
 
 	// Pre-compute deterministic spawn positions for the floor's enemies.
 	// Each spawn is paired with an archetype (middle-manager / policeman /
-	// hitman / swat) chosen by the threat-tier spawn director. The
-	// spawn-direction RNG is keyed off the floor seed so a re-roll on
+	// hitman / swat) chosen by the threat-tier spawn director, and a
+	// variant (PRQ-B7 directive item #10) that picks a weapon/HP loadout.
+	// The spawn-direction RNG is keyed off the floor seed so a re-roll on
 	// the same threat reproduces. `threat` is intentionally NOT in the
 	// dep list — re-pick on every floor change is the correct semantics;
 	// mid-floor threat climbs don't retro-spawn enemies.
@@ -410,15 +448,30 @@ export function Game({ onExit }: Props) {
 			originX: ORIGIN,
 			originZ: ORIGIN,
 		});
-		// Read threat at floor-enter time; the director picks tier by
-		// quantizing threat. Using a synchronous read here is fine —
-		// re-eval happens on every floor change (currentFloor dep).
 		const directorRng = createRng(`${seed}::floor-${floorState.currentFloor}::director`);
 		const archetypes = pickSpawnSet(threat, positions.length, directorRng);
-		return positions.map((p, i) => ({
-			...p,
-			archetype: archetypes[i]?.slug ?? ('middle-manager' as const),
-		}));
+		const variantRng = createRng(`${seed}::floor-${floorState.currentFloor}::variants`);
+		return positions.map((p, i) => {
+			const archetype = archetypes[i]?.slug ?? ('middle-manager' as const);
+			// 30% chance of an upgraded variant, else baseline.
+			const upgrade = variantRng.next() < 0.3;
+			const variant: EnemyVariant = upgrade
+				? archetype === 'middle-manager'
+					? 'middle-manager-faxer'
+					: archetype === 'policeman'
+						? 'policeman-suppressor'
+						: archetype === 'hitman'
+							? 'hitman-sniper'
+							: 'swat-grenadier'
+				: archetype === 'middle-manager'
+					? 'middle-manager-baseline'
+					: archetype === 'policeman'
+						? 'policeman-baseline'
+						: archetype === 'hitman'
+							? 'hitman-baseline'
+							: 'swat-baseline';
+			return { ...p, archetype, variant, stats: enemyVariantStats(variant) };
+		});
 	}, [seed, floorState.currentFloor]);
 
 	const getPlayerPosition = useCallback(
