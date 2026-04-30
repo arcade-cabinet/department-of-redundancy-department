@@ -1,10 +1,10 @@
 import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
 import { Engine } from '@babylonjs/core/Engines/engine';
-import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { Scene } from '@babylonjs/core/scene';
 import '@babylonjs/core/Loading/sceneLoader';
+import '@babylonjs/loaders/glTF';
 
 import {
 	type Cue,
@@ -25,7 +25,8 @@ import {
 	SettingsOverlay,
 } from './gui';
 import { getLevel, type Level } from './levels';
-import type { LevelId } from './levels/types';
+import { applyDoorOpen, buildLevel, type LevelHandles } from './levels/build';
+import type { Door, LevelId } from './levels/types';
 import {
 	loadHighScore,
 	loadSettings,
@@ -51,6 +52,7 @@ const engine = new Engine(canvas, true, { stencil: true, preserveDrawingBuffer: 
 let scene: Scene | null = null;
 let director: EncounterDirector | null = null;
 let currentLevel: Level | null = null;
+let levelHandles: LevelHandles | null = null;
 
 const game = new Game();
 const overlay = new Overlay('dord-ui');
@@ -162,6 +164,7 @@ function constructLevel(levelId: LevelId): void {
 	if (scene) {
 		scene.dispose();
 		scene = null;
+		levelHandles = null;
 	}
 	currentLevel = getLevel(levelId);
 	scene = new Scene(engine);
@@ -171,24 +174,20 @@ function constructLevel(levelId: LevelId): void {
 	camera.fov = 1.2; // ~70°
 	scene.activeCamera = camera;
 
-	new HemisphericLight('amb', new Vector3(0, 1, 0), scene);
-
-	// Placeholder floor so the camera has a frame of reference.
-	const floor = MeshBuilder.CreateGround('floor', { width: 30, height: 30 }, scene);
-	floor.position.set(0, 0, 12);
-	floor.checkCollisions = false;
+	const builtScene = scene;
+	const builtLevel = currentLevel;
+	void buildLevel(builtScene, builtLevel).then((handles) => {
+		if (scene === builtScene) levelHandles = handles;
+	});
 
 	const listener: EncounterListener = {
 		onCueFire(cue: Cue, action: CueAction) {
 			console.debug('[cue]', cue.id, action.verb);
-			if (action.verb === 'transition') {
-				constructLevel(action.toLevelId);
-				game.transitionLevel(action.toLevelId);
-			}
+			handleCueAction(action);
 		},
 		onEnemySpawn(enemy: Enemy) {
 			if (!scene) return;
-			// Visual: a small sphere at the enemy's spawn-rail position.
+			// Placeholder enemy visual — a sphere. Replaced when archetype GLBs are wired.
 			const mesh = MeshBuilder.CreateSphere(`enemy-${enemy.id}`, { diameter: 0.8 }, scene);
 			mesh.position.copyFrom(enemy.position);
 			mesh.metadata = { enemyId: enemy.id };
@@ -224,6 +223,35 @@ function constructLevel(levelId: LevelId): void {
 		difficulty: settings.difficulty,
 		listener,
 	});
+}
+
+function handleCueAction(action: CueAction): void {
+	switch (action.verb) {
+		case 'transition':
+			constructLevel(action.toLevelId);
+			game.transitionLevel(action.toLevelId);
+			return;
+		case 'door': {
+			const mesh = levelHandles?.doors.get(action.doorId);
+			if (!mesh || !currentLevel) return;
+			const doorPrim = currentLevel.primitives.find(
+				(p): p is Door => p.kind === 'door' && p.id === action.doorId,
+			);
+			if (doorPrim && action.to === 'open') applyDoorOpen(mesh, doorPrim);
+			return;
+		}
+		case 'lighting': {
+			const light = levelHandles?.lights.get(action.lightId);
+			if (!light) return;
+			if (action.tween.kind === 'snap') light.intensity = action.tween.intensity;
+			// fade/oscillate handled in a later commit when we wire animations
+			return;
+		}
+		// audio-stinger / ambience-fade / narrator / civilian-spawn / prop-anim / boss-spawn
+		// are handled by their respective subsystems in subsequent commits.
+		default:
+			return;
+	}
 }
 
 // ── Main loop ────────────────────────────────────────────────────────────────

@@ -49,7 +49,7 @@
 	"size-limit": [
 		{
 			"path": "dist/assets/*.js",
-			"limit": "500 KB"
+			"limit": "1000 KB"
 		}
 	],
 	"pnpm": {
