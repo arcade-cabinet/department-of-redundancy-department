@@ -1,0 +1,37 @@
+{
+	"compilerOptions": {
+		"target": "ES2023",
+		"lib": ["ES2023", "DOM", "DOM.Iterable"],
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"noFallthroughCasesInSwitch": true,
+		"exactOptionalPropertyTypes": true,
+		"useDefineForClassFields": true,
+		"jsx": "react-jsx",
+		"esModuleInterop": true,
+		"isolatedModules": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+		"allowSyntheticDefaultImports": true,
+		"resolveJsonModule": true,
+		"verbatimModuleSyntax": true,
+		"noEmit": true,
+		"types": ["vite/client", "vitest/globals"],
+		"paths": {
+			"@/*": ["./src/*"],
+			"@app/*": ["./app/*"]
+		}
+	},
+	"include": [
+		"src",
+		"app",
+		"e2e",
+		"scripts/**/*.mjs",
+		"vite.config.ts",
+		"vitest.config.ts",
+		"playwright.config.ts"
+	],
+	"references": [{ "path": "./tsconfig.node.json" }]
+}
