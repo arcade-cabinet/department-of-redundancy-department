@@ -1,46 +1,13 @@
 @import "tailwindcss";
 
-/* Self-hosted fonts (PRQ-14 T1). The .woff2 binaries are populated by
- * `pnpm run assets:fonts` (a separate provisioning step that pulls
- * from the open licensed sources — Departure Mono, Inter,
- * JetBrains Mono). The font-face declarations here name the expected
- * paths so the build doesn't break if the binaries are missing — the
- * stack falls back to system mono / sans gracefully. */
-@font-face {
-	font-family: "Departure Mono";
-	src: url("/assets/fonts/DepartureMono-Regular.woff2") format("woff2");
-	font-weight: 400;
-	font-style: normal;
-	font-display: swap;
-}
-@font-face {
-	font-family: "Inter";
-	src: url("/assets/fonts/Inter-Regular.woff2") format("woff2");
-	font-weight: 400;
-	font-style: normal;
-	font-display: swap;
-}
-@font-face {
-	font-family: "Inter";
-	src: url("/assets/fonts/Inter-Medium.woff2") format("woff2");
-	font-weight: 500;
-	font-style: normal;
-	font-display: swap;
-}
-@font-face {
-	font-family: "Inter";
-	src: url("/assets/fonts/Inter-SemiBold.woff2") format("woff2");
-	font-weight: 600;
-	font-style: normal;
-	font-display: swap;
-}
-@font-face {
-	font-family: "JetBrains Mono";
-	src: url("/assets/fonts/JetBrainsMono-Regular.woff2") format("woff2");
-	font-weight: 400;
-	font-style: normal;
-	font-display: swap;
-}
+/* Brand fonts (PRQ-14 T1) ship as .woff2 binaries when the
+ * `pnpm run assets:fonts` provisioning step lands; until then we rely on
+ * system fallbacks (`ui-monospace` / `system-ui`) which the typography
+ * tokens below already chain through. The @font-face rules previously
+ * declared here pointed at empty stub files and produced an "OTS parsing
+ * error" on every page load — far worse than the system fallback that
+ * we already render correctly. The rules will return when real woff2
+ * binaries land in public/assets/fonts/. */
 
 :root {
 	/* Color (locked from PRQ-00). */

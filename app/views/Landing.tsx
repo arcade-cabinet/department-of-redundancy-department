@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import * as prefs from '@/db/preferences';
+import { t } from '@/i18n/locale';
 import { Button, flickerOnce } from '@/ui/primitives';
 
 type Props = { onClockIn: () => void };
@@ -30,7 +31,10 @@ export function Landing({ onClockIn }: Props) {
 		};
 	}, []);
 
-	const label = lastFloor > 1 ? `RESUME ON FLOOR ${lastFloor}` : 'CLOCK IN';
+	const label =
+		lastFloor > 1
+			? t('landing.cta.resume').replace('{floor}', String(lastFloor))
+			: t('landing.cta.clockIn');
 
 	return (
 		<motion.main
@@ -69,9 +73,7 @@ export function Landing({ onClockIn }: Props) {
 						textAlign: 'center',
 					}}
 				>
-					Department of
-					<br />
-					Redundancy Department
+					{t('landing.title')}
 				</h1>
 				<div
 					style={{
@@ -91,7 +93,7 @@ export function Landing({ onClockIn }: Props) {
 						textTransform: 'uppercase',
 					}}
 				>
-					There has been a reorganization
+					{t('landing.tagline')}
 				</p>
 			</div>
 			<Button

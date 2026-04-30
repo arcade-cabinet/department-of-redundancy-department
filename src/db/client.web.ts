@@ -1,8 +1,34 @@
 import { drizzle, type SqliteRemoteDatabase } from 'drizzle-orm/sqlite-proxy';
-import initSqlJs, { type Database } from 'sql.js';
+import type { Database } from 'sql.js';
 import { runMigrations } from './migrate';
 import { MIGRATIONS } from './migrations/_index';
 import * as schema from './schema';
+
+// sql.js 1.14 ships UMD; Vite's dep optimizer doesn't synthesize a real
+// `default` export from `module.exports.default = initSqlJs`, so a static
+// `import initSqlJs from 'sql.js'` throws at runtime. Resolve via dynamic
+// import inside init() and read whichever shape the loader actually
+// produced (default function OR `Module` named export OR the module
+// namespace itself acting callable).
+// biome-ignore lint/suspicious/noExplicitAny: cross-shape resolver
+type InitSqlJsFn = (cfg: { locateFile?: (file: string) => string }) => Promise<any>;
+
+async function loadInitSqlJs(): Promise<InitSqlJsFn> {
+	const mod = (await import('sql.js')) as unknown as Record<string, unknown>;
+	// Vite's CJS interop can wrap UMD as { default: fn }, { default: { default: fn } },
+	// or { Module: fn } depending on the entry. Probe each layer for a callable.
+	const candidates: unknown[] = [
+		mod,
+		mod.default,
+		(mod.default as Record<string, unknown> | undefined)?.default,
+		mod.Module,
+		(mod.default as Record<string, unknown> | undefined)?.Module,
+	];
+	for (const c of candidates) {
+		if (typeof c === 'function') return c as InitSqlJsFn;
+	}
+	throw new Error('sql.js: no callable initializer found on imported module');
+}
 
 /**
  * Web adapter: sql.js for the SQLite engine, drizzle's sqlite-proxy
@@ -34,8 +60,9 @@ export function getDb(): Promise<DBHandle> {
 }
 
 async function init(): Promise<DBHandle> {
+	const initSqlJs = await loadInitSqlJs();
 	const SQL = await initSqlJs({
-		locateFile: (file) => `/wasm/${file}`,
+		locateFile: (file) => `${window.location.origin}/wasm/${file}`,
 	});
 	const sql = new SQL.Database();
 

@@ -1,19 +1,22 @@
 # Department of Redundancy Department
 
-> *DOOM meets Minecraft, in cubicles.*
+> *Time Crisis in cubicles.*
 >
-> A first-person voxel-prop FPS set inside an infinite procedurally generated corporate office. Mobile-first PWA, Capacitor-wrapped for iOS / Android. Persistent SQLite world. R3F + drei + Rapier renderer.
+> Mobile-first arcade rail shooter set in a haunted corporate office. The rail moves you past cubicles in first-person. Aim, fire, reload, take cover, swap weapons, survive Lobby → Stairway A → Open Plan → Stairway B → HR Corridor → Stairway C → Executive Suites → Boardroom (Reaper). Coin-op cabinet experience in your pocket.
+>
+> Capacitor-wrapped for native iOS / Android. R3F + drei + Rapier renderer. Persistent SQLite high-score table.
 
-**Status:** pre-alpha (PRQ-00 scaffolding in progress).
+**Status:** rail-shooter pivot in progress (Phase 1 vertical slice).
 **Live deploy:** https://arcade-cabinet.github.io/department-of-redundancy-department/
 
-## Foundation spec
+## Read first
 
-[`docs/superpowers/specs/2026-04-29-dord-foundation-design.md`](./docs/superpowers/specs/2026-04-29-dord-foundation-design.md) — read first.
-
-## Roadmap
-
-[`docs/ROADMAP.md`](./docs/ROADMAP.md) — alpha → beta → RC. PRQ files at [`docs/plans/`](./docs/plans/).
+- **Top-level design:** [`docs/superpowers/specs/2026-04-30-arcade-rail-shooter-design.md`](./docs/superpowers/specs/2026-04-30-arcade-rail-shooter-design.md)
+- **Design canon (12 docs):** [`docs/superpowers/specs/arcade-rail-shooter/`](./docs/superpowers/specs/arcade-rail-shooter/)
+- **Build plan / PRQ ledger:** [`docs/superpowers/plans/2026-04-30-arcade-rail-shooter-build.md`](./docs/superpowers/plans/2026-04-30-arcade-rail-shooter-build.md)
+- **Roadmap:** [`docs/ROADMAP.md`](./docs/ROADMAP.md)
+- **Architecture:** [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
+- **Testing:** [`docs/TESTING.md`](./docs/TESTING.md)
 
 ## Quick start
 

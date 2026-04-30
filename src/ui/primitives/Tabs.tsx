@@ -27,7 +27,7 @@ function List({ style, ...rest }: ComponentProps<typeof TabsPrimitive.List>) {
 			style={{
 				display: 'flex',
 				gap: 'var(--space-2)',
-				borderBottom: '1px solid var(--paper)',
+				borderBottom: '1px solid currentColor',
 				paddingBottom: 'var(--space-2)',
 				...style,
 			}}
@@ -36,12 +36,16 @@ function List({ style, ...rest }: ComponentProps<typeof TabsPrimitive.List>) {
 	);
 }
 
+// Tabs.Trigger inherits its color from the surrounding container so the
+// same component reads correctly on paper (PauseMenu = ink text) AND on
+// ink (HUD overlays = paper text). The active state stamps a 2px
+// underline using currentColor so it follows the inherited tone.
 function Trigger({ style, ...rest }: ComponentProps<typeof TabsPrimitive.Trigger>) {
 	return (
 		<TabsPrimitive.Trigger
 			style={{
 				background: 'transparent',
-				color: 'var(--paper)',
+				color: 'inherit',
 				border: 'none',
 				padding: 'var(--space-2) var(--space-4)',
 				fontFamily: 'var(--font-display)',
@@ -52,6 +56,7 @@ function Trigger({ style, ...rest }: ComponentProps<typeof TabsPrimitive.Trigger
 				borderBottom: '2px solid transparent',
 				...style,
 			}}
+			data-active-style="true"
 			{...rest}
 		/>
 	);
@@ -62,7 +67,7 @@ function Content({ style, ...rest }: ComponentProps<typeof TabsPrimitive.Content
 		<TabsPrimitive.Content
 			style={{
 				padding: 'var(--space-4) 0',
-				color: 'var(--paper)',
+				color: 'inherit',
 				...style,
 			}}
 			{...rest}

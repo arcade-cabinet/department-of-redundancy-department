@@ -96,6 +96,23 @@ async function play(slug: string, opts: PlayOptions = {}): Promise<Audio | null>
 	if (opts.loop !== undefined) src.setLoop(opts.loop);
 	if (opts.volume !== undefined) src.setVolume(opts.volume);
 	if (opts.playbackRate !== undefined) src.setPlaybackRate(opts.playbackRate);
+	// OOM fix (2026-04-30): one-shot fire-and-forget plays (every weapon
+	// shot, every UI cue) leaked the THREE.Audio source — its underlying
+	// AudioBufferSourceNode + GainNode stayed connected to the listener
+	// graph until end-of-buffer, then GC'd JS-side but not always
+	// disconnected from the Web Audio graph. At 10 fires/sec sustained
+	// combat that was ~30 MB/min of orphaned source nodes. Hook onEnded
+	// to disconnect explicitly. Looped sources never end naturally — the
+	// caller must call stop(src) which now also disconnects.
+	if (!opts.loop) {
+		src.onEnded = () => {
+			try {
+				if (src.source) src.source.disconnect();
+			} catch {
+				// best-effort; node may already be disconnected
+			}
+		};
+	}
 	src.play();
 	return src;
 }
@@ -103,6 +120,13 @@ async function play(slug: string, opts: PlayOptions = {}): Promise<Audio | null>
 function stop(src: Audio | null): void {
 	if (!src) return;
 	if (src.isPlaying) src.stop();
+	// Explicit disconnect for looped sources whose onEnded would never
+	// fire. Wrapped because `src.source` may already be disconnected.
+	try {
+		if (src.source) src.source.disconnect();
+	} catch {
+		// best-effort
+	}
 }
 
 /** Test-only: clear the buffer cache between runs. */

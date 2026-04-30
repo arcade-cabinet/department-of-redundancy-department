@@ -1,4 +1,11 @@
-# Native packaging (PRQ-RC4)
+---
+title: Native packaging
+updated: 2026-04-30
+status: current
+domain: ops
+---
+
+# Native packaging
 
 Runbook for shipping signed iOS + Android binaries. Requires Xcode + Android Studio + Apple Developer + Play Console accounts (toolchains aren't on CI runners).
 
@@ -78,7 +85,7 @@ Both stores need:
 
 - App icon (already generated in setup).
 - 6-8 screenshots per platform/density. Capture against the iOS Simulator + Android Emulator on the live build.
-- Short description ≤ 80 chars: "First-person voxel-prop FPS in an infinite procedural office."
-- Long description ≤ 4000 chars: the spec §11.3 brand copy.
-- Privacy policy URL: TBD (see RC2 telemetry opt-in).
+- Short description ≤ 80 chars: "Mobile-first arcade rail shooter set in a haunted corporate office."
+- Long description ≤ 4000 chars: brand copy from `docs/superpowers/specs/2026-04-30-arcade-rail-shooter-design.md`.
+- Privacy policy URL: TBD.
 - Age rating: 12+ (cartoon violence).
