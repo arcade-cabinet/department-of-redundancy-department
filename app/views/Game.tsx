@@ -7,6 +7,15 @@ import { MiddleManagerEntity } from '@/ai/enemies/MiddleManagerEntity';
 import { planSpawns } from '@/ai/enemies/spawner';
 import { useNavMesh } from '@/ai/navmesh/useNavMesh';
 import { loadManifest, type Manifest } from '@/content/manifest';
+import { loadWeapons, type Weapon } from '@/content/weapons';
+import {
+	currentAmmo,
+	currentWeaponSlug,
+	type Equipped,
+	freshEquipped,
+	selectSlot,
+	setSlot,
+} from '@/ecs/components/Equipped';
 import {
 	applyDamage,
 	freshHealth,
@@ -15,6 +24,7 @@ import {
 	PLAYER_MAX_HP,
 	tickDamageFlash,
 } from '@/ecs/components/Health';
+import { PauseProvider } from '@/ecs/PauseContext';
 import { subscribeKeyboard } from '@/input/desktopFallback';
 import type { GestureEvent } from '@/input/gesture';
 import { InputCanvas } from '@/input/InputCanvas';
@@ -23,7 +33,12 @@ import { Lighting } from '@/render/lighting/Lighting';
 import { NavMeshViz, useNavMeshVizFlag } from '@/render/world/NavMeshViz';
 import { PathViz, usePathVizFlag } from '@/render/world/PathViz';
 import { World } from '@/render/world/World';
+import { AmmoCounter } from '@/ui/chrome/AmmoCounter';
+import { Crosshair } from '@/ui/chrome/Crosshair';
+import { FloorStamp } from '@/ui/chrome/FloorStamp';
 import { HpBar } from '@/ui/chrome/HpBar';
+import { ThreatStrip } from '@/ui/chrome/ThreatStrip';
+import { WeaponIcon } from '@/ui/chrome/WeaponIcon';
 import { RadialMenu } from '@/ui/radial/RadialMenu';
 import { DrawCallHUD, useDrawCallHUDFlag } from '@/verify/DrawCallHUD';
 import { generateFloor } from '@/world/generator/floor';
@@ -46,6 +61,19 @@ export function Game({ onExit }: Props) {
 	const [playerHealth, setPlayerHealth] = useState<Health>(() => freshHealth(PLAYER_MAX_HP));
 	const [gameOver, setGameOver] = useState(false);
 	const [killCount, setKillCount] = useState(0);
+	const [equipped, setEquipped] = useState<Equipped>(() => {
+		// Default loadout: stapler in slot 0 (unlimited), three-hole-punch
+		// in slot 1 (10 starting ammo). PRQ-04 will load this from
+		// world_meta/weapons_owned on continue.
+		const e = setSlot(freshEquipped(), 0, 'stapler', -1);
+		return setSlot(e, 1, 'three-hole-punch', 10);
+	});
+	const [weapons, setWeapons] = useState<Map<string, Weapon> | null>(null);
+	useEffect(() => {
+		loadWeapons()
+			.then(setWeapons)
+			.catch((e: unknown) => console.error('weapons load:', e));
+	}, []);
 	// Tick the player damage flash timer down each frame.
 	useEffect(() => {
 		if (playerHealth.damageFlashTimer === 0) return;
@@ -117,12 +145,20 @@ export function Game({ onExit }: Props) {
 	}, []);
 
 	// Keyboard fallback: ESC pauses; pull-direction is exposed for the
-	// kinematic controller (PRQ-06 wiring).
+	// kinematic controller. Number keys 1-2 swap weapons.
 	useEffect(() => {
 		const fb = subscribeKeyboard({
 			pause: () => setPaused((p) => !p),
 		});
-		return () => fb.dispose();
+		const onKey = (e: KeyboardEvent) => {
+			if (e.code === 'Digit1') setEquipped((eq) => selectSlot(eq, 0));
+			else if (e.code === 'Digit2') setEquipped((eq) => selectSlot(eq, 1));
+		};
+		window.addEventListener('keydown', onKey);
+		return () => {
+			fb.dispose();
+			window.removeEventListener('keydown', onKey);
+		};
 	}, []);
 
 	// Translate gesture events: tap → tap-to-travel via the navmesh-driven
@@ -216,22 +252,30 @@ export function Game({ onExit }: Props) {
 				/>
 				<Suspense fallback={null}>
 					<Lighting />
-					<Physics gravity={[0, -9.81, 0]} colliders={false} timeStep="vary" interpolate={false}>
-						{manifest && <World manifest={manifest} seed={seed} />}
-						<PlayerKinematic ref={playerRef} navMesh={navMesh} spawn={[0, 1.5]} />
-						{manifest &&
-							enemySpawns.map((s) => (
-								<MiddleManagerEntity
-									key={`mgr-${s.voxel.x}-${s.voxel.y}-${s.voxel.z}`}
-									manifest={manifest}
-									navMesh={navMesh}
-									spawn={[s.world.x, 0.8, s.world.z]}
-									getPlayerPosition={getPlayerPosition}
-									applyPlayerDamage={applyPlayerDamage}
-									onKill={onEnemyKill}
-								/>
-							))}
-					</Physics>
+					<PauseProvider paused={paused || gameOver}>
+						<Physics
+							gravity={[0, -9.81, 0]}
+							colliders={false}
+							timeStep="vary"
+							interpolate={false}
+							paused={paused || gameOver}
+						>
+							{manifest && <World manifest={manifest} seed={seed} />}
+							<PlayerKinematic ref={playerRef} navMesh={navMesh} spawn={[0, 1.5]} />
+							{manifest &&
+								enemySpawns.map((s) => (
+									<MiddleManagerEntity
+										key={`mgr-${s.voxel.x}-${s.voxel.y}-${s.voxel.z}`}
+										manifest={manifest}
+										navMesh={navMesh}
+										spawn={[s.world.x, 0.8, s.world.z]}
+										getPlayerPosition={getPlayerPosition}
+										applyPlayerDamage={applyPlayerDamage}
+										onKill={onEnemyKill}
+									/>
+								))}
+						</Physics>
+					</PauseProvider>
 					{showNavMeshViz && <NavMeshViz navMesh={navMesh} />}
 					{showPathViz && <PathViz waypoints={pathWaypoints} />}
 					{showHUD && <DrawCallHUD />}
@@ -246,11 +290,23 @@ export function Game({ onExit }: Props) {
 			/>
 			<PauseMenu open={paused} onResume={() => setPaused(false)} onQuit={onExit} />
 			<HpBar health={playerHealth} />
+			<WeaponIcon weaponSlug={currentWeaponSlug(equipped)} />
+			{(() => {
+				const slug = currentWeaponSlug(equipped) ?? '';
+				const w = weapons?.get(slug);
+				const cap = w?.kind === 'projectile' ? w.ammoCap : w?.kind === 'hitscan' ? w.ammoCap : 0;
+				return (
+					<AmmoCounter current={currentAmmo(equipped)} max={cap} weaponName={w?.name ?? slug} />
+				);
+			})()}
+			<FloorStamp floor={1} />
+			<ThreatStrip threat={Math.min(1, killCount / 10)} />
+			<Crosshair visible={false} />
 			<div
 				data-testid="kill-counter"
 				style={{
 					position: 'absolute',
-					bottom: 16,
+					bottom: 38,
 					right: 16,
 					padding: '0.25rem 0.6rem',
 					font: '11px ui-monospace, monospace',

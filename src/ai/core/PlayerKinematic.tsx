@@ -3,6 +3,7 @@ import { CapsuleCollider, type RapierRigidBody, RigidBody, useRapier } from '@re
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import { type PerspectiveCamera, Plane, Raycaster, Vector3 as ThreeVector3, Vector2 } from 'three';
 import { type NavMesh, Vector3 as YukaVector3 } from 'yuka';
+import { usePaused } from '@/ecs/PauseContext';
 import { type DesktopFallback, subscribeKeyboard } from '@/input/desktopFallback';
 import { createPlayerVehicle, type PlayerVehicleHandle } from './PlayerVehicle';
 
@@ -132,7 +133,9 @@ export const PlayerKinematic = forwardRef<PlayerKinematicHandle, Props>(function
 		[navMesh, raycaster, camera, size, floorPlane, vehicle, floorY],
 	);
 
+	const paused = usePaused();
 	useFrame((_state, dt) => {
+		if (paused) return;
 		const body = bodyRef.current;
 		const controller = controllerRef.current;
 		if (!body || !controller) return;
