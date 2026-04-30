@@ -7,11 +7,16 @@ domain: product
 
 # Design
 
-This is a thin pointer. Authoritative design canon:
+This is a thin pointer. Authoritative design canon lives in [`docs/spec/`](./spec/):
 
-- **Top-level:** [`docs/superpowers/specs/2026-04-30-arcade-rail-shooter-design.md`](./superpowers/specs/2026-04-30-arcade-rail-shooter-design.md)
-- **Pacing, beats, modifiers:** [`docs/superpowers/specs/arcade-rail-shooter/`](./superpowers/specs/arcade-rail-shooter/)
-- **Per-level breakdowns:** [`docs/superpowers/specs/arcade-rail-shooter/levels/`](./superpowers/specs/arcade-rail-shooter/levels/) (Lobby → Boardroom)
+- **Overview:** [`docs/spec/00-overview.md`](./spec/00-overview.md)
+- **Pacing & time math:** [`docs/spec/01-pacing-and-time-math.md`](./spec/01-pacing-and-time-math.md)
+- **Encounter vocabulary:** [`docs/spec/02-encounter-vocabulary.md`](./spec/02-encounter-vocabulary.md)
+- **Difficulty & modifiers:** [`docs/spec/03-difficulty-and-modifiers.md`](./spec/03-difficulty-and-modifiers.md)
+- **Construction primitives:** [`docs/spec/04-construction-primitives.md`](./spec/04-construction-primitives.md)
+- **Screenplay language:** [`docs/spec/05-screenplay-language.md`](./spec/05-screenplay-language.md)
+- **Per-level breakdowns:** [`docs/spec/levels/`](./spec/levels/) (Lobby → Boardroom)
+- **Paper playtest:** [`docs/spec/playtest-2026-04-30.md`](./spec/playtest-2026-04-30.md)
 
 ## Identity (locked 2026-04-30)
 

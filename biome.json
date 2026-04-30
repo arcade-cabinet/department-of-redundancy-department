@@ -10,8 +10,6 @@
 			"!ios",
 			"!references",
 			"!public/wasm",
-			"!src/db/migrations",
-			"!playwright-report",
 			"!coverage"
 		]
 	},
