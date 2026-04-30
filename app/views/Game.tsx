@@ -70,6 +70,7 @@ import { FloorStamp } from '@/ui/chrome/FloorStamp';
 import { HpBar } from '@/ui/chrome/HpBar';
 import { ThreatStrip } from '@/ui/chrome/ThreatStrip';
 import { WeaponIcon } from '@/ui/chrome/WeaponIcon';
+import { Button } from '@/ui/primitives';
 import { RadialMenu } from '@/ui/radial/RadialMenu';
 import { DrawCallHUD, useDrawCallHUDFlag } from '@/verify/DrawCallHUD';
 import { PerfProbe } from '@/verify/PerfProbe';
@@ -1012,8 +1013,8 @@ export function Game({ onExit }: Props) {
 				<PlayerCamera
 					position={[0, 1.5]}
 					yaw={Math.PI}
-					pitch={0}
-					eyeHeight={2.4}
+					pitch={-0.18}
+					eyeHeight={1.6}
 					referenceFovDeg={70}
 				/>
 				<AttachListener />
@@ -1210,25 +1211,20 @@ export function Game({ onExit }: Props) {
 					}}
 				/>
 			)}
-			<button
-				type="button"
+			<Button
 				data-testid="exit"
+				variant="ghost"
 				onClick={onExit}
 				style={{
 					position: 'absolute',
 					top: 16,
 					right: 16,
-					padding: '0.5rem 1rem',
-					background: 'var(--ink)',
 					color: 'var(--paper)',
-					border: '1px solid var(--paper)',
-					fontFamily: 'inherit',
-					cursor: 'pointer',
 					zIndex: 10,
 				}}
 			>
 				EXIT
-			</button>
+			</Button>
 		</div>
 	);
 }

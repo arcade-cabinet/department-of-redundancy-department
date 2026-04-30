@@ -28,6 +28,10 @@ export default defineConfig({
 		target: 'es2023',
 	},
 	optimizeDeps: {
-		exclude: ['sql.js'],
+		// sql.js is UMD; letting Vite pre-bundle it via esbuild produces a
+		// proper ESM wrapper with a default export (the original `exclude`
+		// caused the raw UMD to be served without globals, leaving the
+		// runtime with an empty module record).
+		include: ['sql.js'],
 	},
 });

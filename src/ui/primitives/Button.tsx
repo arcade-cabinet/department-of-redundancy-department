@@ -30,6 +30,9 @@ interface BaseProps
 	variant?: Variant;
 }
 
+// `ghost` reads color + border from the surrounding context via
+// `currentColor` so the same variant works both on the paper PauseMenu
+// (ink text) and over the HUD's ink-colored chrome (paper text).
 const STYLES: Record<Variant, React.CSSProperties> = {
 	paper: {
 		background: 'var(--paper)',
@@ -43,8 +46,8 @@ const STYLES: Record<Variant, React.CSSProperties> = {
 	},
 	ghost: {
 		background: 'transparent',
-		color: 'var(--paper)',
-		border: '1px solid var(--paper)',
+		color: 'inherit',
+		border: '1px solid currentColor',
 	},
 };
 

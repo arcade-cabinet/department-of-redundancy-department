@@ -31,11 +31,20 @@
 export function Lighting() {
 	return (
 		<>
-			<ambientLight intensity={0.12} color="#E8ECEE" />
+			{/* Lighting cranked up because the HDRI emissive hemispheres
+			    + per-cubicle RectAreaLights from spec §6 haven't shipped
+			    binaries yet — without them the scene renders pitch-black.
+			    These intensities keep walls/floor/ceiling legible at the
+			    cost of the spec's intended moody office aesthetic; the
+			    real fixture mounts will dial these back when they land. */}
+			<ambientLight intensity={1.4} color="#f4f1ea" />
+			{/* Hemisphere fill — paper-tinted ceiling, ink-tinted floor
+			    so the two surfaces never collapse to pure black. */}
+			<hemisphereLight args={['#f4f1ea', '#5a564f', 1.1]} />
 			<directionalLight
 				position={[20, 30, 10]}
-				intensity={0.35}
-				color="#E8ECEE"
+				intensity={1.0}
+				color="#f4f1ea"
 				castShadow
 				shadow-mapSize-width={2048}
 				shadow-mapSize-height={2048}
@@ -46,6 +55,9 @@ export function Lighting() {
 				shadow-camera-top={32}
 				shadow-camera-bottom={-32}
 			/>
+			{/* Second directional from the opposite side fills the
+			    ceiling-shadowed floor cells. */}
+			<directionalLight position={[-15, 20, -10]} intensity={0.5} color="#e8ecee" />
 		</>
 	);
 }

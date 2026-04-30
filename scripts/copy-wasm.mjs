@@ -20,8 +20,13 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const target = resolve(repoRoot, 'public/wasm');
 mkdirSync(target, { recursive: true });
 
-// (sourcePath, destFilename) pairs.
-const FILES = [['node_modules/sql.js/dist/sql-wasm.wasm', 'sql-wasm.wasm']];
+// (sourcePath, destFilename) pairs. Vite's dep optimizer may resolve
+// sql.js's `browser` exports condition, which calls locateFile with
+// 'sql-wasm-browser.wasm'. Copy both so either path works.
+const FILES = [
+	['node_modules/sql.js/dist/sql-wasm.wasm', 'sql-wasm.wasm'],
+	['node_modules/sql.js/dist/sql-wasm-browser.wasm', 'sql-wasm-browser.wasm'],
+];
 
 let copied = 0;
 let skipped = 0;
