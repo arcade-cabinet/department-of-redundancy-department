@@ -9,6 +9,8 @@ import { pickSpawnSet } from '@/ai/enemies/spawnDirector';
 import { planSpawns } from '@/ai/enemies/spawner';
 import { useNavMesh } from '@/ai/navmesh/useNavMesh';
 import { audioCues } from '@/audio/cues';
+import { place } from '@/building/place';
+import { radialIdToSlug } from '@/building/radialAction';
 import { clearAll, freshDebuffSet } from '@/combat/debuffs';
 import { type EnemyKillSlug, IDLE_DECAY_PER_SECOND, KILL_DELTAS } from '@/combat/threat';
 import { loadManifest, type Manifest } from '@/content/manifest';
@@ -363,11 +365,74 @@ export function Game({ onExit }: Props) {
 		setPendingDir(null);
 	}, []);
 
-	// Player tapped a radial slot. PRQ-06 turns these into koota events
-	// (tap-engage, place-stair, etc.); for now we just log.
-	const onPickRadial = useCallback((opt: { id: string }) => {
-		console.log('radial pick:', opt.id);
-	}, []);
+	// Per-floor placement overlay. Map<voxelKey, BlockSlug> where
+	// voxelKey is `${vx},${vy},${vz}` in floor-space voxel coords
+	// (NOT world). The session-only persistence shape lands proper DB
+	// wiring in M3; for alpha, placements survive seed/floor regen
+	// only as long as Game.tsx is mounted.
+	const [placementsByFloor, setPlacementsByFloor] = useState<
+		ReadonlyMap<number, ReadonlyMap<string, import('@/world/blocks/BlockRegistry').BlockSlug>>
+	>(() => new Map());
+	const placements = placementsByFloor.get(floorState.currentFloor);
+
+	// Player tapped a radial slot. M2c4 wires the place-* options through
+	// to the building.place() core. Other ids (cancel, mine — future)
+	// fall through to the legacy log.
+	const onPickRadial = useCallback(
+		(opt: { id: string }) => {
+			const slug = radialIdToSlug(opt.id);
+			if (!slug || !radialAnchor) {
+				setRadialAnchor(null);
+				return;
+			}
+			const tapWorld = playerRef.current?.getTapWorld(radialAnchor.x, radialAnchor.y);
+			if (!tapWorld) {
+				setRadialAnchor(null);
+				return;
+			}
+			// World→voxel using the same VOXEL_SIZE/ORIGIN that ChunkLayer uses.
+			const VOXEL_SIZE = 0.4;
+			const ORIGIN = -31 * VOXEL_SIZE;
+			const vx = Math.round((tapWorld.x - ORIGIN) / VOXEL_SIZE);
+			const vz = Math.round((tapWorld.z - ORIGIN) / VOXEL_SIZE);
+			const vy = 2; // wall y-row above the carpet (FLOOR_FLOOR_Y_TOP+1)
+			const playerPos = playerRef.current?.getPosition() ?? { x: 0, y: 0.8, z: 0 };
+			const playerVx = Math.round((playerPos.x - ORIGIN) / VOXEL_SIZE);
+			const playerVz = Math.round((playerPos.z - ORIGIN) / VOXEL_SIZE);
+			// Derive a fresh ChunkData snapshot to gate the placement.
+			// Reuses ChunkLayer's overlay path in spirit — generate +
+			// apply existing placements, then check canPlace.
+			const result = generateFloor(seed, floorState.currentFloor);
+			const VOXELS_PER_CHUNK = 16;
+			const cx = Math.floor(vx / VOXELS_PER_CHUNK);
+			const cz = Math.floor(vz / VOXELS_PER_CHUNK);
+			const lx = vx - cx * VOXELS_PER_CHUNK;
+			const lz = vz - cz * VOXELS_PER_CHUNK;
+			const chunk = result.chunks[cz * 4 + cx];
+			if (!chunk) {
+				setRadialAnchor(null);
+				return;
+			}
+			const ok = place({
+				chunk,
+				target: { x: lx, y: vy, z: lz },
+				playerVoxel: { x: playerVx, y: 2, z: playerVz },
+				slug,
+			});
+			if (ok) {
+				const key = `${vx},${vy},${vz}`;
+				setPlacementsByFloor((prev) => {
+					const next = new Map(prev);
+					const floorMap = new Map(next.get(floorState.currentFloor) ?? []);
+					floorMap.set(key, slug);
+					next.set(floorState.currentFloor, floorMap);
+					return next;
+				});
+			}
+			setRadialAnchor(null);
+		},
+		[radialAnchor, seed, floorState.currentFloor],
+	);
 
 	// Demo: until the world-raycast lands, treat every hold as if it hit
 	// the floor. PRQ-06 swaps this for the real surfaceKind via raycast.
@@ -448,7 +513,12 @@ export function Game({ onExit }: Props) {
 							paused={paused || gameOver}
 						>
 							{manifest && (
-								<World manifest={manifest} seed={seed} floor={floorState.currentFloor} />
+								<World
+									manifest={manifest}
+									seed={seed}
+									floor={floorState.currentFloor}
+									{...(placements !== undefined && { placements })}
+								/>
 							)}
 							<PlayerKinematic ref={playerRef} navMesh={navMesh} spawn={[0, 1.5]} />
 							<Door
