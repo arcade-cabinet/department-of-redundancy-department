@@ -190,6 +190,30 @@ export function Game({ onExit }: Props) {
 
 	const upDoorLocked = shouldLockUpDoor({ floor: floorState.currentFloor, bossAlive });
 
+	// Debug-only test namespace (PRQ-17 M3c1). Gated on ?test=1 so
+	// production builds never expose internal state. e2e fixtures in
+	// e2e/fixtures/state.ts read this; never call from app code.
+	useEffect(() => {
+		if (typeof window === 'undefined') return;
+		const params = new URLSearchParams(window.location.search);
+		if (params.get('test') !== '1') return;
+		const w = window as unknown as { __dord?: object };
+		w.__dord = {
+			state: () => ({
+				floor: floorState.currentFloor,
+				threat,
+				kills: killCount,
+				playedSeconds,
+				playerHp: playerHealth.current,
+				bossAlive,
+			}),
+			damageBoss: (n: number) => reaperRef.current?.damage(n),
+		};
+		return () => {
+			delete (window as unknown as { __dord?: object }).__dord;
+		};
+	}, [floorState.currentFloor, threat, killCount, playedSeconds, playerHealth.current, bossAlive]);
+
 	// Walkable cells for the Reaper's teleport picker — pulled from
 	// yuka NavMesh region centroids. Empty until navMesh resolves;
 	// HrReaperEntity gracefully aborts teleport when empty (FSM
