@@ -1,8 +1,14 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const baseURL = process.env.DORD_BASE_URL ?? 'http://localhost:5173/';
-const isExternalTarget =
-	!baseURL.startsWith('http://localhost') && !baseURL.startsWith('http://localhost');
+// Ensure trailing slash so page.goto('') and relative-asset resolution both
+// land under the baseURL path (relevant when DORD_BASE_URL points at the
+// GitHub Pages deploy at /<repo>/, not at the bare origin). Specs use
+// page.goto('') (empty string) which resolves to baseURL itself —
+// page.goto('/') would resolve to origin and skip the Pages base path.
+const rawBase = process.env.DORD_BASE_URL ?? 'http://localhost:5173/';
+const baseURL = rawBase.endsWith('/') ? rawBase : `${rawBase}/`;
+const localHostnames = new Set(['localhost', '127.0.0.1', '::1']);
+const isExternalTarget = !localHostnames.has(new URL(baseURL).hostname);
 
 export default defineConfig({
 	testDir: 'e2e',
