@@ -1,7 +1,9 @@
-# LFS: large binary assets only — JS bundles never get LFS-pulled
-public/assets/audio/** filter=lfs diff=lfs merge=lfs -text
-public/assets/models/** filter=lfs diff=lfs merge=lfs -text
-public/assets/hdri/** filter=lfs diff=lfs merge=lfs -text
+# LFS is intentionally unused. After PRQ-01 + gltf-transform optimize the entire
+# converted asset tree (5 character GLBs + 10 prop GLBs + 50 trap GLBs + HDRI +
+# textures) totals ~60 MB — well within reasonable raw-blob territory for a
+# single repo. The cd.yml LFS-after-build pattern from grovekeeper / chonkers
+# is therefore not needed here. Re-enable LFS only if total weight exceeds
+# ~250 MB or git operations get slow.
 
 # Normalize line endings on text
 * text=auto eol=lf

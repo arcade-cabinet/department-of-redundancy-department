@@ -1,0 +1,103 @@
+{
+	"$schema": "./convert-references.config.schema.json",
+	"sourceRoot": "references/unpacked",
+	"outputRoot": "public/assets/models",
+	"characters": {
+		"middle-manager": {
+			"sources": ["Kento_Nanami_Model/Kento Nanami Model/Kento Nanami GLTF.gltf"],
+			"scale": 1.0,
+			"footprintCells": [1, 2, 1],
+			"tags": ["enemy", "tier-0"]
+		},
+		"policeman": {
+			"sources": ["Policeman_cg/Policeman_Tpose.obj"],
+			"scale": 1.0,
+			"footprintCells": [1, 2, 1],
+			"tags": ["enemy", "tier-1"]
+		},
+		"hitman": {
+			"sources": ["Hitman_obj/Hitman_T_Pose.obj"],
+			"scale": 1.0,
+			"footprintCells": [1, 2, 1],
+			"tags": ["enemy", "tier-1.5"]
+		},
+		"swat": {
+			"sources": ["Character_14_CG/Character_14_glt.gltf", "Character_14_CG/Character_14.obj"],
+			"scale": 1.0,
+			"footprintCells": [1, 2, 1],
+			"tags": ["enemy", "tier-2"]
+		},
+		"hr-reaper": {
+			"sources": ["Gojo_Satoru_Character/Gojo Satoru Character/Gojo Satoru GLTF.gltf"],
+			"scale": 1.5,
+			"vertexTint": [0.878, 0.639, 0.235, 1.0],
+			"footprintCells": [1, 3, 1],
+			"tags": ["enemy", "tier-3", "boss"]
+		}
+	},
+	"props": {
+		"desk": {
+			"sources": ["Voxel_Props_Pack/Desk/Desk_glt.gltf"],
+			"footprintCells": [2, 1, 1],
+			"tags": ["prop", "office"]
+		},
+		"cabinet-1": {
+			"sources": ["Voxel_Props_Pack/Cabinet1/Cabinet1_glt.gltf"],
+			"footprintCells": [1, 2, 1],
+			"tags": ["prop", "office"]
+		},
+		"cabinet-2": {
+			"sources": ["Voxel_Props_Pack/Cabinet2/Cabinet2_glt.gltf"],
+			"footprintCells": [1, 2, 1],
+			"tags": ["prop", "office"]
+		},
+		"cabinet-3": {
+			"sources": ["Voxel_Props_Pack/Cabinet3/Cabinet3_glt.gltf"],
+			"footprintCells": [1, 2, 1],
+			"tags": ["prop", "office"]
+		},
+		"closet": {
+			"sources": ["Voxel_Props_Pack/Closet/Closet_glt.gltf"],
+			"footprintCells": [1, 3, 1],
+			"tags": ["prop", "office"]
+		},
+		"bedside-1": {
+			"sources": ["Voxel_Props_Pack/Bedside_Table1/BedsideTable1_glt.gltf"],
+			"footprintCells": [1, 1, 1],
+			"tags": ["prop", "office"]
+		},
+		"bedside-2": {
+			"sources": ["Voxel_Props_Pack/Bedside_Table_2/BedsideTable2_glt.gltf"],
+			"footprintCells": [1, 1, 1],
+			"tags": ["prop", "office"]
+		},
+		"treasure-chest": {
+			"sources": ["Voxel_Props_Pack/TreasureChest/TreasureChest_glt.gltf"],
+			"footprintCells": [1, 1, 1],
+			"tags": ["prop", "supply-closet"]
+		},
+		"staircase-1": {
+			"sources": ["Voxel_Props_Pack/Staircase1/Staircase_1.obj"],
+			"footprintCells": [1, 3, 2],
+			"tags": ["prop", "buildable", "stair"]
+		},
+		"staircase-2": {
+			"sources": ["Voxel_Props_Pack/Staircase2/Staircase_2.obj"],
+			"footprintCells": [2, 3, 2],
+			"tags": ["prop", "buildable", "stair"]
+		}
+	},
+	"trapsAutoScan": {
+		"glob": "Trap_Pack_Upload/**/*.gltf",
+		"slugPrefix": "trap-",
+		"footprintCells": [1, 1, 1],
+		"tags": ["trap"],
+		"categoryTags": {
+			"shredder": ["1", "1_1", "1_2", "2_1", "2_2", "2_3", "2_4", "2_5"],
+			"mortar": ["3", "3_2", "4", "5"],
+			"sprinkler": ["6", "6_2", "6_3", "7_1", "7_2", "7_3"],
+			"turret": ["12", "13", "14", "15"],
+			"spike": ["16", "17", "18", "19", "19_2", "19_3"]
+		}
+	}
+}
