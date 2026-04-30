@@ -4,6 +4,7 @@ import { type Weapon, weaponStatsFor } from '@/content/weapons';
 import {
 	canFire,
 	currentAmmo,
+	currentTier,
 	currentWeaponSlug,
 	decrementAmmo,
 	type Equipped,
@@ -70,8 +71,8 @@ export function useFrameWeaponTick(input: WeaponTickInput): void {
 			if (!slug) return;
 			const weapon = cur.weapons?.get(slug);
 			if (!weapon) return;
-			// Resolve stats at T1 until the tier-selection system lands (Task 2+).
-			const stats = weaponStatsFor(weapon, 'T1');
+			// Resolve stats at the active slot's tier.
+			const stats = weaponStatsFor(weapon, currentTier(cur.equipped));
 			const playerPos = cur.getPlayerPosition();
 			const enemyPos = enemy.getPosition();
 			const dx = enemyPos.x - playerPos.x;
