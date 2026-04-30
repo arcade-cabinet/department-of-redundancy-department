@@ -29,5 +29,8 @@ references/
 *.tsbuildinfo
 local-dev.sqlite
 
+# WASM blobs copied at build time by scripts/copy-wasm.mjs
+public/wasm/
+
 # OS
 Thumbs.db
