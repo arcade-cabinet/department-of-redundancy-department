@@ -134,6 +134,19 @@ describe('swapFloor', () => {
 		expect(r.dest.chunks.length).toBeGreaterThan(0);
 	});
 
+	it('emitArrival throw does not surface as a swap failure', async () => {
+		const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const d = deps({
+			emitArrival: vi.fn(() => {
+				throw new Error('listener boom');
+			}),
+		});
+		const r = await swapFloor('up', d);
+		expect(r.destFloor).toBe(2);
+		expect(errSpy).toHaveBeenCalled();
+		errSpy.mockRestore();
+	});
+
 	it('passes persisted chunks to caller for restore', async () => {
 		const persisted = [{ floor: 2, chunkX: 0, chunkZ: 0, dirtyBlob: new Uint8Array(4) }];
 		const d = deps({ listPersistedChunks: vi.fn(async (_f: number) => persisted) });

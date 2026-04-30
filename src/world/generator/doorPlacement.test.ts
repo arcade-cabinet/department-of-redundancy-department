@@ -70,5 +70,7 @@ describe('door placement', () => {
 		expect(r.upDoor.z).toBeLessThan(FLOOR_VOXELS_Z);
 		expect(r.downDoor.x).toBeGreaterThanOrEqual(0);
 		expect(r.downDoor.x).toBeLessThan(FLOOR_VOXELS_X);
+		expect(r.downDoor.z).toBeGreaterThanOrEqual(0);
+		expect(r.downDoor.z).toBeLessThan(FLOOR_VOXELS_Z);
 	});
 });

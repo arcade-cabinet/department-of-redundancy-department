@@ -79,7 +79,14 @@ export async function swapFloor(direction: SwapDirection, deps: SwapDeps): Promi
 	await deps.setLastFloor(destFloor);
 
 	await deps.respawnEnemies(destFloor);
-	deps.emitArrival(destFloor);
+
+	// Emit is best-effort: a misbehaving audio listener should not
+	// surface as a swap failure, since state has already committed.
+	try {
+		deps.emitArrival(destFloor);
+	} catch (err) {
+		console.error(`emitArrival(${destFloor}) failed:`, err);
+	}
 
 	const spawn = direction === 'up' ? dest.downDoor : dest.upDoor;
 
