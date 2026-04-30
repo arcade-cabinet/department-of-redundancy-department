@@ -1,0 +1,11 @@
+name: Bug
+description: Report a problem
+labels: [bug]
+body:
+  - type: textarea
+    attributes: { label: What happened, description: "Steps + actual + expected" }
+    validations: { required: true }
+  - type: input
+    attributes: { label: Affected PRQ }
+  - type: input
+    attributes: { label: Platform, placeholder: "Web / iOS / Android" }

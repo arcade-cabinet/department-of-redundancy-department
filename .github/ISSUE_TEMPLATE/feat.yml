@@ -1,0 +1,9 @@
+name: Feature
+description: Propose a feature
+labels: [feature]
+body:
+  - type: textarea
+    attributes: { label: What, description: "What should we build?" }
+    validations: { required: true }
+  - type: textarea
+    attributes: { label: Why, description: "Why now? What does it unblock?" }

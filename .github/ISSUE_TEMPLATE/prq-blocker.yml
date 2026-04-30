@@ -1,0 +1,12 @@
+name: PRQ blocker
+description: Open a blocking issue against a queued PRQ
+labels: [blocker]
+body:
+  - type: input
+    attributes: { label: PRQ }
+    validations: { required: true }
+  - type: textarea
+    attributes: { label: What is blocked }
+    validations: { required: true }
+  - type: textarea
+    attributes: { label: Proposed resolution }
