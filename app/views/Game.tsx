@@ -59,6 +59,7 @@ import { routeTap } from '@/world/floor/floorRouter';
 import { useFloorState } from '@/world/floor/useFloorState';
 import { generateFloor } from '@/world/generator/floor';
 import { createRng, freshSeed } from '@/world/generator/rng';
+import { subscribeMobileLifecycle } from '../shell/lifecycle';
 import { GameOver } from './GameOver';
 import { PauseMenu } from './PauseMenu';
 
@@ -145,6 +146,33 @@ export function Game({ onExit }: Props) {
 			setBossAlive(false);
 		}
 	}, [floorState.currentFloor, defeatedFloors]);
+
+	// PRQ-16 M3c3: native app-lifecycle hooks. On Android/iOS this
+	// pauses the game when backgrounded + routes the OS back button
+	// through PauseMenu. No-op on web (no @capacitor/app at runtime).
+	useEffect(() => {
+		let dispose: () => void = () => {};
+		subscribeMobileLifecycle({
+			onPause: () => setPaused(true),
+			onResume: () => {
+				/* keep paused on resume; player must tap RESUME */
+			},
+			onBack: () => {
+				if (!paused) {
+					setPaused(true);
+					return true;
+				}
+				if (paused) {
+					setPaused(false);
+					return true;
+				}
+				return false;
+			},
+		}).then((d) => {
+			dispose = d;
+		});
+		return () => dispose();
+	}, [paused]);
 
 	// PRQ-15 M2c7: wire the typed audioCues bus to AudioManager so
 	// every `audio:*` event from earlier PRQs (floor-arrival, door-*)
