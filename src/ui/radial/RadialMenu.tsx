@@ -137,24 +137,29 @@ export function RadialMenu({ anchor, surface, onPick, onClose, radius = 90 }: Pr
 													onClose();
 												}}
 												style={{
-													padding: '0.5rem 0.75rem',
+													padding: '0.5rem',
 													borderRadius: '50%',
-													border: '1px solid var(--paper, #e8e6df)',
+													border: '2px solid var(--paper, #e8e6df)',
 													background: 'var(--ink, #0d0f12)',
 													color: 'var(--paper, #e8e6df)',
-													font: '14px ui-monospace, monospace',
-													minWidth: '3.5rem',
-													minHeight: '3.5rem',
+													fontFamily: 'var(--font-display), ui-monospace, monospace',
+													letterSpacing: '0.06em',
+													textTransform: 'uppercase',
+													minWidth: '4.5rem',
+													minHeight: '4.5rem',
 													cursor: 'pointer',
 													display: 'flex',
 													flexDirection: 'column',
 													alignItems: 'center',
 													justifyContent: 'center',
-													gap: '0.15rem',
+													gap: '0.2rem',
+													boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
 												}}
 											>
-												<span style={{ fontSize: '1.25rem' }}>{opt.icon}</span>
-												<span style={{ fontSize: '0.7rem' }}>{opt.label}</span>
+												<span style={{ fontSize: '1.5rem', lineHeight: 1 }}>{opt.icon}</span>
+												<span style={{ fontSize: '0.65rem', lineHeight: 1.1, textAlign: 'center' }}>
+													{opt.label}
+												</span>
 											</button>
 										</motion.li>
 									);

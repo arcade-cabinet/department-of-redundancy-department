@@ -1,7 +1,7 @@
 import { useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
-import { type Group, type Material, Mesh, MeshStandardMaterial } from 'three';
+import { Box3, Group, type Material, Mesh, MeshStandardMaterial, Vector3 } from 'three';
 import { clone as cloneSkeletal } from 'three/addons/utils/SkeletonUtils.js';
 import type { Manifest } from '@/content/manifest';
 import {
@@ -96,7 +96,29 @@ export function Character({
 			});
 			obj.material = cloned.length === 1 ? (cloned[0] as Material) : (cloned as Material[]);
 		});
-		return { root: c, controls };
+		// Normalize the mesh origin: many of our PSX-style GLBs were exported
+		// with the bone/node sitting tens of units above world zero (e.g.
+		// middle-manager.glb has `translation: [_, 31.5, _]`). When mounted at
+		// the spawn position the visible mesh ends up far above the camera and
+		// reads as "no enemy spawned." Compute the world-space AABB of the
+		// loaded scene, then shift the clone so the AABB's bottom-center lands
+		// at local (0, 0, 0). Wrapping in an outer normalizing group keeps
+		// the original child transforms (rotation/scale/animations) intact
+		// while subtracting the unwanted offset.
+		c.updateMatrixWorld(true);
+		const bbox = new Box3().setFromObject(c);
+		const normalized = new Group();
+		normalized.name = 'normalized-character-root';
+		if (!bbox.isEmpty()) {
+			const offset = new Vector3(
+				-(bbox.min.x + bbox.max.x) / 2,
+				-bbox.min.y,
+				-(bbox.min.z + bbox.max.z) / 2,
+			);
+			c.position.add(offset);
+		}
+		normalized.add(c);
+		return { root: normalized, controls };
 	}, [scene]);
 
 	const innerRef = useRef<Group>(null);

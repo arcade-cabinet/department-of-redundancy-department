@@ -24,10 +24,18 @@ export function useNavMesh(
 	host: NavMeshHost;
 	navMesh: NavMesh | null;
 } {
-	const host = useMemo(() => createNavMeshHost(), []);
+	// IMPORTANT: do NOT memoize the host here. React StrictMode mounts →
+	// unmounts → mounts, and the cleanup below calls host.stop(), which
+	// permanently flips a `stopped` flag inside the host. On the second
+	// mount the *same* memoized host rejects every requestRebuild because
+	// `stopped` is true, so the navmesh never finishes building, the
+	// player can never path, enemies can never path. Owning the host in a
+	// ref keyed off seed+floor (created on demand inside the effect)
+	// gives each StrictMode pass a fresh, alive host.
 	const [navMesh, setNavMesh] = useState<NavMesh | null>(null);
 
 	useEffect(() => {
+		const host = createNavMeshHost();
 		const result = generateFloor(seed, floor);
 		host.requestRebuild({
 			chunks: result.chunks,
@@ -35,23 +43,21 @@ export function useNavMesh(
 			originX: -VOXEL_CENTER_X * voxelSize,
 			originZ: -VOXEL_CENTER_Z * voxelSize,
 		});
-		// Poll for completion and update local state. The host's debounce
-		// + async build means we see `current` change after ~100ms.
 		let cancelled = false;
 		const tick = () => {
 			if (cancelled) return;
-			if (host.current !== navMesh) setNavMesh(host.current);
+			if (host.current !== null) setNavMesh(host.current);
 		};
 		const id = setInterval(tick, 50);
 		return () => {
 			cancelled = true;
 			clearInterval(id);
+			host.stop();
 		};
-	}, [host, seed, floor, voxelSize, navMesh]);
-
-	useEffect(() => {
-		return () => host.stop();
-	}, [host]);
+	}, [seed, floor, voxelSize]);
+	// Stable host accessor for the return — rebuild on every (seed,floor)
+	// change but expose a no-op host to legacy callers that import it.
+	const host = useMemo(() => createNavMeshHost(), []);
 
 	return { host, navMesh };
 }

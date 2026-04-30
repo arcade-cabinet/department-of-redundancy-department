@@ -398,7 +398,12 @@ export function Game({ onExit }: Props) {
 	// updates each render so state() returns the latest values.
 	if (typeof window !== 'undefined') {
 		const w = window as unknown as {
-			__dord?: { state: () => unknown; damageBoss: (n: number) => void };
+			__dord?: {
+				state: () => unknown;
+				damageBoss: (n: number) => void;
+				enemies?: () => unknown;
+				spawns?: () => unknown;
+			};
 		};
 		if (window.location.search.includes('test=1')) {
 			w.__dord = w.__dord ?? {
@@ -567,6 +572,32 @@ export function Game({ onExit }: Props) {
 	// Enemy registry — maps id → handle. Game's player-firing tick reads
 	// alive/position/damage from this. Keys mirror MM mount keys.
 	const enemyRegistry = useRef(new Map<string, EnemyHandle>());
+	// Test hook (?test=1): expose enemy + spawn snapshots so playtest
+	// scripts can verify the spawn director and entity registration.
+	if (typeof window !== 'undefined' && window.location.search.includes('test=1')) {
+		const w = window as unknown as {
+			__dord?: {
+				enemies?: () => unknown;
+				spawns?: () => unknown;
+			};
+		};
+		if (w.__dord) {
+			w.__dord.enemies = () => {
+				const out: Array<{ id: string; alive: boolean; pos: { x: number; y: number; z: number } }> =
+					[];
+				for (const [id, h] of enemyRegistry.current) {
+					out.push({ id, alive: h.isAlive(), pos: h.getPosition() });
+				}
+				return out;
+			};
+			w.__dord.spawns = () => enemySpawns;
+			(w.__dord as { player?: () => unknown }).player = () => ({
+				pos: playerRef.current?.getPosition?.() ?? null,
+				path: playerRef.current?.path?.length ?? 0,
+				navMeshReady: !!navMesh,
+			});
+		}
+	}
 	const registerEnemy = useCallback((h: EnemyHandle) => {
 		enemyRegistry.current.set(h.id, h);
 	}, []);
@@ -1177,7 +1208,7 @@ export function Game({ onExit }: Props) {
 			})()}
 			<FloorStamp floor={floorState.currentFloor} />
 			<ThreatStrip threat={threat} />
-			<Crosshair visible={false} />
+			<Crosshair visible={!paused && !gameOver} />
 			<div
 				data-testid="kill-counter"
 				style={{

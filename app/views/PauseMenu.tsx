@@ -118,8 +118,20 @@ export function PauseMenu({
 		<Dialog.Root open={open} onOpenChange={(o) => !o && onResume()}>
 			<Dialog.Portal>
 				<Dialog.Overlay data-testid="pause-overlay" />
-				<Dialog.Content data-testid="pause-menu">
+				<Dialog.Content data-testid="pause-menu" aria-describedby="pause-desc">
 					<Dialog.Title>{t('pause.title')}</Dialog.Title>
+					<Dialog.Description
+						id="pause-desc"
+						style={{
+							position: 'absolute',
+							width: 1,
+							height: 1,
+							overflow: 'hidden',
+							clip: 'rect(0 0 0 0)',
+						}}
+					>
+						Game paused. Resume to continue, or quit to return to the landing page.
+					</Dialog.Description>
 
 					<Tabs.Root defaultValue="settings">
 						<Tabs.List>
