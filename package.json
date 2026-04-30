@@ -1,6 +1,6 @@
 {
 	"name": "department-of-redundancy-department",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"private": true,
 	"description": "DOOM meets Minecraft, in cubicles. Mobile-first first-person voxel-prop FPS.",
 	"type": "module",
