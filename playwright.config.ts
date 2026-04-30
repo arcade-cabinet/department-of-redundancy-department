@@ -7,8 +7,8 @@ import { defineConfig, devices } from '@playwright/test';
 // page.goto('/') would resolve to origin and skip the Pages base path.
 const rawBase = process.env.DORD_BASE_URL ?? 'http://localhost:5173/';
 const baseURL = rawBase.endsWith('/') ? rawBase : `${rawBase}/`;
-const isExternalTarget =
-	!baseURL.startsWith('http://localhost') && !baseURL.startsWith('http://127.0.0.1');
+const localHostnames = new Set(['localhost', '127.0.0.1', '::1']);
+const isExternalTarget = !localHostnames.has(new URL(baseURL).hostname);
 
 export default defineConfig({
 	testDir: 'e2e',
