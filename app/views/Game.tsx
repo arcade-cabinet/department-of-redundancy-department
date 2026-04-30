@@ -28,7 +28,7 @@ import { applyPickup, type PickupKind } from '@/combat/pickups';
 import { type EnemyKillSlug, IDLE_DECAY_PER_SECOND, KILL_DELTAS } from '@/combat/threat';
 import { useFrameWeaponTick } from '@/combat/useFrameWeaponTick';
 import { loadManifest, type Manifest } from '@/content/manifest';
-import { loadWeapons, type Weapon } from '@/content/weapons';
+import { loadWeapons, type Weapon, weaponStatsFor } from '@/content/weapons';
 import { getDb } from '@/db/client';
 import * as coolersRepo from '@/db/repos/coolers';
 import * as worldRepo from '@/db/repos/world';
@@ -643,6 +643,8 @@ export function Game({ onExit }: Props) {
 			// Only projectile-kind weapons spawn a visible Projectile.
 			if (ev.weapon.kind !== 'projectile') return;
 			const w = ev.weapon;
+			// Resolve stats at T1 until tier-selection lands (Task 2+).
+			const wStats = weaponStatsFor(w, 'T1');
 			const id = `proj-${performance.now()}-${Math.random().toString(36).slice(2, 6)}`;
 			setProjectiles((prev) => [
 				...prev,
@@ -652,7 +654,7 @@ export function Game({ onExit }: Props) {
 					direction: [ev.direction.x, 0, ev.direction.z],
 					speed: w.projectileSpeed,
 					lifetimeMs: w.projectileLifetimeMs,
-					maxDistance: w.range,
+					maxDistance: wStats.range,
 					color: '#e0a33c',
 				},
 			]);
@@ -1201,7 +1203,10 @@ export function Game({ onExit }: Props) {
 			{(() => {
 				const slug = currentWeaponSlug(equipped) ?? '';
 				const w = weapons?.get(slug);
-				const cap = w?.kind === 'projectile' ? w.ammoCap : w?.kind === 'hitscan' ? w.ammoCap : 0;
+				// ammoCap lives in tiers; resolve T1 until tier-selection lands (Task 2+).
+				const cap = w?.kind === 'projectile' || w?.kind === 'hitscan'
+					? weaponStatsFor(w, 'T1').ammoCap
+					: 0;
 				return (
 					<AmmoCounter current={currentAmmo(equipped)} max={cap} weaponName={w?.name ?? slug} />
 				);

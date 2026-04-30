@@ -1,65 +1,57 @@
-/**
- * Weapons table loader. Reads `public/content/weapons.json` (fetched at
- * runtime), hand-validates the shape (zod isn't installed yet — the
- * spec §8.6 mentions it for content but we keep the dep set tight
- * until PRQ-B0 expands the weapon roster), and exposes typed lookups.
- *
- * Two weapons in alpha:
- *   - stapler: melee, 12 dmg, 1.5u range, 400ms cooldown, 30° facing.
- *   - three-hole-punch: 3-round burst projectile, 8 dmg/round, 16u
- *     range, 6u/s muzzle, 25 ammo cap, 800ms full-cycle cooldown,
- *     80ms inter-burst spacing.
- *
- * Validation is loud — a malformed JSON throws and the manifest error
- * UI (Game.tsx) renders the message. PRQ-B0 swaps in zod when the
- * roster expands.
- */
-
 export type WeaponKind = 'melee' | 'projectile' | 'hitscan';
+export type Tier = 'T1' | 'T2' | 'T3';
 
-interface MeleeWeapon {
-	slug: string;
-	name: string;
-	kind: 'melee';
-	damage: number;
-	range: number;
-	cooldownMs: number;
-	/** Max angle (deg) between player.forward and target direction for a
-	 *  hit to count. Stapler: 30°. */
-	facingMaxDeg: number;
-	spreadDeg: number;
-	audioCueOnFire: string;
+export interface ViewmodelBinding {
+	glb: string;
+	gripSlug: string;
 }
 
-interface ProjectileWeapon {
+export interface WeaponTierStats {
+	damage: number;
+	ammoCap: number;
+	cooldownMs: number;
+	range: number;
+	spreadDeg: number;
+}
+
+interface WeaponBase {
 	slug: string;
 	name: string;
+	kind: WeaponKind;
+	audioCueOnFire: string;
+	viewmodel?: ViewmodelBinding;
+	tiers: Record<Tier, WeaponTierStats>;
+}
+
+interface MeleeWeapon extends WeaponBase {
+	kind: 'melee';
+	facingMaxDeg: number;
+}
+
+interface ProjectileWeapon extends WeaponBase {
 	kind: 'projectile';
-	damage: number;
-	range: number;
-	cooldownMs: number;
-	ammoCap: number;
 	projectileSpeed: number;
 	burstCount: number;
 	burstIntervalMs: number;
 	projectileLifetimeMs: number;
-	spreadDeg: number;
-	audioCueOnFire: string;
+	splashRadius?: number;
 }
 
-interface HitscanWeapon {
-	slug: string;
-	name: string;
+interface HitscanWeapon extends WeaponBase {
 	kind: 'hitscan';
-	damage: number;
-	range: number;
-	cooldownMs: number;
-	ammoCap: number;
-	spreadDeg: number;
-	audioCueOnFire: string;
+	pelletCount?: number; // shotgun
+	coneDeg?: number;     // flamethrower
 }
 
 export type Weapon = MeleeWeapon | ProjectileWeapon | HitscanWeapon;
+
+const TIERS: readonly Tier[] = ['T1', 'T2', 'T3'];
+
+export function weaponStatsFor(w: Weapon, tier: Tier): WeaponTierStats {
+	const stats = w.tiers[tier];
+	if (!stats) throw new Error(`weapon ${w.slug}: missing tier ${tier}`);
+	return stats;
+}
 
 let weaponsCache: Map<string, Weapon> | null = null;
 let pending: Promise<Map<string, Weapon>> | null = null;
@@ -73,33 +65,18 @@ export async function loadWeapons(url: string = WEAPONS_URL): Promise<Map<string
 		const res = await fetch(url);
 		if (!res.ok) throw new Error(`weapons.json fetch failed: ${res.status}`);
 		const json = (await res.json()) as { weapons?: unknown };
-		if (!json || !Array.isArray(json.weapons)) {
-			throw new Error('weapons.json: expected { weapons: [...] }');
-		}
-		const map = new Map<string, Weapon>();
-		for (const raw of json.weapons) {
-			const w = validateWeapon(raw);
-			map.set(w.slug, w);
-		}
+		const map = buildWeaponsTable(json);
 		weaponsCache = map;
 		return map;
 	})();
-	pending.catch(() => {
-		pending = null;
-	});
+	pending.catch(() => { pending = null; });
 	return pending;
 }
 
-/** Test-only / direct-input loader: validate an in-memory weapons table
- *  without fetching. Tests use this; runtime uses loadWeapons(). */
 export function buildWeaponsTable(rawJson: unknown): Map<string, Weapon> {
-	if (!rawJson || typeof rawJson !== 'object') {
-		throw new Error('weapons table: must be an object');
-	}
+	if (!rawJson || typeof rawJson !== 'object') throw new Error('weapons table: must be an object');
 	const root = rawJson as { weapons?: unknown };
-	if (!Array.isArray(root.weapons)) {
-		throw new Error('weapons table: expected { weapons: [...] }');
-	}
+	if (!Array.isArray(root.weapons)) throw new Error('weapons table: expected { weapons: [...] }');
 	const map = new Map<string, Weapon>();
 	for (const raw of root.weapons) {
 		const w = validateWeapon(raw);
@@ -119,68 +96,80 @@ function validateWeapon(raw: unknown): Weapon {
 	const slug = mustString(r.slug, 'slug');
 	const name = mustString(r.name, 'name');
 	const kind = mustString(r.kind, 'kind') as WeaponKind;
-	const damage = mustNumber(r.damage, 'damage');
-	const range = mustNumber(r.range, 'range');
-	const cooldownMs = mustNumber(r.cooldownMs, 'cooldownMs');
-	const spreadDeg = mustNumber(r.spreadDeg, 'spreadDeg');
 	const audioCueOnFire = mustString(r.audioCueOnFire, 'audioCueOnFire');
+	const viewmodel = parseViewmodel(r.viewmodel);
+	const tiers = parseTiers(slug, r.tiers);
 
 	if (kind === 'melee') {
 		return {
-			slug,
-			name,
-			kind,
-			damage,
-			range,
-			cooldownMs,
+			slug, name, kind, audioCueOnFire, tiers,
+			...(viewmodel && { viewmodel }),
 			facingMaxDeg: mustNumber(r.facingMaxDeg, 'facingMaxDeg'),
-			spreadDeg,
-			audioCueOnFire,
 		};
 	}
 	if (kind === 'projectile') {
-		return {
-			slug,
-			name,
-			kind,
-			damage,
-			range,
-			cooldownMs,
-			ammoCap: mustNumber(r.ammoCap, 'ammoCap'),
+		const out: ProjectileWeapon = {
+			slug, name, kind, audioCueOnFire, tiers,
+			...(viewmodel && { viewmodel }),
 			projectileSpeed: mustNumber(r.projectileSpeed, 'projectileSpeed'),
 			burstCount: mustNumber(r.burstCount, 'burstCount'),
 			burstIntervalMs: mustNumber(r.burstIntervalMs, 'burstIntervalMs'),
 			projectileLifetimeMs: mustNumber(r.projectileLifetimeMs, 'projectileLifetimeMs'),
-			spreadDeg,
-			audioCueOnFire,
 		};
+		if (typeof r.splashRadius === 'number') out.splashRadius = r.splashRadius;
+		return out;
 	}
 	if (kind === 'hitscan') {
-		return {
-			slug,
-			name,
-			kind,
-			damage,
-			range,
-			cooldownMs,
-			ammoCap: mustNumber(r.ammoCap, 'ammoCap'),
-			spreadDeg,
-			audioCueOnFire,
+		const out: HitscanWeapon = {
+			slug, name, kind, audioCueOnFire, tiers,
+			...(viewmodel && { viewmodel }),
 		};
+		if (typeof r.pelletCount === 'number') out.pelletCount = r.pelletCount;
+		if (typeof r.coneDeg === 'number') out.coneDeg = r.coneDeg;
+		return out;
 	}
 	throw new Error(`unknown weapon kind: ${String(kind)}`);
 }
 
-function mustString(v: unknown, field: string): string {
-	if (typeof v !== 'string' || v.length === 0) {
-		throw new Error(`weapon.${field}: expected non-empty string`);
+function parseTiers(slug: string, raw: unknown): Record<Tier, WeaponTierStats> {
+	if (!raw || typeof raw !== 'object') throw new Error(`weapon ${slug}: tiers must be object`);
+	const r = raw as Record<string, unknown>;
+	const out: Partial<Record<Tier, WeaponTierStats>> = {};
+	for (const t of TIERS) {
+		if (!(t in r)) throw new Error(`weapon ${slug}: missing tier ${t}`);
+		out[t] = parseTierStats(slug, t, r[t]);
 	}
+	return out as Record<Tier, WeaponTierStats>;
+}
+
+function parseTierStats(slug: string, tier: Tier, raw: unknown): WeaponTierStats {
+	if (!raw || typeof raw !== 'object') throw new Error(`weapon ${slug}.${tier}: not object`);
+	const r = raw as Record<string, unknown>;
+	return {
+		damage: mustNumber(r.damage, `${slug}.${tier}.damage`),
+		ammoCap: mustNumber(r.ammoCap, `${slug}.${tier}.ammoCap`),
+		cooldownMs: mustNumber(r.cooldownMs, `${slug}.${tier}.cooldownMs`),
+		range: mustNumber(r.range, `${slug}.${tier}.range`),
+		spreadDeg: mustNumber(r.spreadDeg, `${slug}.${tier}.spreadDeg`),
+	};
+}
+
+function parseViewmodel(raw: unknown): ViewmodelBinding | undefined {
+	if (raw === undefined || raw === null) return undefined;
+	if (typeof raw !== 'object') throw new Error('weapon.viewmodel: must be object');
+	const r = raw as Record<string, unknown>;
+	return {
+		glb: mustString(r.glb, 'viewmodel.glb'),
+		gripSlug: mustString(r.gripSlug, 'viewmodel.gripSlug'),
+	};
+}
+
+function mustString(v: unknown, field: string): string {
+	if (typeof v !== 'string' || v.length === 0) throw new Error(`weapon.${field}: expected non-empty string`);
 	return v;
 }
 
 function mustNumber(v: unknown, field: string): number {
-	if (typeof v !== 'number' || !Number.isFinite(v)) {
-		throw new Error(`weapon.${field}: expected finite number`);
-	}
+	if (typeof v !== 'number' || !Number.isFinite(v)) throw new Error(`weapon.${field}: expected finite number`);
 	return v;
 }

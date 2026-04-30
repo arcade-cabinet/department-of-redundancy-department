@@ -1,6 +1,6 @@
 import { type MutableRefObject, useEffect, useRef } from 'react';
 import type { EnemyHandle } from '@/ai/enemies/MiddleManagerEntity';
-import type { Weapon } from '@/content/weapons';
+import { type Weapon, weaponStatsFor } from '@/content/weapons';
 import {
 	canFire,
 	currentAmmo,
@@ -70,17 +70,18 @@ export function useFrameWeaponTick(input: WeaponTickInput): void {
 			if (!slug) return;
 			const weapon = cur.weapons?.get(slug);
 			if (!weapon) return;
+			// Resolve stats at T1 until the tier-selection system lands (Task 2+).
+			const stats = weaponStatsFor(weapon, 'T1');
 			const playerPos = cur.getPlayerPosition();
 			const enemyPos = enemy.getPosition();
 			const dx = enemyPos.x - playerPos.x;
 			const dz = enemyPos.z - playerPos.z;
 			const dist = Math.hypot(dx, dz);
-			const range = weapon.kind === 'melee' ? weapon.range : weapon.range;
-			const inRange = dist <= range;
+			const inRange = dist <= stats.range;
 			const now = performance.now() / 1000;
 			const ready =
-				canFire(cur.equipped, weapon.cooldownMs, now * 1000) &&
-				now * 1000 - cur.lastFireAtRef.current * 1000 >= weapon.cooldownMs;
+				canFire(cur.equipped, stats.cooldownMs, now * 1000) &&
+				now * 1000 - cur.lastFireAtRef.current * 1000 >= stats.cooldownMs;
 			const tick = tickAutoEngage({
 				state,
 				now,
@@ -97,7 +98,7 @@ export function useFrameWeaponTick(input: WeaponTickInput): void {
 				cur.lastFireAtRef.current = now;
 				const zoneRoll = Math.random();
 				const zone = zoneRoll < 0.15 ? 'head' : zoneRoll < 0.6 ? 'torso' : 'limbs';
-				const baseDmg = weapon.damage;
+				const baseDmg = stats.damage;
 				const finalDmg = applyZoneMultiplier(baseDmg, zone);
 				enemy.damage(finalDmg);
 				if (weapon.kind !== 'melee') {
