@@ -32,6 +32,13 @@ export function applyDebuff(set: DebuffSet, kind: DebuffKind, now: number): Debu
 	return { active: [...others, { kind, endAt }] };
 }
 
+/** Drop every active debuff. Called on floor-arrival + on player death
+ *  so a 4s slow applied just before stepping through a door doesn't
+ *  bleed onto the next floor (PRQ-13 reviewer-fold). */
+export function clearAll(_set: DebuffSet): DebuffSet {
+	return { active: [] };
+}
+
 export function clearExpired(set: DebuffSet, now: number): DebuffSet {
 	const active = set.active.filter((d) => d.endAt > now);
 	if (active.length === set.active.length) return set;

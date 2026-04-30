@@ -62,6 +62,8 @@ export function createReaperFSM(now: number, position: Vec3World): ReaperFSM {
 		hp: REAPER_HP,
 		position,
 		enteredAt: now,
+		// -Infinity → first engage tick fires immediately. Matches
+		// MiddleManagerFSM precedent; intentional aggressive opening.
 		lastFireAt: -Infinity,
 		lastTeleportAt: now,
 		action: { kind: 'idle' },
@@ -103,7 +105,20 @@ export function tickReaper(fsm: ReaperFSM, input: ReaperTickInput): ReaperFSM {
 
 	if (fsm.state === 'teleport-windup') {
 		if (input.now - fsm.enteredAt >= REAPER_TELEPORT_WINDUP_S) {
-			const target = input.candidateTarget ?? input.playerPos;
+			// If the runtime can't find a valid teleport cell (tight floor,
+			// no walkable band ∈ [2,8]u from player), abort the teleport
+			// rather than landing on the player. Reset cooldown so the
+			// reaper retries in 12s.
+			if (!input.candidateTarget) {
+				return {
+					...fsm,
+					state: 'engage',
+					enteredAt: input.now,
+					lastTeleportAt: input.now,
+					action: { kind: 'face-player' },
+				};
+			}
+			const target = input.candidateTarget;
 			return {
 				...fsm,
 				state: 'engage',

@@ -26,10 +26,13 @@ export interface DoorProps {
 	position: [number, number, number];
 	direction: 'up' | 'down';
 	open: boolean;
+	/** When true, render the BLOCKED — PENDING REVIEW overlay; the
+	 *  door cannot be opened until unlocked. PRQ-13 boss-floor gate. */
+	locked?: boolean;
 	onOpened?: () => void;
 }
 
-export function Door({ position, direction, open, onOpened }: DoorProps) {
+export function Door({ position, direction, open, locked = false, onOpened }: DoorProps) {
 	const groupRef = useRef<Group>(null);
 	const leftRef = useRef<Group>(null);
 	const rightRef = useRef<Group>(null);
@@ -87,6 +90,22 @@ export function Door({ position, direction, open, onOpened }: DoorProps) {
 					roughness={0.5}
 				/>
 			</mesh>
+			{locked && (
+				<mesh
+					position={[0, DOOR_HEIGHT / 2, PANEL_THICKNESS / 2 + 0.01]}
+					userData={{ doorLocked: true }}
+				>
+					<planeGeometry args={[DOOR_WIDTH * 1.05, DOOR_HEIGHT * 0.95]} />
+					<meshStandardMaterial
+						color="#7a1f23"
+						emissive="#7a1f23"
+						emissiveIntensity={0.6}
+						roughness={0.4}
+						transparent
+						opacity={0.85}
+					/>
+				</mesh>
+			)}
 		</group>
 	);
 }

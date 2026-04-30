@@ -3,9 +3,12 @@ import { Physics } from '@react-three/rapier';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ACESFilmicToneMapping, SRGBColorSpace } from 'three';
 import { PlayerKinematic, type PlayerKinematicHandle } from '@/ai/core/PlayerKinematic';
+import { HrReaperEntity, type HrReaperHandle } from '@/ai/enemies/HrReaperEntity';
 import { MiddleManagerEntity } from '@/ai/enemies/MiddleManagerEntity';
 import { planSpawns } from '@/ai/enemies/spawner';
 import { useNavMesh } from '@/ai/navmesh/useNavMesh';
+import { audioCues } from '@/audio/cues';
+import { clearAll, freshDebuffSet } from '@/combat/debuffs';
 import { type EnemyKillSlug, IDLE_DECAY_PER_SECOND, KILL_DELTAS } from '@/combat/threat';
 import { loadManifest, type Manifest } from '@/content/manifest';
 import { loadWeapons, type Weapon } from '@/content/weapons';
@@ -44,6 +47,7 @@ import { ThreatStrip } from '@/ui/chrome/ThreatStrip';
 import { WeaponIcon } from '@/ui/chrome/WeaponIcon';
 import { RadialMenu } from '@/ui/radial/RadialMenu';
 import { DrawCallHUD, useDrawCallHUDFlag } from '@/verify/DrawCallHUD';
+import { isBossFloor, shouldLockUpDoor } from '@/world/floor/bossGate';
 import { routeTap } from '@/world/floor/floorRouter';
 import { useFloorState } from '@/world/floor/useFloorState';
 import { generateFloor } from '@/world/generator/floor';
@@ -109,6 +113,38 @@ export function Game({ onExit }: Props) {
 	const [pendingDir, setPendingDir] = useState<'up' | 'down' | null>(null);
 	const [doorOpening, setDoorOpening] = useState<'up' | 'down' | null>(null);
 	const [transitionActive, setTransitionActive] = useState(false);
+	const reaperRef = useRef<HrReaperHandle>(null);
+	const [bossAlive, setBossAlive] = useState(false);
+	const [debuffs, setDebuffs] = useState(() => freshDebuffSet());
+
+	// Spawn / despawn the boss as the player crosses into / out of a
+	// boss floor. Atomicity: bossAlive flips synchronously with the
+	// floor transition, satisfying the bossGate.ts contract.
+	useEffect(() => {
+		if (isBossFloor(floorState.currentFloor)) {
+			setBossAlive(true);
+		} else {
+			setBossAlive(false);
+		}
+	}, [floorState.currentFloor]);
+
+	// Clear debuffs on every floor-arrival cue (PRQ-13 reviewer fold:
+	// a 4s reaper-redaction shouldn't bleed onto the next floor).
+	useEffect(() => {
+		const off = audioCues.on((ev) => {
+			if (ev.type === 'floor-arrival') {
+				setDebuffs((d) => clearAll(d));
+			}
+		});
+		return off;
+	}, []);
+	void debuffs; // wired in M2 with BlurOverlay + speed multiplier
+	const onReaperDeath = useCallback(() => {
+		setBossAlive(false);
+		setThreat(0); // PRQ-13 spec: defeating the Reaper resets threat
+	}, []);
+
+	const upDoorLocked = shouldLockUpDoor({ floor: floorState.currentFloor, bossAlive });
 
 	// Pre-compute deterministic spawn positions for the 3 floor-1 managers.
 	// generateFloor() is idempotent on the seed so this stays reactive-clean.
@@ -214,6 +250,10 @@ export function Game({ onExit }: Props) {
 					playerMaxDistance: 2.5,
 				});
 				if (dir && pendingDir === null && !transitionActive) {
+					// Boss-gate: reject up-tap while the floor's Reaper is alive.
+					if (dir === 'up' && upDoorLocked) {
+						return;
+					}
 					setDoorOpening(dir);
 					setPendingDir(dir);
 					return;
@@ -345,8 +385,21 @@ export function Game({ onExit }: Props) {
 								]}
 								direction="up"
 								open={doorOpening === 'up'}
+								locked={upDoorLocked}
 								onOpened={onDoorOpened}
 							/>
+							{isBossFloor(floorState.currentFloor) && bossAlive && manifest && (
+								<HrReaperEntity
+									ref={reaperRef}
+									manifest={manifest}
+									spawn={[floorState.upDoorWorld.x + 2, 0.8, floorState.upDoorWorld.z + 2]}
+									getPlayerPosition={getPlayerPosition}
+									applyPlayerDamage={applyPlayerDamage}
+									onDeath={onReaperDeath}
+									seed={seed}
+									floor={floorState.currentFloor}
+								/>
+							)}
 							{floorState.currentFloor > 1 && (
 								<Door
 									position={[

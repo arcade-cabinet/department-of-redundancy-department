@@ -76,6 +76,19 @@ describe('HrReaper FSM', () => {
 		expect(fsm.state).toBe('teleport-windup');
 	});
 
+	it('teleport-windup with no candidate aborts to engage at original position (no self-snipe)', () => {
+		let fsm = createReaperFSM(0, { x: 0, y: 0, z: 0 });
+		fsm = tickReaper(fsm, { now: 0.1, playerPos, hasLOS: true });
+		fsm = tickReaper(fsm, { now: 12.1, playerPos, hasLOS: true });
+		expect(fsm.state).toBe('teleport-windup');
+		// No candidateTarget supplied — runtime nav-fail. Reaper must
+		// NOT land on the player.
+		fsm = tickReaper(fsm, { now: 13.2, playerPos: { x: 5, y: 0, z: 5 }, hasLOS: true });
+		expect(fsm.state).toBe('engage');
+		expect(fsm.position).toEqual({ x: 0, y: 0, z: 0 });
+		expect(fsm.action.kind).toBe('face-player');
+	});
+
 	it('teleport-windup → engage at new position after 1s', () => {
 		let fsm = createReaperFSM(0, { x: 0, y: 0, z: 0 });
 		fsm = tickReaper(fsm, { now: 0.1, playerPos, hasLOS: true });

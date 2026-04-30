@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	applyDebuff,
+	clearAll,
 	clearExpired,
 	freshDebuffSet,
 	hasDebuff,
@@ -33,6 +34,15 @@ describe('debuff system', () => {
 		expect(hasDebuff(ds, 'reaper-redaction')).toBe(true);
 		// At now=14.1 (past 4s window) — gone.
 		ds = clearExpired(ds, 14.1);
+		expect(hasDebuff(ds, 'reaper-redaction')).toBe(false);
+		expect(speedMultiplier(ds)).toBe(1);
+	});
+
+	it('clearAll drops every active debuff (used on floor-arrival)', () => {
+		let ds = freshDebuffSet();
+		ds = applyDebuff(ds, 'reaper-redaction', 10);
+		expect(hasDebuff(ds, 'reaper-redaction')).toBe(true);
+		ds = clearAll(ds);
 		expect(hasDebuff(ds, 'reaper-redaction')).toBe(false);
 		expect(speedMultiplier(ds)).toBe(1);
 	});
