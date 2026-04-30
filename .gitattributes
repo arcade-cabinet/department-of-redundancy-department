@@ -1,0 +1,12 @@
+# LFS: large binary assets only — JS bundles never get LFS-pulled
+public/assets/audio/** filter=lfs diff=lfs merge=lfs -text
+public/assets/models/** filter=lfs diff=lfs merge=lfs -text
+public/assets/hdri/** filter=lfs diff=lfs merge=lfs -text
+
+# Normalize line endings on text
+* text=auto eol=lf
+*.sh text eol=lf
+*.bat text eol=crlf
+
+# Treat lockfiles as generated — collapse in PR diffs
+pnpm-lock.yaml linguist-generated

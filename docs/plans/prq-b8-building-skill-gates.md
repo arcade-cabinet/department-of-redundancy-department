@@ -1,0 +1,22 @@
+# PRQ-B8: Building Skill Gates
+
+**Status:** queued (fleshed out when prior milestone gate passes)
+
+**Blocked by:** PRQ-B7.
+
+## Goal
+
+Recipe-known + tool-equipped + skill-tier checks for advanced placements.
+
+## Spec reference
+
+`docs/superpowers/specs/2026-04-29-dord-foundation-design.md` §22.2.
+
+## Acceptance
+
+To be expanded into `T1..Tn` task breakdown when this PRQ becomes active. The single-source-of-truth bullet list lives in spec §22.2 (beta) / §22.3 (RC).
+
+When this PRQ becomes active:
+1. Update `.agent-state/cursor.md` to point at this file.
+2. Replace this acceptance section with a full `Success criteria` + `Task breakdown` per the same format as PRQ-00..PRQ-18.
+3. Execute via the standard PR-per-PRQ + squash-merge flow.

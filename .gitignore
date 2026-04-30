@@ -1,0 +1,33 @@
+node_modules/
+dist/
+.vite/
+.vitest-attachments/
+coverage/
+playwright-report/
+test-results/
+.DS_Store
+*.log
+.env
+.env.local
+
+# Capacitor
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+ios/App/build/
+ios/App/Pods/
+ios/App/App.xcworkspace/xcuserdata/
+ios/App/App.xcodeproj/xcuserdata/
+ios/App/App.xcodeproj/project.xcworkspace/xcuserdata/
+ios/DerivedData/
+
+# References (asset packs — gitignored per spec)
+references/
+
+# Build output
+*.tsbuildinfo
+local-dev.sqlite
+
+# OS
+Thumbs.db
