@@ -22,11 +22,13 @@ import { pickTeleportCell } from './reaperTeleport';
  * auditor-amber. The host (Game.tsx) supplies: manifest, walkable
  * grid for teleport picks, getPlayerPosition, and applyPlayerDamage.
  *
- * Spec §0: only character with auditor-amber emissive. The
- * materialOverrides path on Character.tsx already accepts an emissive
- * tint via tierStyles; for the Reaper we patch it post-mount via the
- * wrapper's onSlugUpdate hook (alpha simplification — proper tint
- * channel lands in M2 with the broader material system).
+ * Spec §0: only character with auditor-amber emissive. NOT YET WIRED.
+ * tierStyles.ts owns scale + walkSpeed but has no emissive channel;
+ * adding one requires materialOverrides plumbing that lands in M2
+ * (PRESENTATION). Today the Reaper renders identically to other
+ * characters at 1.5× scale — it's identifiable by behavior + the
+ * locked-door overlay, not by tint. Tracked: M2 commit table item
+ * "boss tint" — see docs/plans/MONOLITHIC-PR-CONSOLIDATION.md M2c2.
  */
 
 const REAPER_SCALE = 1.5;

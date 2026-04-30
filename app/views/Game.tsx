@@ -116,17 +116,22 @@ export function Game({ onExit }: Props) {
 	const reaperRef = useRef<HrReaperHandle>(null);
 	const [bossAlive, setBossAlive] = useState(false);
 	const [debuffs, setDebuffs] = useState(() => freshDebuffSet());
+	// Defeated boss floors. Persisted to drizzle in M3; for now lives
+	// in session memory so re-entering a cleared boss floor does NOT
+	// respawn the Reaper (PRQ-13 spec: single fight per encounter).
+	const [defeatedFloors, setDefeatedFloors] = useState<ReadonlySet<number>>(() => new Set());
 
 	// Spawn / despawn the boss as the player crosses into / out of a
 	// boss floor. Atomicity: bossAlive flips synchronously with the
 	// floor transition, satisfying the bossGate.ts contract.
 	useEffect(() => {
-		if (isBossFloor(floorState.currentFloor)) {
+		const f = floorState.currentFloor;
+		if (isBossFloor(f) && !defeatedFloors.has(f)) {
 			setBossAlive(true);
 		} else {
 			setBossAlive(false);
 		}
-	}, [floorState.currentFloor]);
+	}, [floorState.currentFloor, defeatedFloors]);
 
 	// Clear debuffs on every floor-arrival cue (PRQ-13 reviewer fold:
 	// a 4s reaper-redaction shouldn't bleed onto the next floor).
@@ -138,13 +143,61 @@ export function Game({ onExit }: Props) {
 		});
 		return off;
 	}, []);
-	void debuffs; // wired in M2 with BlurOverlay + speed multiplier
+	// debuffs is read by M2 (BlurOverlay + speedMultiplier in
+	// PlayerKinematic). The state lives + clears NOW so M2 only has
+	// to add consumers, not the producer. The value is intentionally
+	// not wired into a visible effect yet — see M2 task list.
+	void debuffs;
 	const onReaperDeath = useCallback(() => {
 		setBossAlive(false);
 		setThreat(0); // PRQ-13 spec: defeating the Reaper resets threat
-	}, []);
+		setDefeatedFloors((prev) => {
+			const next = new Set(prev);
+			next.add(floorState.currentFloor);
+			return next;
+		});
+	}, [floorState.currentFloor]);
 
 	const upDoorLocked = shouldLockUpDoor({ floor: floorState.currentFloor, bossAlive });
+
+	// Walkable cells for the Reaper's teleport picker — pulled from
+	// yuka NavMesh region centroids. Empty until navMesh resolves;
+	// HrReaperEntity gracefully aborts teleport when empty (FSM
+	// no-candidate guard from M1c2 fold-forward).
+	const walkableCells = useMemo(() => {
+		if (!navMesh) return [] as { x: number; y: number; z: number }[];
+		return navMesh.regions.map((r) => ({
+			x: r.centroid.x,
+			y: r.centroid.y,
+			z: r.centroid.z,
+		}));
+	}, [navMesh]);
+
+	// Pick a Reaper spawn point on a real walkable cell near the
+	// up-door rather than a hardcoded +2/+2 offset that could land
+	// inside a wall on certain seeds. Falls back to the door coord if
+	// the navmesh hasn't resolved yet (next render fixes it).
+	const reaperSpawn = useMemo<[number, number, number]>(() => {
+		const door = floorState.upDoorWorld;
+		if (walkableCells.length === 0) return [door.x, 0.8, door.z];
+		// Pick the closest walkable cell that is at least 2u from the
+		// door (so the player has room to enter and not bump into
+		// the boss on arrival).
+		let best: { x: number; y: number; z: number } | null = null;
+		let bestDist = Infinity;
+		for (const c of walkableCells) {
+			const dx = c.x - door.x;
+			const dz = c.z - door.z;
+			const d = Math.sqrt(dx * dx + dz * dz);
+			if (d < 2 || d > 6) continue;
+			if (d < bestDist) {
+				bestDist = d;
+				best = c;
+			}
+		}
+		if (!best) return [door.x, 0.8, door.z];
+		return [best.x, 0.8, best.z];
+	}, [floorState.upDoorWorld, walkableCells]);
 
 	// Pre-compute deterministic spawn positions for the 3 floor-1 managers.
 	// generateFloor() is idempotent on the seed so this stays reactive-clean.
@@ -392,7 +445,8 @@ export function Game({ onExit }: Props) {
 								<HrReaperEntity
 									ref={reaperRef}
 									manifest={manifest}
-									spawn={[floorState.upDoorWorld.x + 2, 0.8, floorState.upDoorWorld.z + 2]}
+									spawn={reaperSpawn}
+									walkableCells={walkableCells}
 									getPlayerPosition={getPlayerPosition}
 									applyPlayerDamage={applyPlayerDamage}
 									onDeath={onReaperDeath}

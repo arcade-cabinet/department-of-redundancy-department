@@ -21,6 +21,10 @@ const DOOR_HEIGHT = 2.4;
 const PANEL_WIDTH = DOOR_WIDTH / 2;
 const PANEL_THICKNESS = 0.08;
 const OPEN_DURATION_MS = 300;
+/** Z-offset for the locked overlay so it sits in front of the closed
+ *  panels without z-fighting. Anchored off PANEL_THICKNESS so a
+ *  future thicker-door visual doesn't break the rendering. */
+const LOCK_OVERLAY_Z = PANEL_THICKNESS / 2 + 0.01;
 
 export interface DoorProps {
 	position: [number, number, number];
@@ -92,7 +96,7 @@ export function Door({ position, direction, open, locked = false, onOpened }: Do
 			</mesh>
 			{locked && (
 				<mesh
-					position={[0, DOOR_HEIGHT / 2, PANEL_THICKNESS / 2 + 0.01]}
+					position={[0, DOOR_HEIGHT / 2, LOCK_OVERLAY_Z]}
 					userData={{ doorLocked: true }}
 				>
 					<planeGeometry args={[DOOR_WIDTH * 1.05, DOOR_HEIGHT * 0.95]} />
