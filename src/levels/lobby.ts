@@ -1,16 +1,15 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Cue } from '../encounter/cues';
 import type { RailGraph } from '../rail/RailNode';
-import type { Level } from './types';
+import type { Level, Primitive } from './types';
+
+const PI_2 = Math.PI / 2;
 
 /**
  * Level 01 — The Lobby. Mirrors docs/spec/levels/01-lobby.md screenplay.
  *
- * NOTE: This is a doc-faithful skeleton. Construction primitives, full prop
- * geometry, light fixtures, and complete cue list are abbreviated for v1
- * boot — the canon doc has the full list. Subsequent commits flesh out the
- * remaining primitives & cues. The director, types, and cue language are
- * already complete; adding more rows to the arrays here is a content task.
+ * Cell size 4m. Ceiling height 6m (atrium). Camera height 1.6m.
+ * Coordinate frame: rail enters along +Z at (0, 1.6, 0).
  */
 
 const cameraRail: RailGraph = {
@@ -202,10 +201,303 @@ const cues: readonly Cue[] = [
 	},
 ];
 
+// Construction primitives — anchored to docs/spec/levels/01-lobby.md.
+// Walls run along ±X (face inward toward x=0). Floor is 12m × 24m.
+// Primitive plane normals are -Z by default; yaw rotates around +Y.
+const primitives: readonly Primitive[] = [
+	// Floor + ceiling
+	{
+		kind: 'floor',
+		id: 'floor-marble',
+		origin: new Vector3(0, 0, 12),
+		yaw: 0,
+		width: 12,
+		depth: 24,
+		pbr: 'laminate',
+	},
+	{
+		kind: 'ceiling',
+		id: 'ceiling-atrium',
+		origin: new Vector3(0, 0, 12),
+		yaw: 0,
+		width: 12,
+		depth: 24,
+		pbr: 'ceiling-tile',
+		height: 6,
+		emissiveCutouts: [
+			{ width: 1.5, depth: 1.5, offset: [-3, -8], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.5, depth: 1.5, offset: [3, -8], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.5, depth: 1.5, offset: [-3, 0], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.5, depth: 1.5, offset: [3, 0], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.5, depth: 1.5, offset: [-3, 8], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.5, depth: 1.5, offset: [3, 8], intensity: 0.7, color: [1, 1, 0.95] },
+		],
+	},
+
+	// Walls (east faces -X, west faces +X, end faces -Z)
+	{
+		kind: 'wall',
+		id: 'wall-east-1',
+		origin: new Vector3(6, 0, 4),
+		yaw: -PI_2,
+		width: 8,
+		height: 6,
+		pbr: 'drywall',
+		overlay: { texture: 'T_Window_GlassBricks_00.png' },
+	},
+	{
+		kind: 'wall',
+		id: 'wall-east-2',
+		origin: new Vector3(6, 0, 12),
+		yaw: -PI_2,
+		width: 8,
+		height: 6,
+		pbr: 'drywall',
+		overlay: { texture: 'T_Window_GlassBricks_01.png' },
+	},
+	{
+		kind: 'wall',
+		id: 'wall-east-3',
+		origin: new Vector3(6, 0, 20),
+		yaw: -PI_2,
+		width: 8,
+		height: 6,
+		pbr: 'drywall',
+	},
+	{
+		kind: 'wall',
+		id: 'wall-west-1',
+		origin: new Vector3(-6, 0, 4),
+		yaw: PI_2,
+		width: 8,
+		height: 6,
+		pbr: 'drywall',
+		overlay: { texture: 'T_Window_Wood_012.png' },
+	},
+	{
+		kind: 'wall',
+		id: 'wall-west-2',
+		origin: new Vector3(-6, 0, 12),
+		yaw: PI_2,
+		width: 8,
+		height: 6,
+		pbr: 'drywall',
+		overlay: { texture: 'T_Window_Wood_018.png' },
+	},
+	{
+		kind: 'wall',
+		id: 'wall-west-3',
+		origin: new Vector3(-6, 0, 20),
+		yaw: PI_2,
+		width: 8,
+		height: 6,
+		pbr: 'drywall',
+	},
+	{
+		kind: 'wall',
+		id: 'wall-end',
+		origin: new Vector3(0, 0, 24),
+		yaw: Math.PI,
+		width: 12,
+		height: 6,
+		pbr: 'drywall',
+		overlay: { texture: 'T_Window_Wood_019.png' },
+	},
+
+	// Doors
+	{
+		kind: 'door',
+		id: 'door-revolving',
+		origin: new Vector3(0, 0, 0),
+		yaw: 0,
+		width: 2,
+		height: 2.4,
+		texture: 'T_Door_Wood_Painted_028.png',
+		family: 'painted-wood',
+		state: 'closed',
+		swing: 'inward',
+		hingedOn: 'left',
+	},
+	{
+		kind: 'door',
+		id: 'door-reception-side-A',
+		origin: new Vector3(-3, 0, 4),
+		yaw: PI_2,
+		width: 1,
+		height: 2.2,
+		texture: 'T_Door_Wood_005.png',
+		family: 'wood',
+		state: 'closed',
+		swing: 'inward',
+		hingedOn: 'left',
+		spawnRailId: 'rail-spawn-reception-A',
+	},
+	{
+		kind: 'door',
+		id: 'door-side-cubicle-1',
+		origin: new Vector3(3, 0, 6),
+		yaw: -PI_2,
+		width: 1,
+		height: 2.2,
+		texture: 'T_Door_Wood_Painted_011.png',
+		family: 'painted-wood',
+		state: 'closed',
+		swing: 'inward',
+		hingedOn: 'right',
+		spawnRailId: 'rail-spawn-side-1',
+	},
+	{
+		kind: 'door',
+		id: 'door-north-wing',
+		origin: new Vector3(-6, 0, 12),
+		yaw: PI_2,
+		width: 1,
+		height: 2.2,
+		texture: 'T_Door_Wood_012.png',
+		family: 'wood',
+		state: 'closed',
+		swing: 'outward',
+		hingedOn: 'left',
+		spawnRailId: 'rail-spawn-north-wing',
+	},
+	{
+		kind: 'door',
+		id: 'door-south-wing',
+		origin: new Vector3(6, 0, 12),
+		yaw: -PI_2,
+		width: 1,
+		height: 2.2,
+		texture: 'T_Door_Wood_Painted_007.png',
+		family: 'painted-wood',
+		state: 'closed',
+		swing: 'outward',
+		hingedOn: 'right',
+		spawnRailId: 'rail-spawn-south-wing',
+	},
+	{
+		kind: 'door',
+		id: 'door-elevator-A',
+		origin: new Vector3(-2, 0, 24),
+		yaw: Math.PI,
+		width: 1,
+		height: 2.4,
+		texture: 'T_LiftDoor_00.png',
+		family: 'lift',
+		state: 'closed',
+		swing: 'slide-left',
+	},
+	{
+		kind: 'door',
+		id: 'door-elevator-B',
+		origin: new Vector3(0, 0, 24),
+		yaw: Math.PI,
+		width: 1,
+		height: 2.4,
+		texture: 'T_LiftDoor_00.png',
+		family: 'lift',
+		state: 'closed',
+		swing: 'slide-left',
+		spawnRailId: 'rail-spawn-elevator-garrison',
+	},
+	{
+		kind: 'door',
+		id: 'door-elevator-C',
+		origin: new Vector3(2, 0, 24),
+		yaw: Math.PI,
+		width: 1,
+		height: 2.4,
+		texture: 'T_LiftDoor_00.png',
+		family: 'lift',
+		state: 'closed',
+		swing: 'slide-left',
+	},
+
+	// Pillars
+	{
+		kind: 'pillar',
+		id: 'pillar-N-1',
+		origin: new Vector3(-3, 0, 16),
+		yaw: 0,
+		shape: 'round',
+		size: 0.6,
+		height: 6,
+		pbr: 'drywall',
+	},
+	{
+		kind: 'pillar',
+		id: 'pillar-N-2',
+		origin: new Vector3(3, 0, 16),
+		yaw: 0,
+		shape: 'round',
+		size: 0.6,
+		height: 6,
+		pbr: 'drywall',
+	},
+
+	// Props (only those whose GLBs exist)
+	{
+		kind: 'prop',
+		id: 'prop-reception-desk',
+		origin: new Vector3(-2, 0, 4),
+		yaw: 0,
+		glb: 'props/desk.glb',
+		scale: 1.2,
+	},
+	{
+		kind: 'prop',
+		id: 'prop-cabinet-N',
+		origin: new Vector3(-4, 0, 16),
+		yaw: 0,
+		glb: 'props/cabinet-1.glb',
+	},
+	{
+		kind: 'prop',
+		id: 'prop-cabinet-S',
+		origin: new Vector3(4, 0, 16),
+		yaw: Math.PI,
+		glb: 'props/cabinet-2.glb',
+	},
+
+	// Lights
+	{
+		kind: 'light',
+		id: 'light-fluorescent-fill',
+		origin: new Vector3(0, 6, 12),
+		yaw: 0,
+		light: 'hemispheric',
+		color: [1.0, 1.0, 0.95],
+		intensity: 0.4,
+	},
+	{
+		kind: 'light',
+		id: 'light-revolving-door-spot',
+		origin: new Vector3(0, 4, 1),
+		yaw: 0,
+		light: 'spot',
+		color: [0.95, 0.95, 1.0],
+		intensity: 1.2,
+		direction: new Vector3(0, -0.5, 1),
+		conicalAngle: 1.0,
+		range: 12,
+	},
+	{
+		kind: 'light',
+		id: 'light-elevator-spot-B',
+		origin: new Vector3(0, 4, 23.5),
+		yaw: 0,
+		light: 'spot',
+		color: [1.0, 0.95, 0.85],
+		intensity: 0.0, // dim until p3-spotlight cue snaps it to 1.5
+		direction: new Vector3(0, -0.5, -1),
+		conicalAngle: 0.6,
+		range: 8,
+	},
+];
+
 export const lobbyLevel: Level = {
 	id: 'lobby',
 	displayName: 'Lobby — Floor 1',
-	primitives: [],
+	primitives,
 	spawnRails: [
 		{
 			id: 'rail-spawn-reception-A',
