@@ -1,0 +1,21 @@
+{
+	"version": 1,
+	"coverage_rules": [
+		{
+			"scope": "src/render/**",
+			"requires_one_of": ["e2e/render-*.spec.ts", "src/render/**/*.test.ts"],
+			"override": "// no-visual-impact: <≥10-word reason>"
+		},
+		{
+			"scope": "src/db/**",
+			"requires_one_of": ["src/db/**/*.test.ts"],
+			"override": "// no-schema-impact: <≥10-word reason>"
+		},
+		{
+			"scope": "src/ai/**",
+			"requires_one_of": ["src/ai/**/*.test.ts"],
+			"override": "// no-ai-impact: <≥10-word reason>"
+		}
+	],
+	"forbidden_bash": ["--no-verify", "git push --force "]
+}
