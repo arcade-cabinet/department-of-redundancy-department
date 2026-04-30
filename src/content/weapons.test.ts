@@ -10,11 +10,34 @@ const json = JSON.parse(
 );
 
 describe('weapons content', () => {
-	it('shipped weapons.json validates and produces 2 entries', () => {
+	it('shipped weapons.json validates and produces 6 entries (alpha 2 + beta 4)', () => {
 		const table = buildWeaponsTable(json);
-		expect(table.size).toBe(2);
+		expect(table.size).toBe(6);
 		expect(table.has('stapler')).toBe(true);
 		expect(table.has('three-hole-punch')).toBe(true);
+		expect(table.has('letter-opener')).toBe(true);
+		expect(table.has('whiteboard-marker')).toBe(true);
+		expect(table.has('toner-cannon')).toBe(true);
+		expect(table.has('fax-machine')).toBe(true);
+	});
+
+	it('toner-cannon is a high-damage projectile with 8 ammo cap', () => {
+		const t = buildWeaponsTable(json);
+		const w = t.get('toner-cannon');
+		expect(w?.kind).toBe('projectile');
+		if (w?.kind !== 'projectile') throw new Error('not projectile');
+		expect(w.damage).toBe(35);
+		expect(w.ammoCap).toBe(8);
+	});
+
+	it('fax-machine is a hitscan with 12 ammo + 22u range', () => {
+		const t = buildWeaponsTable(json);
+		const w = t.get('fax-machine');
+		expect(w?.kind).toBe('hitscan');
+		if (w?.kind !== 'hitscan') throw new Error('not hitscan');
+		expect(w.damage).toBe(22);
+		expect(w.range).toBe(22);
+		expect(w.ammoCap).toBe(12);
 	});
 
 	it('stapler is melee with 12 dmg / 1.5u range / 400ms cooldown / 30° facing', () => {

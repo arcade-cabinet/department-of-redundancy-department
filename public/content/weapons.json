@@ -12,6 +12,28 @@
 			"audioCueOnFire": "stapler-thunk"
 		},
 		{
+			"slug": "letter-opener",
+			"name": "Letter Opener",
+			"kind": "melee",
+			"damage": 18,
+			"range": 1.7,
+			"cooldownMs": 350,
+			"spreadDeg": 0,
+			"facingMaxDeg": 25,
+			"audioCueOnFire": "letter-opener-slash"
+		},
+		{
+			"slug": "whiteboard-marker",
+			"name": "Whiteboard Marker",
+			"kind": "melee",
+			"damage": 6,
+			"range": 1.4,
+			"cooldownMs": 250,
+			"spreadDeg": 0,
+			"facingMaxDeg": 35,
+			"audioCueOnFire": "marker-squeak"
+		},
+		{
 			"slug": "three-hole-punch",
 			"name": "Three-Hole Punch",
 			"kind": "projectile",
@@ -25,6 +47,32 @@
 			"projectileLifetimeMs": 1000,
 			"spreadDeg": 4,
 			"audioCueOnFire": "three-hole-burst"
+		},
+		{
+			"slug": "toner-cannon",
+			"name": "Toner Cannon",
+			"kind": "projectile",
+			"damage": 35,
+			"range": 12,
+			"cooldownMs": 1500,
+			"ammoCap": 8,
+			"projectileSpeed": 9,
+			"burstCount": 1,
+			"burstIntervalMs": 0,
+			"projectileLifetimeMs": 800,
+			"spreadDeg": 8,
+			"audioCueOnFire": "toner-blast"
+		},
+		{
+			"slug": "fax-machine",
+			"name": "Fax Machine",
+			"kind": "hitscan",
+			"damage": 22,
+			"range": 22,
+			"cooldownMs": 1200,
+			"ammoCap": 12,
+			"spreadDeg": 5,
+			"audioCueOnFire": "fax-screech"
 		}
 	]
 }
