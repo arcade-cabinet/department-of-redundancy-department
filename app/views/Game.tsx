@@ -6,6 +6,7 @@ import { PlayerKinematic, type PlayerKinematicHandle } from '@/ai/core/PlayerKin
 import { MiddleManagerEntity } from '@/ai/enemies/MiddleManagerEntity';
 import { planSpawns } from '@/ai/enemies/spawner';
 import { useNavMesh } from '@/ai/navmesh/useNavMesh';
+import { type EnemyKillSlug, IDLE_DECAY_PER_SECOND, KILL_DELTAS } from '@/combat/threat';
 import { loadManifest, type Manifest } from '@/content/manifest';
 import { loadWeapons, type Weapon } from '@/content/weapons';
 import {
@@ -61,6 +62,15 @@ export function Game({ onExit }: Props) {
 	const [playerHealth, setPlayerHealth] = useState<Health>(() => freshHealth(PLAYER_MAX_HP));
 	const [gameOver, setGameOver] = useState(false);
 	const [killCount, setKillCount] = useState(0);
+	const [threat, setThreat] = useState(0);
+	// Idle decay: tick threat down at 0.05/min while not paused / dead.
+	useEffect(() => {
+		if (paused || gameOver) return;
+		const id = setInterval(() => {
+			setThreat((t) => Math.max(0, t - IDLE_DECAY_PER_SECOND));
+		}, 1000);
+		return () => clearInterval(id);
+	}, [paused, gameOver]);
 	const [equipped, setEquipped] = useState<Equipped>(() => {
 		// Default loadout: stapler in slot 0 (unlimited), three-hole-punch
 		// in slot 1 (10 starting ammo). PRQ-04 will load this from
@@ -127,9 +137,11 @@ export function Game({ onExit }: Props) {
 
 	const onEnemyKill = useCallback((slug: string) => {
 		setKillCount((n) => n + 1);
+		// Threat bump per spec §10. Unknown slugs (cosmetic kills) ignored.
+		const delta = KILL_DELTAS[slug as EnemyKillSlug];
+		if (delta) setThreat((t) => t + delta);
 		// PRQ-04 kills repo wiring lands when the koota world is in place;
-		// for now we just bump the local counter.
-		void slug;
+		// for now we just bump local state.
 	}, []);
 	useEffect(() => {
 		loadManifest()
@@ -300,7 +312,7 @@ export function Game({ onExit }: Props) {
 				);
 			})()}
 			<FloorStamp floor={1} />
-			<ThreatStrip threat={Math.min(1, killCount / 10)} />
+			<ThreatStrip threat={threat} />
 			<Crosshair visible={false} />
 			<div
 				data-testid="kill-counter"
