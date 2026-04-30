@@ -13,10 +13,13 @@
  * `now - lastFireAt >= cooldownMs/1000`.
  */
 
+export type Tier = 'T1' | 'T2' | 'T3';
+
 export interface EquippedSlot {
 	slug: string | null;
 	ammo: number; // -1 = unlimited (melee weapons)
 	lastFireAt: number; // -Infinity = never fired
+	tier: Tier;
 }
 
 export interface Equipped {
@@ -34,14 +37,27 @@ export function freshEquipped(): Equipped {
 }
 
 export function emptySlot(): EquippedSlot {
-	return { slug: null, ammo: 0, lastFireAt: -Infinity };
+	return { slug: null, ammo: 0, lastFireAt: -Infinity, tier: 'T1' };
 }
 
-export function setSlot(eq: Equipped, idx: number, slug: string, ammo: number): Equipped {
+export function setSlot(eq: Equipped, idx: number, slug: string, ammo: number, tier: Tier = 'T1'): Equipped {
 	if (idx < 0 || idx >= QUICKBAR_SIZE) throw new RangeError(`slot index ${idx} OOB`);
 	const slots = eq.slots.slice();
-	slots[idx] = { slug, ammo, lastFireAt: -Infinity };
+	slots[idx] = { slug, ammo, lastFireAt: -Infinity, tier };
 	return { ...eq, slots };
+}
+
+export function setSlotTier(eq: Equipped, idx: number, tier: Tier): Equipped {
+	if (idx < 0 || idx >= QUICKBAR_SIZE) return eq;
+	const slot = eq.slots[idx];
+	if (!slot?.slug) return eq;
+	const slots = eq.slots.slice();
+	slots[idx] = { ...slot, tier };
+	return { ...eq, slots };
+}
+
+export function currentTier(eq: Equipped): Tier {
+	return eq.slots[eq.current]?.tier ?? 'T1';
 }
 
 export function selectSlot(eq: Equipped, idx: number): Equipped {

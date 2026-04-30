@@ -3,6 +3,7 @@ import {
 	addAmmoTo,
 	canFire,
 	currentAmmo,
+	currentTier,
 	currentWeaponSlug,
 	decrementAmmo,
 	freshEquipped,
@@ -10,6 +11,8 @@ import {
 	recordFire,
 	selectSlot,
 	setSlot,
+	setSlotTier,
+	type Tier,
 } from './Equipped';
 
 describe('Equipped', () => {
@@ -85,5 +88,23 @@ describe('Equipped', () => {
 		expect(canFire(empty, 100, 5)).toBe(false);
 		const dry = setSlot(freshEquipped(), 0, 'three-hole-punch', 0);
 		expect(canFire(dry, 100, 5)).toBe(false);
+	});
+});
+
+describe('Equipped tier', () => {
+	it('defaults to T1 when not specified', () => {
+		const eq = setSlot(freshEquipped(), 0, 'staple-rifle', 30);
+		expect(currentTier(eq)).toBe('T1');
+	});
+
+	it('setSlotTier updates the active slot tier', () => {
+		let eq = setSlot(freshEquipped(), 0, 'staple-rifle', 30);
+		eq = setSlotTier(eq, 0, 'T2');
+		expect(currentTier(eq)).toBe('T2');
+	});
+
+	it('setSlotTier is a no-op for an empty slot', () => {
+		const eq = setSlotTier(freshEquipped(), 3, 'T2');
+		expect(eq.slots[3]?.slug).toBeNull();
 	});
 });
