@@ -53,7 +53,14 @@ export function routeTap(ctx: DoorRouterCtx): TapDirection {
 		downDist <= ctx.tapMaxDistance &&
 		dist(ctx.playerPos, ctx.downDoor) <= ctx.playerMaxDistance;
 
-	if (upCandidate && downCandidate) return upDist <= downDist ? 'up' : 'down';
+	if (upCandidate && downCandidate) {
+		// Tie-break by player→door distance, not tap→door. Spec §4
+		// frames doors as "reachable", and the closer-to-player door is
+		// more reachable when both are within the tap radius.
+		const upPlayerDist = dist(ctx.playerPos, ctx.upDoor);
+		const downPlayerDist = dist(ctx.playerPos, ctx.downDoor);
+		return upPlayerDist <= downPlayerDist ? 'up' : 'down';
+	}
 	if (upCandidate) return 'up';
 	if (downCandidate) return 'down';
 	return null;

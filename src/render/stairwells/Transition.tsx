@@ -41,7 +41,10 @@ export function Transition({
 			firedMidpoint.current = false;
 			setPhase('fade-in');
 		}
-		if (!active && phase === 'fade-out') {
+		// Host aborted mid-transition: collapse to idle no matter the
+		// current phase. Without this, a cancel during fade-in left the
+		// overlay stuck opaque, deadlocking the input layer.
+		if (!active && phase !== 'idle') {
 			setPhase('idle');
 			if (onComplete) onComplete();
 		}

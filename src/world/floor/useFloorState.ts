@@ -67,15 +67,18 @@ export function useFloorState(opts: UseFloorStateOptions) {
 				getCurrentFloor: async () => currentFloor,
 				setCurrentFloor: async (f: number) => setCurrentFloor(f),
 				flushDirty: async () => {
-					/* DB save loop wires in M3 */
+					warnUnimpl('flushDirty');
 				},
-				listPersistedChunks: async (_f: number) => [],
+				listPersistedChunks: async (_f: number) => {
+					warnUnimpl('listPersistedChunks');
+					return [];
+				},
 				generate: (seed: string, floor: number) => generateFloor(seed, floor),
 				applyThreatDecay: async (_d: number) => {
-					/* threat repo wires when koota lands in M3 */
+					warnUnimpl('applyThreatDecay');
 				},
 				respawnEnemies: async (_f: number) => {
-					/* spawn director re-run wires in M2 alongside archetype mounts */
+					warnUnimpl('respawnEnemies');
 				},
 				emitArrival: (f: number) => {
 					import('@/audio/cues').then((m) => m.emit({ type: 'floor-arrival', floor: f }));
@@ -125,3 +128,13 @@ function doorToWorld(
 }
 
 void FLOOR_CHUNKS_X; // re-export-free import — keeps tree-shake honest
+
+const warnedKeys = new Set<string>();
+function warnUnimpl(name: string): void {
+	if (warnedKeys.has(name)) return;
+	warnedKeys.add(name);
+	// Make it loud-once: the M3 wiring task list checks this dev console
+	// for any "no-op floor swap dep:" warnings as proof the runtime is
+	// not silently dropping persisted state.
+	console.warn(`[useFloorState] no-op floor swap dep: ${name} — wires in M3`);
+}

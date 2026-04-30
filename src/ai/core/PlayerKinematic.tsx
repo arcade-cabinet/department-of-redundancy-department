@@ -147,8 +147,14 @@ export const PlayerKinematic = forwardRef<PlayerKinematicHandle, Props>(function
 			teleport(x, z) {
 				const body = bodyRef.current;
 				if (!body) return;
-				body.setNextKinematicTranslation({ x, y: floorY, z });
+				// setTranslation(true) snaps + wakes the body. We deliberately
+				// do NOT also call setNextKinematicTranslation here — the
+				// queued-next-translation would re-apply on the following
+				// physics step from a stale source and could ghost the
+				// capsule for one frame. Sync the yuka vehicle's internal
+				// position too so the next AI tick steers from the new pos.
 				body.setTranslation({ x, y: floorY, z }, true);
+				vehicle.sync(yukaScratch.current.set(x, floorY, z));
 				vehicle.clearPath();
 				pathRef.current = [];
 			},

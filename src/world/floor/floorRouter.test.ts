@@ -63,17 +63,32 @@ describe('floor router — door tap classification', () => {
 		expect(r).toBe('down');
 	});
 
-	it('tap inside both radii prefers the closer door', () => {
-		// Both doors within range; tap exactly on up-door's coord.
+	it('tap inside both radii tie-breaks by player→door distance', () => {
+		// Both doors close to tap; player is right next to up-door.
+		// Player-distance tie-break picks 'up' even though tap is
+		// equidistant.
 		const r = routeTap(
 			baseCtx({
 				upDoor: { x: 5, y: 2, z: 5 },
-				downDoor: { x: 6, y: 2, z: 6 },
+				downDoor: { x: 5.5, y: 2, z: 5.5 },
 				playerPos: { x: 5, y: 0.8, z: 5 },
-				tapWorld: { x: 5, y: 2, z: 5 },
+				tapWorld: { x: 5.25, y: 2, z: 5.25 },
 				currentFloor: 2,
 			}),
 		);
 		expect(r).toBe('up');
+	});
+
+	it('tap inside both radii: when player is closer to down-door, picks down', () => {
+		const r = routeTap(
+			baseCtx({
+				upDoor: { x: 5, y: 2, z: 5 },
+				downDoor: { x: 6, y: 2, z: 6 },
+				playerPos: { x: 6, y: 0.8, z: 6 },
+				tapWorld: { x: 5.5, y: 2, z: 5.5 },
+				currentFloor: 2,
+			}),
+		);
+		expect(r).toBe('down');
 	});
 });

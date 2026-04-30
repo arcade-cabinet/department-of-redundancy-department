@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { Group } from 'three';
 
 /**
@@ -34,8 +34,11 @@ export function Door({ position, direction, open, onOpened }: DoorProps) {
 	const leftRef = useRef<Group>(null);
 	const rightRef = useRef<Group>(null);
 	// Tween state in a ref so useFrame doesn't re-render every tick.
+	// Note: firedOpened resets on every open→close→open transition; if
+	// the host flips `open` rapidly within one tween, openedFraction
+	// can lag the prop. Door taps gate this in practice (pendingDir
+	// blocks re-tap), so the simple guard is enough.
 	const stateRef = useRef({ openedFraction: 0, lastOpen: false, firedOpened: false });
-	const [, force] = useState(0);
 
 	useEffect(() => {
 		if (open !== stateRef.current.lastOpen) {
@@ -48,17 +51,14 @@ export function Door({ position, direction, open, onOpened }: DoorProps) {
 		const s = stateRef.current;
 		const target = open ? 1 : 0;
 		const direction01 = target > s.openedFraction ? 1 : -1;
-		const speed = 1000 / OPEN_DURATION_MS; // fraction units per second
+		const speed = 1000 / OPEN_DURATION_MS;
 		s.openedFraction = clamp(s.openedFraction + direction01 * speed * dtSec, 0, 1);
 		const angle = (s.openedFraction * Math.PI) / 2;
 		if (leftRef.current) leftRef.current.rotation.y = -angle;
 		if (rightRef.current) rightRef.current.rotation.y = angle;
 		if (open && s.openedFraction >= 1 && !s.firedOpened) {
 			s.firedOpened = true;
-			if (onOpened) {
-				onOpened();
-				force((n) => n + 1);
-			}
+			onOpened?.();
 		}
 	});
 

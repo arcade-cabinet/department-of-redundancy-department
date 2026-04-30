@@ -186,6 +186,12 @@ export function Game({ onExit }: Props) {
 	// Translate gesture events: tap → tap-to-travel via the navmesh-driven
 	// vehicle; hold → radial menu; drag/drag-end reserved for drag-look
 	// (PRQ-08+ when pointer-lock + sensitivity wire in).
+	// Pin individual fields off floorState (object identity churns on
+	// every swap → would re-bind InputCanvas listeners). Pulling out
+	// the primitives keeps onGesture stable across non-swap renders.
+	const upDoorWorld = floorState.upDoorWorld;
+	const downDoorWorld = floorState.downDoorWorld;
+	const currentFloor = floorState.currentFloor;
 	const onGesture = useCallback(
 		(e: GestureEvent) => {
 			if (e.kind === 'hold') {
@@ -199,9 +205,9 @@ export function Game({ onExit }: Props) {
 			const tapWorld = playerRef.current?.getTapWorld(e.x, e.y);
 			if (tapWorld) {
 				const dir = routeTap({
-					upDoor: floorState.upDoorWorld,
-					downDoor: floorState.downDoorWorld,
-					currentFloor: floorState.currentFloor,
+					upDoor: upDoorWorld,
+					downDoor: downDoorWorld,
+					currentFloor,
 					playerPos: playerRef.current?.getPosition() ?? { x: 0, y: 0.8, z: 0 },
 					tapWorld,
 					tapMaxDistance: 1.5,
@@ -216,7 +222,7 @@ export function Game({ onExit }: Props) {
 			playerRef.current?.tap(e.x, e.y);
 			setTimeout(() => setPathWaypoints(playerRef.current?.path ?? []), 16);
 		},
-		[floorState, pendingDir, transitionActive],
+		[upDoorWorld, downDoorWorld, currentFloor, pendingDir, transitionActive],
 	);
 
 	// Door open animation finished → kick off fade-cut.
