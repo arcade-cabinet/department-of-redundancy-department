@@ -1,4 +1,5 @@
 import { useTexture } from '@react-three/drei';
+import { RigidBody, TrimeshCollider } from '@react-three/rapier';
 import { useMemo, useRef } from 'react';
 import {
 	BufferAttribute,
@@ -60,7 +61,7 @@ export function Chunk({ chunk, origin = [0, 0, 0] }: Props) {
 
 	const meshRef = useRef<Mesh>(null);
 
-	const geometry = useMemo(() => {
+	const { geometry, trimeshArgs } = useMemo(() => {
 		const mesh = greedyMesh(chunk);
 		const g = new BufferGeometry();
 		g.setAttribute('position', new BufferAttribute(mesh.positions, 3));
@@ -74,12 +75,19 @@ export function Chunk({ chunk, origin = [0, 0, 0] }: Props) {
 		// just need the tree to exist; PRQ-03 T6 will wire the accelerated
 		// raycast on the actual mesh ref.
 		g.computeBoundsTree?.();
-		return g;
+		// Rapier TrimeshCollider takes (vertices, indices) tuples. Reuse
+		// the same geometry buffers — Rapier copies them on the wasm
+		// side, so subsequent geometry edits don't affect the collider.
+		const trimeshTuple: [Float32Array, Uint32Array] = [mesh.positions, mesh.indices];
+		return { geometry: g, trimeshArgs: trimeshTuple };
 	}, [chunk]);
 
 	return (
-		<mesh ref={meshRef} position={origin} geometry={geometry} castShadow receiveShadow>
-			<meshStandardMaterial map={tileset} roughness={0.85} metalness={0} />
-		</mesh>
+		<RigidBody type="fixed" colliders={false} position={origin}>
+			<mesh ref={meshRef} geometry={geometry} castShadow receiveShadow>
+				<meshStandardMaterial map={tileset} roughness={0.85} metalness={0} />
+			</mesh>
+			<TrimeshCollider args={trimeshArgs} />
+		</RigidBody>
 	);
 }

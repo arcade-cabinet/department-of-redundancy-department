@@ -1,12 +1,17 @@
 import { Canvas } from '@react-three/fiber';
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Physics } from '@react-three/rapier';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ACESFilmicToneMapping, SRGBColorSpace } from 'three';
+import { PlayerKinematic, type PlayerKinematicHandle } from '@/ai/core/PlayerKinematic';
+import { useNavMesh } from '@/ai/navmesh/useNavMesh';
 import { loadManifest, type Manifest } from '@/content/manifest';
 import { subscribeKeyboard } from '@/input/desktopFallback';
 import type { GestureEvent } from '@/input/gesture';
 import { InputCanvas } from '@/input/InputCanvas';
 import { PlayerCamera } from '@/render/camera/PlayerCamera';
 import { Lighting } from '@/render/lighting/Lighting';
+import { NavMeshViz, useNavMeshVizFlag } from '@/render/world/NavMeshViz';
+import { PathViz, usePathVizFlag } from '@/render/world/PathViz';
 import { World } from '@/render/world/World';
 import { RadialMenu } from '@/ui/radial/RadialMenu';
 import { DrawCallHUD, useDrawCallHUDFlag } from '@/verify/DrawCallHUD';
@@ -21,12 +26,17 @@ export function Game({ onExit }: Props) {
 	const [paused, setPaused] = useState(false);
 	const [radialAnchor, setRadialAnchor] = useState<{ x: number; y: number } | null>(null);
 	const showHUD = useDrawCallHUDFlag();
+	const showNavMeshViz = useNavMeshVizFlag();
+	const showPathViz = usePathVizFlag();
+	const playerRef = useRef<PlayerKinematicHandle>(null);
+	const [pathWaypoints, setPathWaypoints] = useState<readonly import('yuka').Vector3[]>([]);
 	// Per spec §8.5: world_seed lives in @capacitor/preferences. PRQ-04 wires
 	// the persisted seed. For PRQ-02 we use a stable demo seed so the camera
 	// position can be hand-aligned to a known-open cubicle; freshSeed() is
 	// kept available for the new-game path that PRQ-04 will own.
 	void freshSeed; // silence unused — wired in PRQ-04
 	const [seed] = useState<string>(() => 'Synergistic Bureaucratic Cubicle');
+	const { navMesh } = useNavMesh(seed, 1);
 	useEffect(() => {
 		loadManifest()
 			.then((m) => {
@@ -49,14 +59,19 @@ export function Game({ onExit }: Props) {
 		return () => fb.dispose();
 	}, []);
 
-	// Translate gesture events into UI state. World-space raycast lands
-	// in PRQ-06 alongside the kinematic controller; for now we pop the
-	// radial on hold to validate the input → UI wiring works end-to-end.
+	// Translate gesture events: tap → tap-to-travel via the navmesh-driven
+	// vehicle; hold → radial menu; drag/drag-end reserved for drag-look
+	// (PRQ-08+ when pointer-lock + sensitivity wire in).
 	const onGesture = useCallback((e: GestureEvent) => {
 		if (e.kind === 'hold') {
 			setRadialAnchor({ x: e.x, y: e.y });
+			return;
 		}
-		// tap / drag / drag-end: PRQ-06 wires these to tap-travel + drag-look.
+		if (e.kind === 'tap') {
+			playerRef.current?.tap(e.x, e.y);
+			// Capture the new path for PathViz on the next tick.
+			setTimeout(() => setPathWaypoints(playerRef.current?.path ?? []), 16);
+		}
 	}, []);
 
 	// Player tapped a radial slot. PRQ-06 turns these into koota events
@@ -123,11 +138,9 @@ export function Game({ onExit }: Props) {
 					antialias: true,
 				}}
 			>
-				{/* Voxel floor surface sits at world y=0.8 (2 carpet voxels × 0.4u);
-				    eye height 1.6 above feet → camera y=2.4. Position offset on z
-				    so the player starts a step back from the manager at the cubicle
-				    center, looking at them (yaw=π faces -Z which the scene faces by
-				    default, so PI looks back along +Z toward the manager). */}
+				{/* PlayerKinematic owns the camera position once mounted; the
+				    PlayerCamera here only sets initial yaw/pitch + FOV (the
+				    Y is overwritten by the kinematic's per-frame update). */}
 				<PlayerCamera
 					position={[0, 1.5]}
 					yaw={Math.PI}
@@ -137,7 +150,12 @@ export function Game({ onExit }: Props) {
 				/>
 				<Suspense fallback={null}>
 					<Lighting />
-					{manifest && <World manifest={manifest} seed={seed} />}
+					<Physics gravity={[0, -9.81, 0]} colliders={false} timeStep="vary" interpolate={false}>
+						{manifest && <World manifest={manifest} seed={seed} />}
+						<PlayerKinematic ref={playerRef} navMesh={navMesh} spawn={[0, 1.5]} />
+					</Physics>
+					{showNavMeshViz && <NavMeshViz navMesh={navMesh} />}
+					{showPathViz && <PathViz waypoints={pathWaypoints} />}
 					{showHUD && <DrawCallHUD />}
 				</Suspense>
 			</Canvas>
