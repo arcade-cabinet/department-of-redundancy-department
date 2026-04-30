@@ -40,3 +40,40 @@ describe('weapons table', () => {
 		expect(() => buildWeaponsTable(bad)).toThrow(/T2/);
 	});
 });
+
+// src/content/weapons.test.ts (append)
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+describe('shipped weapons.json', () => {
+	const json = JSON.parse(readFileSync(resolve('public/content/weapons.json'), 'utf-8'));
+	const map = buildWeaponsTable(json);
+
+	it.each([
+		'staple-rifle',
+		'binder-blaster',
+		'expense-report-smg',
+		'toner-cannon',
+		'compliance-incinerator',
+		'severance-special',
+	])('has weapon %s with all 3 tiers', (slug) => {
+		const w = map.get(slug);
+		expect(w).toBeDefined();
+		expect(w!.tiers.T1).toBeDefined();
+		expect(w!.tiers.T2).toBeDefined();
+		expect(w!.tiers.T3).toBeDefined();
+	});
+
+	it('tier multipliers approximately match spec curves', () => {
+		const w = map.get('staple-rifle')!;
+		expect(w.tiers.T2.damage / w.tiers.T1.damage).toBeCloseTo(1.40, 2);
+		expect(w.tiers.T3.ammoCap / w.tiers.T1.ammoCap).toBeCloseTo(2.10, 1);
+		expect(w.tiers.T2.cooldownMs / w.tiers.T1.cooldownMs).toBeCloseTo(0.85, 2);
+	});
+
+	it('every weapon has a viewmodel binding', () => {
+		for (const w of map.values()) {
+			expect(w.viewmodel).toBeDefined();
+		}
+	});
+});

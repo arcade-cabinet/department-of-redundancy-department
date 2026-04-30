@@ -1,78 +1,87 @@
 {
 	"weapons": [
 		{
-			"slug": "stapler",
-			"name": "Stapler",
-			"kind": "melee",
-			"damage": 12,
-			"range": 1.5,
-			"cooldownMs": 400,
-			"spreadDeg": 0,
-			"facingMaxDeg": 30,
-			"audioCueOnFire": "stapler-thunk"
+			"slug": "staple-rifle",
+			"name": "Staple Rifle",
+			"kind": "hitscan",
+			"audioCueOnFire": "staple-rifle-fire",
+			"viewmodel": { "glb": "weapon-ak47.glb", "gripSlug": "ak47" },
+			"tiers": {
+				"T1": { "damage": 8, "ammoCap": 30, "cooldownMs": 120, "range": 18, "spreadDeg": 4 },
+				"T2": { "damage": 11.2, "ammoCap": 45, "cooldownMs": 102, "range": 18, "spreadDeg": 3.2 },
+				"T3": { "damage": 14.8, "ammoCap": 63, "cooldownMs": 84, "range": 18, "spreadDeg": 2.2 }
+			}
 		},
 		{
-			"slug": "letter-opener",
-			"name": "Letter Opener",
-			"kind": "melee",
-			"damage": 18,
-			"range": 1.7,
-			"cooldownMs": 350,
-			"spreadDeg": 0,
-			"facingMaxDeg": 25,
-			"audioCueOnFire": "letter-opener-slash"
+			"slug": "binder-blaster",
+			"name": "Binder Blaster",
+			"kind": "hitscan",
+			"audioCueOnFire": "binder-blaster-fire",
+			"viewmodel": { "glb": "weapon-shotgun.glb", "gripSlug": "shotgun" },
+			"pelletCount": 6,
+			"tiers": {
+				"T1": { "damage": 6, "ammoCap": 8, "cooldownMs": 800, "range": 8, "spreadDeg": 12 },
+				"T2": { "damage": 8.4, "ammoCap": 12, "cooldownMs": 680, "range": 8, "spreadDeg": 9.6 },
+				"T3": { "damage": 11.1, "ammoCap": 17, "cooldownMs": 560, "range": 8, "spreadDeg": 6.6 }
+			}
 		},
 		{
-			"slug": "whiteboard-marker",
-			"name": "Whiteboard Marker",
-			"kind": "melee",
-			"damage": 6,
-			"range": 1.4,
-			"cooldownMs": 250,
-			"spreadDeg": 0,
-			"facingMaxDeg": 35,
-			"audioCueOnFire": "marker-squeak"
-		},
-		{
-			"slug": "three-hole-punch",
-			"name": "Three-Hole Punch",
-			"kind": "projectile",
-			"damage": 8,
-			"range": 16,
-			"cooldownMs": 800,
-			"ammoCap": 25,
-			"projectileSpeed": 6,
-			"burstCount": 3,
-			"burstIntervalMs": 80,
-			"projectileLifetimeMs": 1000,
-			"spreadDeg": 4,
-			"audioCueOnFire": "three-hole-burst"
+			"slug": "expense-report-smg",
+			"name": "Expense Report SMG",
+			"kind": "hitscan",
+			"audioCueOnFire": "expense-report-smg-fire",
+			"viewmodel": { "glb": "weapon-mac10.glb", "gripSlug": "mac10" },
+			"tiers": {
+				"T1": { "damage": 5, "ammoCap": 32, "cooldownMs": 80, "range": 14, "spreadDeg": 6 },
+				"T2": { "damage": 7, "ammoCap": 48, "cooldownMs": 68, "range": 14, "spreadDeg": 4.8 },
+				"T3": { "damage": 9.25, "ammoCap": 67, "cooldownMs": 56, "range": 14, "spreadDeg": 3.3 }
+			}
 		},
 		{
 			"slug": "toner-cannon",
 			"name": "Toner Cannon",
 			"kind": "projectile",
-			"damage": 35,
-			"range": 12,
-			"cooldownMs": 1500,
-			"ammoCap": 8,
+			"audioCueOnFire": "toner-cannon-fire",
+			"viewmodel": { "glb": "weapon-bazooka.glb", "gripSlug": "bazooka" },
 			"projectileSpeed": 9,
 			"burstCount": 1,
 			"burstIntervalMs": 0,
-			"projectileLifetimeMs": 800,
-			"spreadDeg": 8,
-			"audioCueOnFire": "toner-blast"
+			"projectileLifetimeMs": 1500,
+			"splashRadius": 2.5,
+			"tiers": {
+				"T1": { "damage": 75, "ammoCap": 4, "cooldownMs": 1500, "range": 14, "spreadDeg": 0 },
+				"T2": { "damage": 105, "ammoCap": 6, "cooldownMs": 1275, "range": 14, "spreadDeg": 0 },
+				"T3": { "damage": 138.75, "ammoCap": 8, "cooldownMs": 1050, "range": 14, "spreadDeg": 0 }
+			}
 		},
 		{
-			"slug": "fax-machine",
-			"name": "Fax Machine",
+			"slug": "compliance-incinerator",
+			"name": "Compliance Incinerator",
 			"kind": "hitscan",
-			"damage": 22,
-			"range": 22,
-			"cooldownMs": 1200,
-			"ammoCap": 12,
-			"spreadDeg": 5,
-			"audioCueOnFire": "fax-screech"
+			"audioCueOnFire": "compliance-incinerator-fire",
+			"viewmodel": { "glb": "weapon-flamethrower.glb", "gripSlug": "flamethrower" },
+			"coneDeg": 60,
+			"tiers": {
+				"T1": { "damage": 4, "ammoCap": 50, "cooldownMs": 60, "range": 6, "spreadDeg": 8 },
+				"T2": { "damage": 5.6, "ammoCap": 75, "cooldownMs": 51, "range": 6, "spreadDeg": 6.4 },
+				"T3": { "damage": 7.4, "ammoCap": 105, "cooldownMs": 42, "range": 6, "spreadDeg": 4.4 }
+			}
+		},
+		{
+			"slug": "severance-special",
+			"name": "Severance Special",
+			"kind": "projectile",
+			"audioCueOnFire": "severance-special-fire",
+			"viewmodel": { "glb": "weapon-mgd-pm9.glb", "gripSlug": "mgd-pm9" },
+			"projectileSpeed": 14,
+			"burstCount": 1,
+			"burstIntervalMs": 0,
+			"projectileLifetimeMs": 1200,
+			"tiers": {
+				"T1": { "damage": 35, "ammoCap": 12, "cooldownMs": 600, "range": 16, "spreadDeg": 2 },
+				"T2": { "damage": 49, "ammoCap": 18, "cooldownMs": 510, "range": 16, "spreadDeg": 1.6 },
+				"T3": { "damage": 64.75, "ammoCap": 25, "cooldownMs": 420, "range": 16, "spreadDeg": 1.1 }
+			}
 		}
 	]
 }
