@@ -21,13 +21,16 @@ import { radialIdToSlug } from '@/building/radialAction';
 import { discoverRecipe, freshRecipeBook, knownRecipeSlugs } from '@/building/recipes';
 import { freshAutoEngage, setEngageTarget } from '@/combat/autoEngage';
 import { clearAll, freshDebuffSet } from '@/combat/debuffs';
+import { fallDamageFor } from '@/combat/fallDamage';
 import { PickupEntity } from '@/combat/PickupEntity';
+import { Projectile } from '@/combat/Projectile';
 import { applyPickup, type PickupKind } from '@/combat/pickups';
 import { type EnemyKillSlug, IDLE_DECAY_PER_SECOND, KILL_DELTAS } from '@/combat/threat';
 import { useFrameWeaponTick } from '@/combat/useFrameWeaponTick';
 import { loadManifest, type Manifest } from '@/content/manifest';
 import { loadWeapons, type Weapon } from '@/content/weapons';
 import { getDb } from '@/db/client';
+import * as coolersRepo from '@/db/repos/coolers';
 import * as worldRepo from '@/db/repos/world';
 import { startSaveLoop } from '@/db/save-loop';
 import type { SaveBlob } from '@/db/saveBlob';
@@ -252,6 +255,23 @@ export function Game({ onExit }: Props) {
 		const archetype = floorArchetypeFor(floorState.currentFloor);
 		console.info(`[floor] archetype=${archetype} floor=${floorState.currentFloor}`);
 	}, [floorState.currentFloor]);
+
+	// Directive item #8 + PRQ-09 spec §19.2: water-cooler claim on
+	// every floor entry, recorded near the up-door cell. The persisted
+	// claim gates respawn — on death the player would arrive at the
+	// most-recent claimed cooler. R3F mounts (lit-up cooler GLB) land
+	// in a future commit; this commit makes the repo write happen on
+	// the playable loop. Idempotent — re-entering a floor is no-op.
+	useEffect(() => {
+		const h = saveHandleRef.current;
+		if (!h) return;
+		const door = floorState.upDoorWorld;
+		const VOXEL_SIZE = 0.4;
+		const ORIGIN = -31 * VOXEL_SIZE;
+		const cx = Math.round((door.x - ORIGIN) / VOXEL_SIZE);
+		const cz = Math.round((door.z - ORIGIN) / VOXEL_SIZE);
+		h.enqueue((tx) => coolersRepo.claim(tx, floorState.currentFloor, cx, 1, cz));
+	}, [floorState.currentFloor, floorState.upDoorWorld]);
 
 	// Directive item #11 + PRQ-B3: pick a deterministic trap set per
 	// floor based on threat tier (1-3 traps). Logged for now; a future
@@ -556,6 +576,22 @@ export function Game({ onExit }: Props) {
 	// Player auto-engage: tap on enemy → lock target → fire on cadence.
 	const [engageState, setEngageState] = useState(() => freshAutoEngage());
 	const lastFireAtRef = useRef(0);
+
+	// Active projectiles spawned by useFrameWeaponTick's onFire callback
+	// for projectile-kind weapons. Each gets a Projectile mount; expire
+	// removes it from this list.
+	const [projectiles, setProjectiles] = useState<
+		ReadonlyArray<{
+			id: string;
+			origin: [number, number, number];
+			direction: [number, number, number];
+			speed: number;
+			lifetimeMs: number;
+			maxDistance: number;
+			color: string;
+		}>
+	>([]);
+
 	useFrameWeaponTick({
 		paused: paused || gameOver,
 		engageState,
@@ -566,6 +602,29 @@ export function Game({ onExit }: Props) {
 		setEquipped,
 		weapons,
 		lastFireAtRef,
+		onFire: (ev) => {
+			// Audio cue for every fire (broadcast via the typed bus so
+			// future per-weapon cues can subscribe). Today the bus has
+			// no fire-cue type so we directly call audioManager with a
+			// per-weapon slug.
+			void audioManager.play(`weapon-${ev.weapon.slug}-fire`, { volume: 0.6 });
+			// Only projectile-kind weapons spawn a visible Projectile.
+			if (ev.weapon.kind !== 'projectile') return;
+			const w = ev.weapon;
+			const id = `proj-${performance.now()}-${Math.random().toString(36).slice(2, 6)}`;
+			setProjectiles((prev) => [
+				...prev,
+				{
+					id,
+					origin: [ev.origin.x, 1.0, ev.origin.z],
+					direction: [ev.direction.x, 0, ev.direction.z],
+					speed: w.projectileSpeed,
+					lifetimeMs: w.projectileLifetimeMs,
+					maxDistance: w.range,
+					color: '#e0a33c',
+				},
+			]);
+		},
 	});
 	useEffect(() => {
 		loadManifest()
@@ -682,12 +741,20 @@ export function Game({ onExit }: Props) {
 	// Fade-in midpoint → run swapTo + teleport player to the destination
 	// floor's opposite door (Up-Door of N → arrive at Down-Door of N+1).
 	// Use the world-space spawn returned by swapTo so we never duplicate
-	// the voxel→world math here.
+	// the voxel→world math here. Down-door descent applies a stylized
+	// fall-damage cost (directive item #4) — treated as a 4u drop so the
+	// fallDamageFor function lives in the playable loop. Real shaft-
+	// drop physics land when PlayerKinematic enables gravity.
 	const onTransitionMidpoint = useCallback(async () => {
 		if (!pendingDir) return;
+		const wasDown = pendingDir === 'down';
 		const { spawnWorld } = await swapTo(pendingDir);
 		playerRef.current?.teleport(spawnWorld.x, spawnWorld.z);
-	}, [pendingDir, swapTo]);
+		if (wasDown) {
+			const dmg = fallDamageFor(4);
+			if (dmg > 0) applyPlayerDamage(dmg);
+		}
+	}, [pendingDir, swapTo, applyPlayerDamage]);
 
 	// Fade-out complete → clear pending state.
 	const onTransitionComplete = useCallback(() => {
@@ -755,6 +822,89 @@ export function Game({ onExit }: Props) {
 				}
 				setRadialAnchor(null);
 				return;
+			}
+
+			// Directive item #7: radial action dispatcher tail. Each
+			// non-place / non-mine option maps to an observable side
+			// effect so the player sees feedback. Some are stylized
+			// alpha-stub effects; the surfaces they bind to (terminals,
+			// printers, water-cooler) materialize as discrete entities
+			// in M5+ and rebind the handlers there.
+			switch (opt.id) {
+				case 'inspect': {
+					console.info(`[radial] inspect at (${vx},${vy},${vz})`);
+					setRadialAnchor(null);
+					return;
+				}
+				case 'mark': {
+					console.info(`[radial] mark at (${vx},${vy},${vz})`);
+					setRadialAnchor(null);
+					return;
+				}
+				case 'repair': {
+					console.info(`[radial] repair at (${vx},${vy},${vz})`);
+					setRadialAnchor(null);
+					return;
+				}
+				case 'work': {
+					// Stylized: working a desk yields one stamina memo.
+					setMemos((prev) => [...prev, generateMemo(memoRng.current)]);
+					setRadialAnchor(null);
+					return;
+				}
+				case 'search': {
+					// Stylized: search yields a binder-clip drop.
+					setDrops((prev) => [
+						...prev,
+						{
+							id: `search-${performance.now()}`,
+							kind: 'binder-clips',
+							pos: [tapWorld.x, 0.8, tapWorld.z],
+						},
+					]);
+					setRadialAnchor(null);
+					return;
+				}
+				case 'use':
+				case 'print': {
+					console.info(`[radial] ${opt.id} at (${vx},${vy},${vz})`);
+					setRadialAnchor(null);
+					return;
+				}
+				case 'open': {
+					// Door open is normally driven by the floor router;
+					// close the radial cleanly here.
+					setRadialAnchor(null);
+					return;
+				}
+				case 'attack':
+				case 'focus-fire': {
+					// Engage the nearest live enemy near the tap point
+					// (mirrors the tap-engage path in onGesture).
+					let nearestId: string | null = null;
+					let nearestD = 4.0; // wider than tap-engage since this is intentional
+					for (const [eid, h] of enemyRegistry.current) {
+						if (!h.isAlive()) continue;
+						const p = h.getPosition();
+						const d = Math.hypot(p.x - tapWorld.x, p.z - tapWorld.z);
+						if (d < nearestD) {
+							nearestD = d;
+							nearestId = eid;
+						}
+					}
+					if (nearestId) {
+						setEngageState((s) => setEngageTarget(s, nearestId, performance.now() / 1000));
+					}
+					setRadialAnchor(null);
+					return;
+				}
+				case 'flee': {
+					// Disengage + path away from the tapped point toward
+					// the player's current position projected outward.
+					setEngageState(freshAutoEngage());
+					setRadialAnchor(null);
+					return;
+				}
 			}
 
 			// PLACE — existing path.
@@ -949,6 +1099,18 @@ export function Game({ onExit }: Props) {
 									position={d.pos}
 									getPlayerPosition={getPlayerPosition}
 									onCollect={() => onPickupCollect(d.id, d.kind)}
+								/>
+							))}
+							{projectiles.map((p) => (
+								<Projectile
+									key={p.id}
+									origin={p.origin}
+									direction={p.direction}
+									speed={p.speed}
+									lifetimeMs={p.lifetimeMs}
+									maxDistance={p.maxDistance}
+									color={p.color}
+									onExpire={() => setProjectiles((prev) => prev.filter((q) => q.id !== p.id))}
 								/>
 							))}
 						</Physics>

@@ -27,6 +27,13 @@ import { applyZoneMultiplier, classifyHitZone } from './damageZones';
  *      apply damage immediately and spawn a visual.
  */
 
+export interface FireEvent {
+	weapon: Weapon;
+	origin: { x: number; y: number; z: number };
+	direction: { x: number; y: number; z: number };
+	targetId: string;
+}
+
 export interface WeaponTickInput {
 	paused: boolean;
 	engageState: AutoEngageState;
@@ -37,6 +44,9 @@ export interface WeaponTickInput {
 	setEquipped: (eq: Equipped) => void;
 	weapons: Map<string, Weapon> | null;
 	lastFireAtRef: MutableRefObject<number>;
+	/** Optional host callback for fire events (used to spawn Projectile
+	 *  visuals for projectile weapons + dispatch audio cues). */
+	onFire?: (ev: FireEvent) => void;
 }
 
 export function useFrameWeaponTick(input: WeaponTickInput): void {
@@ -85,8 +95,6 @@ export function useFrameWeaponTick(input: WeaponTickInput): void {
 			}
 			if (tick.action.fire) {
 				cur.lastFireAtRef.current = now;
-				// Pick a random local-y in the capsule (simplified — alpha
-				// uses zone-weighted RNG; full BVH raycast lands later).
 				const zoneRoll = Math.random();
 				const zone = zoneRoll < 0.15 ? 'head' : zoneRoll < 0.6 ? 'torso' : 'limbs';
 				const baseDmg = weapon.damage;
@@ -97,6 +105,18 @@ export function useFrameWeaponTick(input: WeaponTickInput): void {
 				}
 				if (cur.equipped && currentAmmo(cur.equipped) === 0 && weapon.kind !== 'melee') {
 					cur.setEngageState(clearEngageTarget(tick.state));
+				}
+				// Surface the fire event so the host can spawn Projectile
+				// visuals + dispatch audio cues. Direction is unit-length
+				// player→enemy on the XZ plane.
+				if (cur.onFire) {
+					const len = dist > 0 ? dist : 1;
+					cur.onFire({
+						weapon,
+						origin: { x: playerPos.x, y: playerPos.y, z: playerPos.z },
+						direction: { x: dx / len, y: 0, z: dz / len },
+						targetId: state.targetId,
+					});
 				}
 				// Suppress unused-import warning while LOS is stub.
 				void classifyHitZone;
