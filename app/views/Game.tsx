@@ -648,6 +648,7 @@ export function Game({ onExit }: Props) {
 			__dord?: {
 				enemies?: () => unknown;
 				spawns?: () => unknown;
+				jumpToFloor?: (n: number) => Promise<void>;
 			};
 		};
 		if (w.__dord) {
@@ -665,6 +666,14 @@ export function Game({ onExit }: Props) {
 				path: playerRef.current?.path?.length ?? 0,
 				navMeshReady: !!navMesh,
 			});
+			// Single-step: swapTo closes over the current floor from render;
+			// looping doesn't work because React batches state updates.
+			// The e2e smoke test only needs floor > 1, so one step is enough.
+			(w.__dord as Record<string, unknown>).jumpToFloor = (n: number) => {
+				const cur = floorState.currentFloor;
+				if (n > cur) swapTo('up');
+				else if (n < cur) swapTo('down');
+			};
 		}
 	}
 	const registerEnemy = useCallback((h: EnemyHandle) => {
