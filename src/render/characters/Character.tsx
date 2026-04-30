@@ -123,6 +123,29 @@ export function Character({
 
 	const innerRef = useRef<Group>(null);
 	const fsmRef = useRef({ state, elapsedMs: 0 });
+
+	// OOM fix (2026-04-30): per-instance Material.clone() above creates
+	// fresh GPU shader programs + uniforms per character instance.
+	// Without explicit dispose on unmount, every killed enemy leaks
+	// ~100 KB of material data (textures are shared with the source
+	// scene, so we don't double-dispose those). Traverse the clone tree
+	// and dispose each cloned material when the React component
+	// unmounts.
+	useEffect(
+		() => () => {
+			cloned.root.traverse((o) => {
+				const maybeMesh = o as { material?: unknown };
+				const m = maybeMesh.material;
+				if (!m) return;
+				const mats = Array.isArray(m) ? m : [m];
+				for (const mat of mats) {
+					(mat as { dispose?: () => void }).dispose?.();
+				}
+			});
+		},
+		[cloned],
+	);
+
 	// Sync the FSM's state when the prop changes — but transient states
 	// (attack/hit/death) ignore prop set-state, matching transition().
 	useEffect(() => {

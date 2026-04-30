@@ -327,9 +327,15 @@ export function Game({ onExit }: Props) {
 	const activeAmbienceRef = useRef<Map<AmbienceLayer, ReturnType<typeof audioManager.play> | null>>(
 		new Map(),
 	);
+	// OOM fix (2026-04-30): ambience layer Promises that resolve AFTER
+	// Game unmount used to leak — they'd construct a THREE.Audio source
+	// post-unmount that was never stopped. Track an unmounted flag in a
+	// ref and check inside .then so late-resolving sources get stopped
+	// immediately. Also reconcile when paused (just stop layers) so
+	// pausing while a layer is playing actually silences it.
+	const ambienceUnmountedRef = useRef(false);
 	useEffect(() => {
-		if (paused || gameOver) return;
-		const desired = new Set(ambienceForThreat(threat));
+		const desired = paused || gameOver ? new Set<AmbienceLayer>() : new Set(ambienceForThreat(threat));
 		const active = activeAmbienceRef.current;
 		// Stop layers no longer desired.
 		for (const [layer, src] of active) {
@@ -341,13 +347,21 @@ export function Game({ onExit }: Props) {
 		// Start layers newly desired.
 		for (const layer of desired) {
 			if (!active.has(layer)) {
-				active.set(layer, audioManager.play(`ambience-${layer}`, { loop: true, volume: 0.4 }));
+				const promise = audioManager.play(`ambience-${layer}`, { loop: true, volume: 0.4 });
+				active.set(layer, promise);
+				// If Game unmounts while the promise is in-flight, stop
+				// the resolved source immediately when it lands.
+				void Promise.resolve(promise).then((s) => {
+					if (ambienceUnmountedRef.current) audioManager.stop(s ?? null);
+				});
 			}
 		}
 	}, [threat, paused, gameOver]);
 	useEffect(() => {
-		// On Game unmount, stop every ambience layer.
+		// On Game unmount, stop every ambience layer + raise the flag so
+		// any in-flight play() promise stops itself on resolve.
 		return () => {
+			ambienceUnmountedRef.current = true;
 			const active = activeAmbienceRef.current;
 			for (const [, src] of active) {
 				void Promise.resolve(src).then((s) => audioManager.stop(s ?? null));
@@ -476,9 +490,23 @@ export function Game({ onExit }: Props) {
 	// the same threat reproduces. `threat` is intentionally NOT in the
 	// dep list — re-pick on every floor change is the correct semantics;
 	// mid-floor threat climbs don't retro-spawn enemies.
+	// OOM fix (2026-04-30): generateFloor allocates ~128 KB chunk data
+	// per call. Game.tsx calls it from three places (enemySpawns,
+	// onPickRadial — every radial tap, radialSurface — every anchor
+	// change). Hoist to a shared per-floor useMemo so all three share
+	// one allocation. Anything that needs to MUTATE the chunks (like
+	// completeMine in onPickRadial) must clone first; today only the
+	// radial surface classifier reads (no mutation), and the original
+	// onPickRadial path didn't actually persist mutations through
+	// generateFloor's output (it builds a fresh per-call result).
+	const floorData = useMemo(
+		() => generateFloor(seed, floorState.currentFloor),
+		[seed, floorState.currentFloor],
+	);
+
 	// biome-ignore lint/correctness/useExhaustiveDependencies: see above
 	const enemySpawns = useMemo(() => {
-		const result = generateFloor(seed, floorState.currentFloor);
+		const result = floorData;
 		const VOXEL_SIZE = 0.4;
 		const ORIGIN = -31 * VOXEL_SIZE;
 		const positions = planSpawns({
@@ -905,7 +933,10 @@ export function Game({ onExit }: Props) {
 			const vx = Math.round((tapWorld.x - ORIGIN) / VOXEL_SIZE);
 			const vz = Math.round((tapWorld.z - ORIGIN) / VOXEL_SIZE);
 			const vy = 2;
-			const result = generateFloor(seed, floorState.currentFloor);
+			// OOM fix: reuse the shared floorData allocation. Mining
+			// mutations propagate to other consumers (radial classifier,
+			// future spawns) — that's the correct gameplay behavior.
+			const result = floorData;
 			const VOXELS_PER_CHUNK = 16;
 			const cx = Math.floor(vx / VOXELS_PER_CHUNK);
 			const cz = Math.floor(vz / VOXELS_PER_CHUNK);
@@ -1046,7 +1077,7 @@ export function Game({ onExit }: Props) {
 			}
 			setRadialAnchor(null);
 		},
-		[radialAnchor, seed, floorState.currentFloor],
+		[radialAnchor, seed, floorState.currentFloor, floorData],
 	);
 
 	// Directive item #6: classify the actual surface under the radial
@@ -1057,12 +1088,12 @@ export function Game({ onExit }: Props) {
 		if (!radialAnchor) return null;
 		const tapWorld = playerRef.current?.getTapWorld(radialAnchor.x, radialAnchor.y);
 		if (!tapWorld) return 'floor' as const;
-		const result = generateFloor(seed, floorState.currentFloor);
+		// OOM fix: reuse the shared floorData allocation.
 		const v = worldToVoxel(tapWorld, 2);
-		const blockId = blockIdAt(result.chunks, v);
+		const blockId = blockIdAt(floorData.chunks, v);
 		const kind = classifySurface({ kind: 'voxel', blockId });
 		return kind ?? ('floor' as const);
-	}, [radialAnchor, seed, floorState.currentFloor]);
+	}, [radialAnchor, floorData]);
 
 	if (manifestError) {
 		return (

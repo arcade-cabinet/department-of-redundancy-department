@@ -1,6 +1,6 @@
 import { useTexture } from '@react-three/drei';
 import { RigidBody, TrimeshCollider } from '@react-three/rapier';
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
 	BufferAttribute,
 	BufferGeometry,
@@ -81,6 +81,20 @@ export function Chunk({ chunk, origin = [0, 0, 0] }: Props) {
 		const trimeshTuple: [Float32Array, Uint32Array] = [mesh.positions, mesh.indices];
 		return { geometry: g, trimeshArgs: trimeshTuple };
 	}, [chunk]);
+
+	// OOM fix (2026-04-30): three.js BufferGeometry + three-mesh-bvh
+	// boundsTree are NOT released by the React reconciler when the
+	// <Chunk> unmounts. Each floor swap was leaking ~2 MB of GPU + JS
+	// (16 chunks × geometry + BVH typed-arrays) per swap. Explicit
+	// dispose on cleanup. Rapier's TrimeshCollider already cleans up
+	// its wasm side via <RigidBody> unmount.
+	useEffect(
+		() => () => {
+			(geometry as { disposeBoundsTree?: () => void }).disposeBoundsTree?.();
+			geometry.dispose();
+		},
+		[geometry],
+	);
 
 	return (
 		<RigidBody type="fixed" colliders={false} position={origin}>

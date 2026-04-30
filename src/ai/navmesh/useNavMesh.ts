@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { NavMesh } from 'yuka';
 import { VOXEL_CENTER_X, VOXEL_CENTER_Z } from '@/render/world/ChunkLayer';
 import { generateFloor } from '@/world/generator/floor';
-import { createNavMeshHost, type NavMeshHost } from './NavMeshHost';
+import { createNavMeshHost } from './NavMeshHost';
 
 /**
  * Hook that owns a NavMeshHost driven by the current floor's chunks.
@@ -21,7 +21,6 @@ export function useNavMesh(
 	floor: number,
 	voxelSize = 0.4,
 ): {
-	host: NavMeshHost;
 	navMesh: NavMesh | null;
 } {
 	// IMPORTANT: do NOT memoize the host here. React StrictMode mounts →
@@ -53,11 +52,14 @@ export function useNavMesh(
 			cancelled = true;
 			clearInterval(id);
 			host.stop();
+			// OOM fix (2026-04-30): null out the previous floor's yuka
+			// NavMesh so it can be GC'd. Without this the React state
+			// kept the regions/edges/polygons reachable across floor
+			// swaps (~2 MB / swap leak). The next floor's effect will
+			// setNavMesh again once its host's build completes.
+			setNavMesh(null);
 		};
 	}, [seed, floor, voxelSize]);
-	// Stable host accessor for the return — rebuild on every (seed,floor)
-	// change but expose a no-op host to legacy callers that import it.
-	const host = useMemo(() => createNavMeshHost(), []);
 
-	return { host, navMesh };
+	return { navMesh };
 }
