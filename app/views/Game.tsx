@@ -25,12 +25,16 @@ import { fallDamageFor } from '@/combat/fallDamage';
 import { PickupEntity } from '@/combat/PickupEntity';
 import { Projectile } from '@/combat/Projectile';
 import { applyPickup, type PickupKind } from '@/combat/pickups';
-import { type EnemyKillSlug, IDLE_DECAY_PER_SECOND, KILL_DELTAS } from '@/combat/threat';
+import { type EnemyKillSlug, IDLE_DECAY_PER_SECOND, KILL_DELTAS, tierFor } from '@/combat/threat';
+import { upgradeCost } from '@/combat/upgrade';
 import { useFrameWeaponTick } from '@/combat/useFrameWeaponTick';
+import { WeaponPickup } from '@/combat/WeaponPickup';
+import { pickWeaponDrop, type WeaponDrop } from '@/combat/weaponDrops';
 import { loadManifest, type Manifest } from '@/content/manifest';
 import { loadWeapons, type Weapon, weaponStatsFor } from '@/content/weapons';
 import { getDb } from '@/db/client';
 import * as coolersRepo from '@/db/repos/coolers';
+import { migrateAlphaWeaponSlugs } from '@/db/repos/weapons';
 import * as worldRepo from '@/db/repos/world';
 import { startSaveLoop } from '@/db/save-loop';
 import type { SaveBlob } from '@/db/saveBlob';
@@ -42,6 +46,8 @@ import {
 	freshEquipped,
 	selectSlot,
 	setSlot,
+	setSlotTier,
+	type Tier,
 } from '@/ecs/components/Equipped';
 import {
 	applyDamage,
@@ -51,6 +57,12 @@ import {
 	PLAYER_MAX_HP,
 	tickDamageFlash,
 } from '@/ecs/components/Health';
+import {
+	addCurrency,
+	freshCurrency,
+	spendCurrency,
+	type WeaponCurrency,
+} from '@/ecs/components/WeaponCurrency';
 import { PauseProvider } from '@/ecs/PauseContext';
 import { subscribeKeyboard } from '@/input/desktopFallback';
 import type { GestureEvent } from '@/input/gesture';
@@ -82,9 +94,12 @@ import { generateFloor } from '@/world/generator/floor';
 import { floorArchetypeFor } from '@/world/generator/floorArchetype';
 import { createRng, freshSeed } from '@/world/generator/rng';
 import { pickTrapSet } from '@/world/traps/traps';
+import { WorkbenchEntity } from '@/world/workbench/WorkbenchEntity';
+import { isWorkbenchFloor, workbenchPositionFor } from '@/world/workbench/workbenchSpawn';
 import { subscribeMobileLifecycle } from '../shell/lifecycle';
 import { GameOver } from './GameOver';
 import { PauseMenu } from './PauseMenu';
+import { WorkbenchPanel } from './WorkbenchPanel';
 
 type Props = { onExit: () => void };
 
@@ -117,12 +132,13 @@ export function Game({ onExit }: Props) {
 		return () => clearInterval(id);
 	}, [paused, gameOver]);
 	const [equipped, setEquipped] = useState<Equipped>(() => {
-		// Default loadout: stapler in slot 0 (unlimited), three-hole-punch
-		// in slot 1 (10 starting ammo). PRQ-04 will load this from
-		// world_meta/weapons_owned on continue.
-		const e = setSlot(freshEquipped(), 0, 'stapler', -1);
-		return setSlot(e, 1, 'three-hole-punch', 10);
+		// New starter loadout: only staple-rifle in slot 0, T1, full mag.
+		// Migration of any persisted alpha-format saves runs in the
+		// load-from-DB path (Task 11 handler).
+		return setSlot(freshEquipped(), 0, 'staple-rifle', 30, 'T1');
 	});
+	// migrateAlphaWeaponSlugs is retained for future persistence-load path wiring.
+	void migrateAlphaWeaponSlugs;
 	const [weapons, setWeapons] = useState<Map<string, Weapon> | null>(null);
 	useEffect(() => {
 		loadWeapons()
@@ -500,10 +516,51 @@ export function Game({ onExit }: Props) {
 		});
 	}, [seed, floorState.currentFloor]);
 
+	// One weapon drop per floor (sometimes none, depending on threat tier).
+	// Spawn position: pick a deterministic walkable cell ~3..6u in front
+	// of the down-door so the player passes near it on transit.
+	// threat is intentionally NOT in the dep list — re-pick on floor change
+	// is the correct semantics; mid-floor threat climbs don't re-roll the drop.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: see above
+	const weaponDrop = useMemo<{ drop: WeaponDrop; pos: [number, number, number] } | null>(() => {
+		const tier = tierFor(threat);
+		const pick = pickWeaponDrop(seed, floorState.currentFloor, tier);
+		if (!pick) return null;
+		const door = floorState.downDoorWorld;
+		const rng = createRng(`${seed}::weapon-drop-pos::floor-${floorState.currentFloor}`);
+		const angle = rng.next() * Math.PI * 2;
+		const dist = 3 + rng.next() * 3;
+		return {
+			drop: pick,
+			pos: [door.x + Math.cos(angle) * dist, 0.6, door.z + Math.sin(angle) * dist],
+		};
+	}, [seed, floorState.currentFloor]);
+
+	const onWeaponPickup = useCallback((drop: WeaponDrop, weapon: Weapon) => {
+		// Replace the active slot's weapon with the new one at full mag
+		// for the dropped tier.
+		const ammo = weapon.tiers[drop.tier].ammoCap;
+		setEquipped((eq) => setSlot(eq, eq.current, drop.slug, ammo, drop.tier));
+	}, []);
+
 	const getPlayerPosition = useCallback(
 		() => playerRef.current?.getPosition() ?? { x: 0, y: 0.8, z: 0 },
 		[],
 	);
+
+	const [workbenchOpen, setWorkbenchOpen] = useState(false);
+	const workbenchPos = useMemo<[number, number, number] | null>(() => {
+		if (!isWorkbenchFloor(floorState.currentFloor)) return null;
+		const p = workbenchPositionFor(seed, floorState.currentFloor, floorState.downDoorWorld);
+		return [p.x, 0.4, p.z];
+	}, [seed, floorState.currentFloor, floorState.downDoorWorld]);
+
+	const onUpgradeWeapon = useCallback((slotIdx: number, fromTier: Tier, toTier: Tier) => {
+		const cost = upgradeCost(fromTier, toTier);
+		if (!cost) return;
+		setWallet((w) => spendCurrency(w, cost));
+		setEquipped((eq) => setSlotTier(eq, slotIdx, toTier));
+	}, []);
 
 	const applyPlayerDamage = useCallback((dmg: number): boolean => {
 		let dead = false;
@@ -527,6 +584,7 @@ export function Game({ onExit }: Props) {
 	const [memos, setMemos] = useState<readonly string[]>([]);
 	// Player state objects so pickups + damage land in one place.
 	const [armor, setArmor] = useState(0);
+	const [wallet, setWallet] = useState<WeaponCurrency>(() => freshCurrency());
 	const overhealCapRef = useRef(PLAYER_MAX_HP);
 	const memoRng = useRef(createRng('memo-narrator'));
 
@@ -564,6 +622,17 @@ export function Game({ onExit }: Props) {
 				overhealCapRef.current = result.overhealCap;
 				return result.health;
 			});
+			// Tally currency for workbench upgrades (in addition to the
+			// existing health/armor effect).
+			const currencyKind =
+				kind === 'binder-clips'
+					? 'binderClips'
+					: kind === 'coffee'
+						? 'coffee'
+						: kind === 'donut'
+							? 'donuts'
+							: 'briefcases';
+			setWallet((w) => addCurrency(w, currencyKind));
 			setDrops((prev) => prev.filter((d) => d.id !== dropId));
 		},
 		[equipped, armor],
@@ -1135,6 +1204,28 @@ export function Game({ onExit }: Props) {
 									onCollect={() => onPickupCollect(d.id, d.kind)}
 								/>
 							))}
+							{weaponDrop && weapons?.get(weaponDrop.drop.slug) && (
+								<WeaponPickup
+									id={`weapon-${floorState.currentFloor}`}
+									glb={weapons.get(weaponDrop.drop.slug)!.viewmodel?.glb ?? 'weapon-ak47.glb'}
+									tier={weaponDrop.drop.tier}
+									position={weaponDrop.pos}
+									getPlayerPosition={getPlayerPosition}
+									onCollect={() => {
+										const w = weapons.get(weaponDrop.drop.slug);
+										if (w) onWeaponPickup(weaponDrop.drop, w);
+									}}
+								/>
+							)}
+							{workbenchPos && (
+								<WorkbenchEntity
+									id={`workbench-${floorState.currentFloor}`}
+									position={workbenchPos}
+									getPlayerPosition={getPlayerPosition}
+									onPlayerNear={() => setWorkbenchOpen(true)}
+									suppressed={workbenchOpen}
+								/>
+							)}
 							{projectiles.map((p) => (
 								<Projectile
 									key={p.id}
@@ -1168,6 +1259,14 @@ export function Game({ onExit }: Props) {
 				surface={radialSurface}
 				onPick={onPickRadial}
 				onClose={() => setRadialAnchor(null)}
+			/>
+			<WorkbenchPanel
+				open={workbenchOpen}
+				onClose={() => setWorkbenchOpen(false)}
+				equipped={equipped}
+				wallet={wallet}
+				weapons={weapons}
+				onUpgrade={onUpgradeWeapon}
 			/>
 			<PauseMenu
 				open={paused}
@@ -1204,9 +1303,8 @@ export function Game({ onExit }: Props) {
 				const slug = currentWeaponSlug(equipped) ?? '';
 				const w = weapons?.get(slug);
 				// ammoCap lives in tiers; resolve T1 until tier-selection lands (Task 2+).
-				const cap = w?.kind === 'projectile' || w?.kind === 'hitscan'
-					? weaponStatsFor(w, 'T1').ammoCap
-					: 0;
+				const cap =
+					w?.kind === 'projectile' || w?.kind === 'hitscan' ? weaponStatsFor(w, 'T1').ammoCap : 0;
 				return (
 					<AmmoCounter current={currentAmmo(equipped)} max={cap} weaponName={w?.name ?? slug} />
 				);
