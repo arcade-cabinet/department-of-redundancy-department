@@ -25,7 +25,17 @@ export type FirePatternId =
 	| 'justice-glint'
 	| 'civilian-walk'
 	| 'pre-aggro-pistol-pop'
-	| 'idle';
+	| 'idle'
+	// Bespoke boss fire programs (one per phase fired in level data).
+	| 'garrison-burst'
+	| 'whitcomb-throw'
+	| 'phelps-aim'
+	| 'phelps-snipe'
+	| 'crawford-suppress'
+	| 'crawford-charge'
+	| 'reaper-scythe-arc'
+	| 'reaper-volley'
+	| 'reaper-rush';
 
 export type FireEvent =
 	| { readonly atMs: number; readonly verb: 'aim-laser'; readonly durationMs: number }

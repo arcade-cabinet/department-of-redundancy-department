@@ -17,9 +17,10 @@ import type { FirePatternId } from './FirePattern';
 // The boss enters at phase 1 on `boss-spawn`; each `boss-phase` cue
 // transitions to the named phase (typically 2, 3 for multi-phase bosses).
 //
-// Phase-specific fire programs are placeholders today: each phase uses an
-// existing shipped program. Bespoke per-boss programs land in a follow-up
-// (mini-bosses item in the directive feature queue).
+// Each boss-phase references a bespoke fire program defined in firePatterns.ts
+// (garrison-burst, whitcomb-throw, phelps-aim, phelps-snipe, crawford-suppress,
+// crawford-charge, reaper-scythe-arc, reaper-volley, reaper-rush). The cadence
+// + damage values reflect each named character's spec personality.
 
 export interface BossDefinition {
 	readonly archetype: ArchetypeId;
@@ -34,7 +35,7 @@ export const BOSSES: Readonly<Record<BossId, BossDefinition>> = {
 		hpMultiplier: 5,
 		railIdConvention: 'rail-spawn-elevator-garrison',
 		fireProgramByPhase: {
-			1: 'pistol-cover-pop',
+			1: 'garrison-burst',
 		},
 	},
 	whitcomb: {
@@ -42,7 +43,7 @@ export const BOSSES: Readonly<Record<BossId, BossDefinition>> = {
 		hpMultiplier: 7,
 		railIdConvention: 'rail-spawn-whitcomb',
 		fireProgramByPhase: {
-			1: 'mass-pop-volley',
+			1: 'whitcomb-throw',
 		},
 	},
 	phelps: {
@@ -50,8 +51,8 @@ export const BOSSES: Readonly<Record<BossId, BossDefinition>> = {
 		hpMultiplier: 8,
 		railIdConvention: 'rail-spawn-phelps',
 		fireProgramByPhase: {
-			1: 'mass-pop-volley',
-			2: 'sniper-aim',
+			1: 'phelps-aim',
+			2: 'phelps-snipe',
 		},
 	},
 	crawford: {
@@ -59,8 +60,8 @@ export const BOSSES: Readonly<Record<BossId, BossDefinition>> = {
 		hpMultiplier: 5,
 		railIdConvention: 'rail-spawn-crawford',
 		fireProgramByPhase: {
-			1: 'pistol-cover-pop',
-			2: 'mass-pop-volley',
+			1: 'crawford-suppress',
+			2: 'crawford-charge',
 		},
 	},
 	reaper: {
@@ -68,9 +69,9 @@ export const BOSSES: Readonly<Record<BossId, BossDefinition>> = {
 		hpMultiplier: 1,
 		railIdConvention: 'rail-spawn-reaper-entry',
 		fireProgramByPhase: {
-			1: 'sniper-aim',
-			2: 'mass-pop-volley',
-			3: 'charge-sprint',
+			1: 'reaper-scythe-arc',
+			2: 'reaper-volley',
+			3: 'reaper-rush',
 		},
 	},
 };
