@@ -23,6 +23,7 @@ import {
 	type EncounterListener,
 	type Enemy,
 	type FireEvent,
+	type LightingTween,
 } from './encounter';
 import { drainPendingCues, isHandlesDependent } from './encounter/pendingCueQueue';
 import { installTestHooks, now } from './engine/clock';
@@ -563,6 +564,8 @@ function constructLevel(levelId: LevelId): void {
 		lastShakeDy = 0;
 		levelHandles = null;
 		audioBus = null;
+		clearFireAlarmFlicker();
+		lightTweens.clear();
 		enemySpawnHp.clear();
 		enemyLastHitTarget.clear();
 		enemyMeshes.clear();
@@ -735,12 +738,9 @@ function handleCueAction(action: CueAction): void {
 		case 'door':
 			handleDoorCue(action.doorId, action.to);
 			return;
-		case 'lighting': {
-			const light = levelHandles?.lights.get(action.lightId);
-			if (!light) return;
-			if (action.tween.kind === 'snap') light.intensity = action.tween.intensity;
+		case 'lighting':
+			handleLightingCue(action.lightId, action.tween);
 			return;
-		}
 		case 'civilian-spawn': {
 			spawnCivilian(action.railId);
 			return;
@@ -797,19 +797,229 @@ function handleLevelEvent(
 	event: 'fire-alarm' | 'power-out' | 'lights-restored' | 'elevator-ding',
 ): void {
 	if (!levelHandles || !currentLevel) return;
-	if (event === 'power-out') {
-		for (const light of levelHandles.lights.values()) light.intensity = 0;
-		return;
+	switch (event) {
+		case 'power-out':
+			handlePowerOut();
+			return;
+		case 'lights-restored':
+			handleLightsRestored();
+			return;
+		case 'fire-alarm':
+			handleFireAlarm();
+			return;
+		case 'elevator-ding':
+			handleElevatorDing();
+			return;
 	}
-	if (event === 'lights-restored') {
-		for (const prim of currentLevel.primitives) {
-			if (prim.kind !== 'light') continue;
-			const lightPrim = prim as Light;
-			const bl = levelHandles.lights.get(lightPrim.id);
-			if (bl) bl.intensity = lightPrim.intensity;
+}
+
+function handlePowerOut(): void {
+	if (!levelHandles) return;
+	for (const light of levelHandles.lights.values()) light.intensity = 0;
+}
+
+function handleLightsRestored(): void {
+	if (!levelHandles || !currentLevel) return;
+	for (const prim of currentLevel.primitives) {
+		if (prim.kind !== 'light') continue;
+		const lightPrim = prim as Light;
+		const bl = levelHandles.lights.get(lightPrim.id);
+		if (bl) bl.intensity = lightPrim.intensity;
+	}
+}
+
+// Lobby Position-1 opener per docs/spec/levels/01-lobby.md: klaxon looped
+// under the level audio + 4Hz red flicker on level lights + auto-open every
+// spawn-rail door so the wave that follows reads as "alarm tripped, exits
+// releasing." Without this the fire-alarm cue silently no-op'd and the
+// lobby's scripted opener never played for the player.
+function handleFireAlarm(): void {
+	if (!levelHandles || !currentLevel) return;
+	audioBus?.startAmbience('fire-alarm-klaxon', 'sfx/klaxon-loop.ogg', 0.6, true);
+	fireAlarmActive = true;
+	fireAlarmStartedMs = now();
+	// Snapshot current intensities so the flicker can ride on top of
+	// authored levels and `clearFireAlarm` can restore them exactly.
+	fireAlarmBaseIntensity.clear();
+	for (const [id, light] of levelHandles.lights) {
+		fireAlarmBaseIntensity.set(id, light.intensity);
+	}
+	openDoorsBy((door) => door.spawnRailId != null);
+}
+
+// Lobby exit + HR-corridor exit set piece — stinger + open the lift door.
+function handleElevatorDing(): void {
+	if (!levelHandles || !currentLevel) return;
+	audioBus?.playStinger('stingers/elevator-ding.ogg', 0.7);
+	openDoorsBy((door) => door.family === 'lift');
+}
+
+function openDoorsBy(predicate: (door: Door) => boolean): void {
+	if (!levelHandles || !currentLevel) return;
+	for (const prim of currentLevel.primitives) {
+		if (prim.kind !== 'door') continue;
+		const door = prim as Door;
+		if (!predicate(door)) continue;
+		const mesh = levelHandles.doors.get(door.id);
+		if (mesh) applyDoorOpen(mesh, door);
+	}
+}
+
+// ── Cue-driven lighting tweens ──────────────────────────────────────────────
+
+// Active fade / flicker / colour-shift tweens keyed by light id. Each entry
+// is consumed by `tickLightTweens` per frame and removed when its end time
+// passes. The `lighting` cue handler installs entries here; `clearFireAlarmFlicker`
+// and the level-dispose path are responsible for stopping them on transition.
+type LightTween =
+	| {
+			readonly kind: 'fade';
+			readonly fromIntensity: number;
+			readonly toIntensity: number;
+			readonly startMs: number;
+			readonly endMs: number;
+	  }
+	| {
+			readonly kind: 'flicker';
+			readonly minIntensity: number;
+			readonly maxIntensity: number;
+			readonly hz: number;
+			readonly startMs: number;
+			readonly endMs: number;
+	  }
+	| {
+			readonly kind: 'colour-shift';
+			readonly fromColor: readonly [number, number, number];
+			readonly toColor: readonly [number, number, number];
+			readonly startMs: number;
+			readonly endMs: number;
+	  };
+const lightTweens = new Map<string, LightTween>();
+
+function handleLightingCue(lightId: string, tween: LightingTween): void {
+	const light = levelHandles?.lights.get(lightId);
+	if (!light) return;
+	if (tween.kind === 'snap') {
+		light.intensity = tween.intensity;
+		if (tween.color && 'diffuse' in light) {
+			const [r, g, b] = tween.color;
+			light.diffuse.set(r, g, b);
 		}
 		return;
 	}
+	const startMs = now();
+	const endMs = startMs + tween.durationMs;
+	if (tween.kind === 'fade') {
+		lightTweens.set(lightId, {
+			kind: 'fade',
+			fromIntensity: light.intensity,
+			toIntensity: tween.toIntensity,
+			startMs,
+			endMs,
+		});
+		return;
+	}
+	if (tween.kind === 'flicker') {
+		lightTweens.set(lightId, {
+			kind: 'flicker',
+			minIntensity: tween.minIntensity,
+			maxIntensity: tween.maxIntensity,
+			hz: tween.hz,
+			startMs,
+			endMs,
+		});
+		return;
+	}
+	if (tween.kind === 'colour-shift' && 'diffuse' in light) {
+		lightTweens.set(lightId, {
+			kind: 'colour-shift',
+			fromColor: [light.diffuse.r, light.diffuse.g, light.diffuse.b],
+			toColor: tween.toColor,
+			startMs,
+			endMs,
+		});
+	}
+}
+
+function tickLightTweens(nowMs: number): void {
+	if (!levelHandles || lightTweens.size === 0) return;
+	for (const [id, tween] of lightTweens) {
+		const light = levelHandles.lights.get(id);
+		if (!light) {
+			lightTweens.delete(id);
+			continue;
+		}
+		applyLightTween(light, tween, nowMs);
+		if (nowMs >= tween.endMs) lightTweens.delete(id);
+	}
+}
+
+function applyLightTween(
+	light: {
+		intensity: number;
+		diffuse?: { r: number; g: number; b: number; set: (r: number, g: number, b: number) => void };
+	},
+	tween: LightTween,
+	nowMs: number,
+): void {
+	const t = Math.min(1, (nowMs - tween.startMs) / Math.max(1, tween.endMs - tween.startMs));
+	if (tween.kind === 'fade') {
+		light.intensity = tween.fromIntensity + (tween.toIntensity - tween.fromIntensity) * t;
+		return;
+	}
+	if (tween.kind === 'flicker') {
+		const phase = ((nowMs - tween.startMs) * tween.hz) / 500;
+		light.intensity = Math.floor(phase) % 2 === 0 ? tween.minIntensity : tween.maxIntensity;
+		return;
+	}
+	if (tween.kind === 'colour-shift' && light.diffuse) {
+		const [fr, fg, fb] = tween.fromColor;
+		const [tr, tg, tb] = tween.toColor;
+		light.diffuse.set(fr + (tr - fr) * t, fg + (tg - fg) * t, fb + (tb - fb) * t);
+	}
+}
+
+// ── Fire-alarm flicker state ────────────────────────────────────────────────
+
+// Drives the 4Hz red flicker on level lights while the alarm is active. The
+// tick loop reads these and modulates `light.intensity` per frame; on level
+// transition `clearFireAlarmFlicker` resets the bookkeeping. Klaxon loop is
+// owned by AudioBus and disposes with the scene.
+let fireAlarmActive = false;
+let fireAlarmStartedMs = 0;
+const fireAlarmBaseIntensity = new Map<string, number>();
+const FIRE_ALARM_FLICKER_HZ = 4;
+
+function tickFireAlarm(nowMs: number): void {
+	if (!fireAlarmActive || !levelHandles) return;
+	// Square wave at FIRE_ALARM_FLICKER_HZ — half-period bright, half-period
+	// dim. The dim phase reads as "red strobe" because authored level lights
+	// fall back to ambient red when their intensity drops; the spec calls for
+	// 4Hz red flicker, which a 50% duty square at 4Hz delivers.
+	const phaseMs = ((nowMs - fireAlarmStartedMs) * FIRE_ALARM_FLICKER_HZ) / 500;
+	const dim = Math.floor(phaseMs) % 2 === 0;
+	for (const [id, light] of levelHandles.lights) {
+		// Cue-driven lighting tweens win over the alarm flicker. Without
+		// this guard, a `lighting` cue authored to fade or colour-shift a
+		// light during the alarm window would be silently clobbered every
+		// frame — `tickLightTweens` runs first and writes the interpolated
+		// value, then `tickFireAlarm` overwrites it.
+		if (lightTweens.has(id)) continue;
+		const base = fireAlarmBaseIntensity.get(id) ?? light.intensity;
+		light.intensity = dim ? base * 0.15 : base;
+	}
+}
+
+function clearFireAlarmFlicker(): void {
+	if (!fireAlarmActive) return;
+	if (levelHandles) {
+		for (const [id, light] of levelHandles.lights) {
+			const base = fireAlarmBaseIntensity.get(id);
+			if (base != null) light.intensity = base;
+		}
+	}
+	fireAlarmActive = false;
+	fireAlarmBaseIntensity.clear();
 }
 
 // ── Camera shake ─────────────────────────────────────────────────────────────
@@ -1023,6 +1233,8 @@ function tick(): void {
 		if (director && !director.isFinished) director.tick(dtMs);
 		tickCivilians(dtMs);
 		tickPropAnims();
+		tickLightTweens(tickT);
+		tickFireAlarm(tickT);
 		game.tickReload(now());
 		if (currentCamera) applyCameraShake(currentCamera);
 	}

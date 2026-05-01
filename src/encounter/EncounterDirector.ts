@@ -9,7 +9,7 @@ import {
 	resumeFromCombat,
 } from '../rail/Rail';
 import type { RailGraph } from '../rail/RailNode';
-import { BOSSES, bossEnemyId } from './Boss';
+import { BOSSES, bossEnemyId, bossIdForEnemy } from './Boss';
 import type { BossId, Cue, CueAction, DifficultyGate } from './cues';
 import { ARCHETYPES, type ArchetypeId, type Enemy, type EnemyState } from './Enemy';
 import type { FireEvent, FirePattern, FirePatternId } from './FirePattern';
@@ -149,6 +149,12 @@ export class EncounterDirector {
 	// Hitless-kill streak within the current dwell node. Director-internal;
 	// resets on damage / miss / new dwell node.
 	private hitlessKills = 0;
+	// Phase-1 max-HP per boss. Captured on `boss-spawn` so the auto
+	// `boss-phase` emitter can compute fractional HP thresholds without
+	// re-deriving from `BOSSES[].hpByPhase` or `archetype.hp×hpMultiplier`
+	// every hit (and so a difficulty multiplier applied at spawn is
+	// honoured on the threshold).
+	private readonly bossPhaseOneMaxHp = new Map<BossId, number>();
 
 	constructor(config: EncounterDirectorConfig) {
 		this.cues = config.cues.filter((c) => this.passesDifficultyGate(c, config.difficulty));
@@ -261,10 +267,49 @@ export class EncounterDirector {
 		this.listener.onEnemyHit(enemyId, target, damage);
 		if (newHp <= 0) {
 			this.killEnemy(enemyId);
-		} else {
-			const updated = new Map(this.state.enemies);
-			updated.set(enemyId, { ...enemy, hp: newHp });
-			this.state = { ...this.state, enemies: updated };
+			return;
+		}
+		const updated = new Map(this.state.enemies);
+		updated.set(enemyId, { ...enemy, hp: newHp });
+		this.state = { ...this.state, enemies: updated };
+		this.maybeAutoBossPhase(enemyId, newHp);
+	}
+
+	/**
+	 * If the damaged enemy is a boss with `phaseTriggerByHpFraction`, walk the
+	 * thresholds and auto-emit a synthetic `boss-phase` cue when HP first drops
+	 * below the fraction × phase-1 max-HP. Spec-driven: docs/spec/00-overview.md
+	 * mini-bosses are 2-phase fights with a 50% threshold; lobby's screenplay
+	 * comment used to read "boss-phase transition is emitted by director on HP
+	 * threshold (50%)" but the director never actually did. This is the
+	 * emission. `setBossPhase` (invoked via fireCue) refreshes HP from
+	 * `hpByPhase` if the boss spec includes one.
+	 */
+	private maybeAutoBossPhase(enemyId: string, newHp: number): void {
+		const bossId = bossIdForEnemy(enemyId);
+		if (!bossId) return;
+		const def = BOSSES[bossId];
+		if (!def?.phaseTriggerByHpFraction) return;
+		const phaseOneMaxHp = this.bossPhaseOneMaxHp.get(bossId);
+		if (!phaseOneMaxHp) return;
+		const fired = new Set(this.state.firedCueIds);
+		// Walk phases low → high so a single overkill hit that crosses two
+		// thresholds emits both transitions in order.
+		const triggers = Object.entries(def.phaseTriggerByHpFraction)
+			.map(([k, v]) => [Number(k), v as number] as const)
+			.sort((a, b) => a[0] - b[0]);
+		for (const [phase, fraction] of triggers) {
+			const cueId = `boss-phase-auto-${bossId}-${phase}`;
+			if (fired.has(cueId)) continue;
+			if (newHp >= phaseOneMaxHp * fraction) continue;
+			fired.add(cueId);
+			const cue: Cue = {
+				id: cueId,
+				trigger: { kind: 'wall-clock', atMs: this.state.elapsedMs },
+				action: { verb: 'boss-phase', bossId, phase },
+			};
+			this.state = { ...this.state, firedCueIds: fired };
+			this.fireCue(cue);
 		}
 	}
 
@@ -340,6 +385,11 @@ export class EncounterDirector {
 			if (shouldFire) {
 				fired.add(cue.id);
 				this.fireCue(cue);
+				// `fireCue` may stamp additional keys into `state.firedCueIds`
+				// (e.g. `setBossPhase` stamps the auto-emit key so HP-driven
+				// re-emission can't double-fire). Merge those into our local
+				// set so the final write at end of loop doesn't clobber them.
+				for (const k of this.state.firedCueIds) fired.add(k);
 			}
 		}
 		this.state = { ...this.state, firedCueIds: fired };
@@ -395,6 +445,13 @@ export class EncounterDirector {
 		}
 		const archetype = ARCHETYPES[def.archetype];
 		const railState = createSpawnRailState(railGraph);
+		// `hpByPhase[1]` wins when defined (Reaper spec: 1500 P1 → 1800 P2 → 2200 P3).
+		// Otherwise fall back to the long-standing `archetype.hp × hpMultiplier`
+		// formula scaled by current difficulty. Either way the resulting value
+		// becomes the phase-1 max-HP captured below for threshold math.
+		const baseMaxHp =
+			def.hpByPhase?.[phase] ??
+			archetype.hp * def.hpMultiplier * this.difficultyParams.enemyHpMultiplier;
 		const enemy: Enemy = {
 			id,
 			archetypeId: def.archetype,
@@ -402,12 +459,13 @@ export class EncounterDirector {
 			rail: railState,
 			elapsedMs: 0,
 			nextFireEventIdx: 0,
-			hp: archetype.hp * def.hpMultiplier * this.difficultyParams.enemyHpMultiplier,
+			hp: baseMaxHp,
 			state: 'sliding',
 			position: spawnRailPosition(railState),
 			ceaseAfterMs: null,
 			alerted: true,
 		};
+		this.bossPhaseOneMaxHp.set(bossId, baseMaxHp);
 		const updated = new Map(this.state.enemies);
 		updated.set(id, enemy);
 		const dwell = new Set(this.state.currentDwellEnemyIds);
@@ -434,11 +492,31 @@ export class EncounterDirector {
 			console.warn(`[director] boss-phase '${bossId}' boss not alive`);
 			return;
 		}
+		// If the boss spec includes per-phase HP, refresh to that value on
+		// transition. Reaper escalates 1500 → 1800 → 2200 per spec; without
+		// this the climax burned through all three phases on phase-1 HP and
+		// died ~67% sooner than authored. Mini-bosses (no hpByPhase entry)
+		// retain their current HP — phase-2 just swaps fire program.
+		const refreshedHp = def.hpByPhase?.[phase] ?? live.hp;
 		const updated = new Map(this.state.enemies);
 		// Reset fire-program cursor + elapsed so the new program starts from
 		// event 0 instead of mid-stream.
-		updated.set(id, { ...live, fireProgramId: fireProgram, elapsedMs: 0, nextFireEventIdx: 0 });
-		this.state = { ...this.state, enemies: updated };
+		updated.set(id, {
+			...live,
+			fireProgramId: fireProgram,
+			elapsedMs: 0,
+			nextFireEventIdx: 0,
+			hp: refreshedHp,
+		});
+		// Stamp the auto-emit key so a subsequent HP-threshold crossing won't
+		// re-fire setBossPhase for the same phase. Without this, a level
+		// authoring `boss-phase` AND the auto-emitter would BOTH fire when
+		// HP later drops below the fraction × phase-1 max — second pass
+		// resets fire-program cursor (elapsedMs:0, nextFireEventIdx:0) and
+		// erases damage taken during the transition window.
+		const fired = new Set(this.state.firedCueIds);
+		fired.add(`boss-phase-auto-${bossId}-${phase}`);
+		this.state = { ...this.state, enemies: updated, firedCueIds: fired };
 	}
 
 	private spawnEnemy(

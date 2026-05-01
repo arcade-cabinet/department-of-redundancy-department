@@ -118,3 +118,133 @@ describe('EncounterDirector — dwell early-resume gate', () => {
 		expect(director.cameraPosition.z).toBeGreaterThan(5);
 	});
 });
+
+describe('EncounterDirector — boss phase HP escalation', () => {
+	function bossSetup() {
+		const cueFires: Array<{ id: string; verb: string; phase?: number }> = [];
+		const listener: EncounterListener = {
+			...noopListener,
+			onCueFire: (cue, action) => {
+				if (action.verb === 'boss-phase') {
+					cueFires.push({ id: cue.id, verb: action.verb, phase: action.phase });
+				} else {
+					cueFires.push({ id: cue.id, verb: action.verb });
+				}
+			},
+		};
+		const cues: Cue[] = [
+			{
+				id: 'spawn-garrison',
+				trigger: { kind: 'on-arrive', railNodeId: 'pos-1' },
+				action: { verb: 'boss-spawn', bossId: 'garrison', phase: 1 },
+			},
+		];
+		const director = new EncounterDirector({
+			cameraRail: railWithDwell,
+			cues,
+			spawnRails: [
+				{
+					id: 'rail-spawn-elevator-garrison',
+					path: [new Vector3(0, 0, 7), new Vector3(0, 0, 8)],
+					speed: 2,
+					loop: false,
+				},
+			],
+			difficulty: 'normal',
+			listener,
+		});
+		return { director, cueFires };
+	}
+
+	it('auto-emits boss-phase cue when mini-boss HP drops below 50% threshold', () => {
+		const { director, cueFires } = bossSetup();
+		// Tick into pos-1 — the on-arrive cue spawns Garrison at phase 1.
+		director.tick(2000);
+		const boss = director.getEnemy('boss-garrison');
+		if (!boss) throw new Error('expected boss-garrison alive after tick');
+		// security-guard headDamage. Hammer the boss until just past 50% HP
+		// — the auto-emitter must fire EXACTLY ONCE for phase 2.
+		const startHp = boss.hp;
+		const halfHp = startHp * 0.5;
+		while ((director.getEnemy('boss-garrison')?.hp ?? 0) > halfHp) {
+			director.hitEnemy('boss-garrison', 'head');
+		}
+		const phaseFires = cueFires.filter((f) => f.verb === 'boss-phase');
+		expect(phaseFires.length).toBe(1);
+		expect(phaseFires[0]?.phase).toBe(2);
+	});
+
+	it('does not re-emit boss-phase on subsequent below-threshold hits', () => {
+		const { director, cueFires } = bossSetup();
+		director.tick(2000);
+		const boss = director.getEnemy('boss-garrison');
+		if (!boss) throw new Error('expected boss-garrison alive');
+		const halfHp = boss.hp * 0.5;
+		while ((director.getEnemy('boss-garrison')?.hp ?? 0) > halfHp) {
+			director.hitEnemy('boss-garrison', 'head');
+		}
+		// Five more hits past the threshold — emitter must not re-fire.
+		for (let i = 0; i < 5; i++) {
+			if (!director.getEnemy('boss-garrison')) break;
+			director.hitEnemy('boss-garrison', 'head');
+		}
+		expect(cueFires.filter((f) => f.verb === 'boss-phase').length).toBe(1);
+	});
+
+	it('does not double-fire setBossPhase when level authors a boss-phase cue AND HP crosses threshold', () => {
+		// Regression for review finding on f69a7ba: if a level authors its own
+		// `boss-phase` cue (e.g. on-arrive at a node), `setBossPhase` must
+		// stamp the auto-emit key so a later HP-threshold crossing won't fire
+		// `setBossPhase` a second time and reset the fire-program cursor +
+		// erase damage taken during the transition window.
+		const cueFires: Array<{ id: string; verb: string; phase?: number }> = [];
+		const listener: EncounterListener = {
+			...noopListener,
+			onCueFire: (cue, action) => {
+				if (action.verb === 'boss-phase') {
+					cueFires.push({ id: cue.id, verb: action.verb, phase: action.phase });
+				}
+			},
+		};
+		const cues: Cue[] = [
+			{
+				id: 'spawn-garrison',
+				trigger: { kind: 'on-arrive', railNodeId: 'pos-1' },
+				action: { verb: 'boss-spawn', bossId: 'garrison', phase: 1 },
+			},
+			{
+				id: 'authored-phase-2',
+				trigger: { kind: 'on-arrive', railNodeId: 'pos-1' },
+				action: { verb: 'boss-phase', bossId: 'garrison', phase: 2 },
+			},
+		];
+		const director = new EncounterDirector({
+			cameraRail: railWithDwell,
+			cues,
+			spawnRails: [
+				{
+					id: 'rail-spawn-elevator-garrison',
+					path: [new Vector3(0, 0, 7), new Vector3(0, 0, 8)],
+					speed: 2,
+					loop: false,
+				},
+			],
+			difficulty: 'normal',
+			listener,
+		});
+		// Tick into pos-1 — both cues fire on the SAME on-arrive: spawn at
+		// phase 1 and immediately authored boss-phase to 2.
+		director.tick(2000);
+		const initial = cueFires.filter((f) => f.verb === 'boss-phase').length;
+		expect(initial).toBe(1); // The authored cue.
+		// Now hammer the boss past 50% HP — auto-emit must NOT re-fire because
+		// the authored cue already advanced to phase 2 and stamped the key.
+		const boss = director.getEnemy('boss-garrison');
+		if (!boss) throw new Error('expected boss-garrison alive');
+		const halfHp = boss.hp * 0.5;
+		while ((director.getEnemy('boss-garrison')?.hp ?? 0) > halfHp) {
+			director.hitEnemy('boss-garrison', 'head');
+		}
+		expect(cueFires.filter((f) => f.verb === 'boss-phase').length).toBe(initial);
+	});
+});

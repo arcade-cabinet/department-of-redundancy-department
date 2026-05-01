@@ -29,3 +29,39 @@ describe('BOSSES quarter drops', () => {
 		expect(BOSSES.reaper.quarterDrop).toEqual([5, 5]);
 	});
 });
+
+describe('BOSSES phase fire programs', () => {
+	it('every mini-boss has a phase-2 fire program', () => {
+		// Per docs/spec/00-overview.md the four mini-bosses are 2-phase
+		// fights (regular → enraged). Phase-2 cadence is bespoke per
+		// character. Without phase-2, mini-bosses play half their encounter.
+		for (const id of ['garrison', 'whitcomb', 'phelps', 'crawford'] as const) {
+			expect(BOSSES[id].fireProgramByPhase[2]).toBeDefined();
+		}
+	});
+
+	it('the Reaper has all three phase fire programs', () => {
+		expect(BOSSES.reaper.fireProgramByPhase[1]).toBe('reaper-scythe-arc');
+		expect(BOSSES.reaper.fireProgramByPhase[2]).toBe('reaper-volley');
+		expect(BOSSES.reaper.fireProgramByPhase[3]).toBe('reaper-rush');
+	});
+});
+
+describe('BOSSES phase HP escalation', () => {
+	it('the Reaper escalates HP per phase per docs/spec/02-encounter-vocabulary.md', () => {
+		// 1500 → 1800 → 2200 is the spec'd escalation. Without per-phase
+		// refresh the climax burned through all three programs on phase-1
+		// HP and died ~67% sooner than authored.
+		expect(BOSSES.reaper.hpByPhase).toEqual({ 1: 1500, 2: 1800, 3: 2200 });
+	});
+
+	it('mini-bosses use 50% HP-fraction triggers for phase 2', () => {
+		for (const id of ['garrison', 'whitcomb', 'phelps', 'crawford'] as const) {
+			expect(BOSSES[id].phaseTriggerByHpFraction).toEqual({ 2: 0.5 });
+		}
+	});
+
+	it('the Reaper has no auto-trigger — phase transitions are level-authored', () => {
+		expect(BOSSES.reaper.phaseTriggerByHpFraction).toBeUndefined();
+	});
+});

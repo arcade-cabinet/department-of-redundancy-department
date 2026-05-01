@@ -184,6 +184,22 @@ export const FIRE_PATTERNS: Readonly<Record<FirePatternId, FirePattern>> = {
 			{ atMs: 2000, verb: 'idle' },
 		],
 	},
+	'garrison-enraged': {
+		// Phase 2 (HP < 50%) per docs/spec/00-overview.md "two phases (regular
+		// → enraged)". Tighter cadence: shorter aim, three-round bursts,
+		// faster loop. Damage per shot dips slightly (frantic, less-aimed)
+		// but cycle DPS climbs from 11/s → ~22/s, doubling the threat.
+		id: 'garrison-enraged',
+		loop: true,
+		events: [
+			{ atMs: 0, verb: 'aim-laser', durationMs: 400 },
+			{ atMs: 400, verb: 'fire-hitscan', damage: 18 },
+			{ atMs: 600, verb: 'fire-hitscan', damage: 18 },
+			{ atMs: 800, verb: 'fire-hitscan', damage: 18 },
+			{ atMs: 900, verb: 'idle' },
+			{ atMs: 1400, verb: 'idle' },
+		],
+	},
 	'whitcomb-throw': {
 		// CFO Whitcomb: slow telegraphed lobs (stress-balls in spec, treated
 		// as a projectile-throw with long travel).
@@ -193,6 +209,21 @@ export const FIRE_PATTERNS: Readonly<Record<FirePatternId, FirePattern>> = {
 			{ atMs: 0, verb: 'aim-laser', durationMs: 1000 },
 			{ atMs: 1000, verb: 'projectile-throw', damage: 20, ttlMs: 1500 },
 			{ atMs: 2500, verb: 'idle' },
+		],
+	},
+	'whitcomb-volley': {
+		// Phase 2: Whitcomb panics and lobs three stapler-grenades in quick
+		// succession instead of the careful single throw. Lower per-projectile
+		// damage but the volley fans out — players have to track multiple
+		// arcs simultaneously.
+		id: 'whitcomb-volley',
+		loop: true,
+		events: [
+			{ atMs: 0, verb: 'aim-laser', durationMs: 600 },
+			{ atMs: 600, verb: 'projectile-throw', damage: 14, ttlMs: 1400 },
+			{ atMs: 900, verb: 'projectile-throw', damage: 14, ttlMs: 1400 },
+			{ atMs: 1200, verb: 'projectile-throw', damage: 14, ttlMs: 1400 },
+			{ atMs: 2600, verb: 'idle' },
 		],
 	},
 	'phelps-aim': {
