@@ -135,7 +135,7 @@ function routeOverlay(state: GameState): void {
 				if (token !== overlayRouteToken) return;
 				if (game.getState().phase !== 'difficulty-select') return;
 				const picker = new DifficultySelectOverlay(overlay, unlocked, (difficulty, lives) => {
-					game.chooseDifficulty(difficulty, lives);
+					game.chooseDifficulty(difficulty, lives, 'standard', now());
 				});
 				activeOverlayDispose = () => picker.dispose();
 			});
@@ -196,7 +196,7 @@ async function emitGameOver(state: GameState, score: number, cleared: boolean): 
 		headshots: run.headshots,
 		justiceShots: run.justiceShots,
 		civilianHits: run.civilianHits,
-		elapsedMs: performance.now() - run.startedAtMs,
+		elapsedMs: now() - run.startedAtMs,
 		clearedRun: cleared,
 	};
 	const overlayInstance = new GameOverOverlay(overlay, summary, () => {
@@ -705,17 +705,27 @@ canvas.addEventListener('pointerdown', (e) => {
 	if (pick.kind !== 'air') director.emitAlert();
 });
 
-window.addEventListener('keydown', (e) => {
-	if (game.getState().phase !== 'playing') return;
-	if (e.key === 'r' || e.key === 'R') {
-		game.reload(now());
-		e.preventDefault();
-		return;
-	}
-	if (e.key === 'Tab') {
-		game.swapWeapon();
-		e.preventDefault();
-	}
-});
+// Canvas needs tabindex to receive focus + keydown directly. Capture-phase
+// listener so e.preventDefault() suppresses Tab focus-cycling before the
+// browser processes it (window-level handlers are too late on Firefox).
+canvas.setAttribute('tabindex', '0');
+canvas.addEventListener(
+	'keydown',
+	(e) => {
+		if (game.getState().phase !== 'playing') return;
+		if (e.key === 'r' || e.key === 'R') {
+			game.reload(now());
+			e.preventDefault();
+			return;
+		}
+		if (e.key === 'Tab') {
+			game.swapWeapon();
+			e.preventDefault();
+		}
+	},
+	{ capture: true },
+);
+// Focus the canvas on first pointer interaction so keys reach it.
+canvas.addEventListener('pointerdown', () => canvas.focus(), { passive: true });
 
 engine.runRenderLoop(tick);

@@ -45,8 +45,13 @@ export class Game {
 		this.update(setPhase(this.state, 'difficulty-select'));
 	}
 
-	chooseDifficulty(difficulty: Difficulty, lives: Lives, mode: GameMode = 'standard'): void {
-		this.update(startRun(difficulty, lives, mode));
+	chooseDifficulty(
+		difficulty: Difficulty,
+		lives: Lives,
+		mode: GameMode = 'standard',
+		nowMs: number,
+	): void {
+		this.update(startRun(difficulty, lives, mode, nowMs));
 	}
 
 	hit(target: 'head' | 'body' | 'justice'): void {

@@ -86,7 +86,12 @@ export function comboMultiplier(combo: number): number {
 	return 1.0 + COMBO_STEP * Math.min(Math.max(0, combo), COMBO_CAP);
 }
 
-export function startRun(difficulty: Difficulty, lives: Lives, mode: GameMode): GameState {
+export function startRun(
+	difficulty: Difficulty,
+	lives: Lives,
+	mode: GameMode,
+	nowMs: number,
+): GameState {
 	const livesCount = lives === 'permadeath' ? 1 : 3;
 	return {
 		phase: 'playing',
@@ -104,7 +109,7 @@ export function startRun(difficulty: Difficulty, lives: Lives, mode: GameMode): 
 			enemiesKilled: 0,
 			headshots: 0,
 			justiceShots: 0,
-			startedAtMs: performance.now(),
+			startedAtMs: nowMs,
 			weapon: INITIAL_WEAPON_STATE,
 		},
 	};
