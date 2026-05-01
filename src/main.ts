@@ -19,6 +19,7 @@ import {
 	type Enemy,
 	type FireEvent,
 } from './encounter';
+import { drainPendingCues, isHandlesDependent } from './encounter/pendingCueQueue';
 import { now } from './engine/clock';
 import { rand } from './engine/rng';
 import { Game } from './game/Game';
@@ -92,6 +93,10 @@ const enemySpawnHp = new Map<string, number>();
 const enemyLastHitTarget = new Map<string, 'head' | 'body' | 'justice'>();
 const enemyMeshes = new Map<string, AbstractMesh>();
 const healthKitMeshes = new Map<string, AbstractMesh>();
+// Cue actions whose handlers read `levelHandles` are queued here when they
+// fire before `buildLevel(...)` resolves. Drained on handles-ready. Cleared
+// on level transition. See `handleCueAction`.
+const pendingCueActions: CueAction[] = [];
 
 const game = new Game();
 const overlay = new Overlay('dord-ui');
@@ -286,6 +291,10 @@ function constructLevel(levelId: LevelId): void {
 		activeCivilians.clear();
 		civilianSeq = 0;
 		activePropAnims.clear();
+		// Discard — the level is gone, queued cues for it are obsolete.
+		// Distinct from the drain in `buildLevel(...).then`, which captures
+		// a snapshot before re-dispatching.
+		pendingCueActions.length = 0;
 	}
 	currentLevel = getLevel(levelId);
 	scene = new Scene(engine);
@@ -303,12 +312,17 @@ function constructLevel(levelId: LevelId): void {
 	const builtScene = scene;
 	const builtLevel = currentLevel;
 	void buildLevel(builtScene, builtLevel).then((handles) => {
-		if (scene === builtScene) {
-			levelHandles = handles;
-			// Capture health-kit meshes for pickAt + collection bookkeeping.
-			for (const [id, mesh] of handles.healthKits) {
-				healthKitMeshes.set(id, mesh);
-			}
+		if (scene !== builtScene) return;
+		levelHandles = handles;
+		// Capture health-kit meshes for pickAt + collection bookkeeping.
+		for (const [id, mesh] of handles.healthKits) {
+			healthKitMeshes.set(id, mesh);
+		}
+		// Drain any cues that fired before handles arrived. Snapshot + clear
+		// first so re-entrant pushes into the queue (rare) aren't iterated
+		// in the same pass.
+		for (const action of drainPendingCues(pendingCueActions)) {
+			handleCueAction(action);
 		}
 	});
 
@@ -383,6 +397,13 @@ function constructLevel(levelId: LevelId): void {
 }
 
 function handleCueAction(action: CueAction): void {
+	// If the cue's handler reads `levelHandles` and the build hasn't
+	// resolved yet, queue and drain on handles-ready. See
+	// src/encounter/pendingCueQueue.ts for the verb classification.
+	if (levelHandles === null && isHandlesDependent(action)) {
+		pendingCueActions.push(action);
+		return;
+	}
 	switch (action.verb) {
 		case 'transition':
 			constructLevel(action.toLevelId);
