@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+	damagePlayer,
 	type GameState,
+	recordKill,
 	startReload,
 	startRun,
 	swapWeapon,
@@ -117,8 +119,6 @@ describe('startRun weapon initialisation', () => {
 	});
 });
 
-import { damagePlayer, recordKill } from './GameState';
-
 describe('damagePlayer under glassCannon', () => {
 	it('triples incoming damage', () => {
 		// Glass cannon halves max HP at start (50) then triples damage.
@@ -131,12 +131,23 @@ describe('damagePlayer under glassCannon', () => {
 });
 
 describe('damagePlayer under ironMan', () => {
-	it('skips continue-prompt — first death is final', () => {
+	it('skips continue-prompt — first death is final, even with lives remaining', () => {
 		const state = startRun('normal', 'three-lives', 'daily-challenge', T0, 'iron-man');
 		expect(state.run?.remainingLives).toBe(3);
 		const dead = damagePlayer(state, 999);
 		expect(dead.phase).toBe('game-over');
-		expect(dead.run?.remainingLives).toBe(0);
+		// Decrement is truthful — not zeroed for cosmetic effect. End-of-run
+		// summary should see "you had 2 lives left when iron-man got you."
+		expect(dead.run?.remainingLives).toBe(2);
+	});
+
+	it('subsequent damagePlayer call after iron-man game-over is a no-op', () => {
+		const state = startRun('normal', 'three-lives', 'daily-challenge', T0, 'iron-man');
+		const dead = damagePlayer(state, 999);
+		// Phase guard at top of damagePlayer (state.phase !== 'playing' returns
+		// state unchanged) protects against further state mutation.
+		const again = damagePlayer(dead, 999);
+		expect(again).toBe(dead);
 	});
 
 	it('standard run goes to continue-prompt instead', () => {

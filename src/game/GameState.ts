@@ -280,8 +280,15 @@ export function damagePlayer(state: GameState, damage: number): GameState {
 	const remaining = state.run.remainingLives - 1;
 	// Iron man: no continues. The first time HP hits zero ends the run, even
 	// if remainingLives > 0. Bypasses the continue-prompt phase entirely.
+	// We still decrement remainingLives accurately so the end-of-run summary,
+	// analytics, and any "you had X lives left" stat see the truthful count
+	// (not zeroed out for cosmetic effect).
 	if (remaining <= 0 || flags.ironMan) {
-		return { ...state, phase: 'game-over', run: { ...state.run, playerHp: 0, remainingLives: 0 } };
+		return {
+			...state,
+			phase: 'game-over',
+			run: { ...state.run, playerHp: 0, remainingLives: Math.max(0, remaining) },
+		};
 	}
 	return {
 		...state,
