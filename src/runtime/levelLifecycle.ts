@@ -1,21 +1,30 @@
 import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
 import type { Engine } from '@babylonjs/core/Engines/engine';
 import { ImportMeshAsync } from '@babylonjs/core/Loading/sceneLoader';
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import type { BaseTexture } from '@babylonjs/core/Materials/Textures/baseTexture';
-import { Color4 } from '@babylonjs/core/Maths/math.color';
+import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { Scene } from '@babylonjs/core/scene';
-import { ARCHETYPES, type Enemy } from '../encounter';
+import {
+	ARCHETYPES,
+	BOSSES,
+	bossIdForEnemy,
+	type Cue,
+	type CueAction,
+	type EncounterListener,
+	type Enemy,
+	type FireEvent,
+} from '../encounter';
+import type { Game } from '../game/Game';
+import { awardQuarters, rollBossDrop } from '../game/quarters';
 
 /**
- * Helpers for level scene construction + boss-GLB import. The big
- * `constructLevel` function still lives in `main.ts` because its
- * `EncounterListener` factory closes over ~12 cross-module symbols
- * (game, IS_DEV, bossIdForEnemy, rollBossDrop, awardQuarters, the four
- * enemy bookkeeping Maps, plus handleCueAction). Hoisting that listener
- * cleanly is its own architectural piece — the helpers here are the part
- * that DOES extract cleanly without a 12-arg callback bag.
+ * Helpers for level scene construction + boss-GLB import + the
+ * EncounterListener factory. constructLevel itself remains in main.ts as
+ * the boot orchestrator; this module owns the heavy listener factory.
  */
 
 const CAPSULE_HALF_HEIGHT_FOR_BOSS_GLB = 0.9;
@@ -92,4 +101,129 @@ export function buildTitleScene(engine: Engine, sharedBrdf: BaseTexture): Scene 
 	titleCam.minZ = 0.05;
 	s.activeCamera = titleCam;
 	return s;
+}
+
+/**
+ * Cross-module dependencies that the EncounterListener needs to read or
+ * mutate. The Maps are passed by reference — the listener mutates them
+ * in-place. `getScene` reads the live `scene` let (the active gameplay
+ * scene); `getCamera` reads the per-level camera the listener was built
+ * with.
+ */
+export interface EncounterListenerHost {
+	readonly capsuleHeight: number;
+	readonly capsuleRadius: number;
+	readonly capsuleHalfHeight: number;
+	readonly enemyMeshes: Map<string, AbstractMesh>;
+	readonly enemySpawnHp: Map<string, number>;
+	readonly enemyLastHitTarget: Map<string, 'head' | 'body' | 'justice'>;
+	readonly game: Game;
+	readonly isDev: boolean;
+	getScene(): Scene | null;
+	getCamera(): FreeCamera | null;
+	disposeEnemy(enemyId: string): void;
+	handleCueAction(action: CueAction): void;
+}
+
+/**
+ * Build an EncounterListener wired to the given host. Called once per
+ * level inside `constructLevel`. The listener holds no internal state
+ * beyond what the host exposes — the host's mutable Maps ARE the per-
+ * level enemy bookkeeping.
+ */
+export function createEncounterListener(host: EncounterListenerHost): EncounterListener {
+	return {
+		onCueFire(cue: Cue, action: CueAction) {
+			console.debug('[cue]', cue.id, action.verb);
+			host.handleCueAction(action);
+		},
+		onEnemySpawn(enemy: Enemy) {
+			const scene = host.getScene();
+			if (!scene) return;
+			const mesh = MeshBuilder.CreateCapsule(
+				`enemy-${enemy.id}`,
+				{ radius: host.capsuleRadius, height: host.capsuleHeight },
+				scene,
+			);
+			mesh.position.copyFrom(enemy.position);
+			mesh.position.y += host.capsuleHalfHeight;
+			// Placeholder material so the capsule reads as a threat until
+			// archetype GLBs land. Without this, the capsule has no material
+			// and renders as a near-invisible default-shaded silhouette,
+			// which is what the visual audit caught.
+			const mat = new StandardMaterial(`mat-enemy-${enemy.id}`, scene);
+			const isBoss = bossIdForEnemy(enemy.id) !== null;
+			// Bosses get a distinct color so they're not lost in a wave of
+			// red grunt-capsules. Reaper goes near-black/purple; the other
+			// four bosses go gold so the player knows which target carries
+			// the boss HP bar.
+			if (enemy.archetypeId === 'reaper') {
+				mat.diffuseColor = new Color3(0.4, 0.05, 0.4);
+				mat.emissiveColor = new Color3(0.25, 0.0, 0.25);
+			} else if (isBoss) {
+				mat.diffuseColor = new Color3(0.95, 0.75, 0.15);
+				mat.emissiveColor = new Color3(0.3, 0.2, 0.0);
+			} else {
+				mat.diffuseColor = new Color3(0.85, 0.18, 0.18);
+				mat.emissiveColor = new Color3(0.12, 0.0, 0.0);
+			}
+			mat.specularColor = new Color3(0.05, 0.05, 0.05);
+			mesh.material = mat;
+			mesh.metadata = { enemyId: enemy.id };
+			host.enemySpawnHp.set(enemy.id, enemy.hp);
+			host.enemyMeshes.set(enemy.id, mesh);
+			// For bosses, attempt to load the archetype GLB and parent it to
+			// the capsule. The capsule remains as the hitbox; the GLB is
+			// purely visual. If the GLB load fails (404, network), the
+			// colored capsule stays as the visible body.
+			if (isBoss) {
+				loadBossGlb(scene, mesh, enemy, host.getScene);
+			}
+		},
+		onEnemyMove(enemyId, position) {
+			const mesh = host.enemyMeshes.get(enemyId);
+			if (!mesh) return;
+			mesh.position.copyFrom(position);
+			mesh.position.y += host.capsuleHalfHeight;
+		},
+		onEnemyHit(enemyId, target, _damage) {
+			host.enemyLastHitTarget.set(enemyId, target);
+		},
+		onEnemyKill(enemyId) {
+			host.disposeEnemy(enemyId);
+			const target = host.enemyLastHitTarget.get(enemyId) ?? 'body';
+			host.game.hit(target);
+			host.enemyLastHitTarget.delete(enemyId);
+			// Boss kills drop quarters per docs/spec/06-economy.md.
+			const bossId = bossIdForEnemy(enemyId);
+			if (bossId !== null) {
+				const drop = rollBossDrop(BOSSES[bossId].quarterDrop);
+				if (drop > 0) {
+					awardQuarters(drop).catch((err) => {
+						console.error(`[economy] failed to award boss drop for ${bossId}`, err);
+					});
+				}
+			}
+		},
+		onEnemyCease(enemyId) {
+			host.disposeEnemy(enemyId);
+			host.enemyLastHitTarget.delete(enemyId);
+		},
+		onFireEvent(_enemyId, event: FireEvent) {
+			void event;
+		},
+		onPlayerDamage(damage) {
+			// `isDev` is a Vite compile-time constant in main.ts — this entire
+			// branch tree-shakes in production builds, so the `__dordGod`
+			// cheat surface never ships.
+			if (host.isDev && (globalThis as { __dordGod?: boolean }).__dordGod) return;
+			host.game.takeDamage(damage);
+		},
+		onCameraUpdate(position, lookAt) {
+			const camera = host.getCamera();
+			if (!camera) return;
+			camera.position.copyFrom(position);
+			camera.setTarget(lookAt);
+		},
+	};
 }

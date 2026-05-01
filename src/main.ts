@@ -1,10 +1,7 @@
 import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
 import { Engine } from '@babylonjs/core/Engines/engine';
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
-import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
-import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { GetEnvironmentBRDFTexture } from '@babylonjs/core/Misc/brdfTextureTools';
 import { Scene } from '@babylonjs/core/scene';
 import '@babylonjs/core/Audio/audioEngine';
@@ -12,27 +9,16 @@ import '@babylonjs/core/Culling/ray'; // side-effect: enables scene.pick / pickW
 import '@babylonjs/loaders/glTF';
 
 import { AudioBus } from './audio/AudioBus';
-import {
-	BOSSES,
-	bossIdForEnemy,
-	type Cue,
-	type CueAction,
-	EncounterDirector,
-	type EncounterListener,
-	type Enemy,
-	type FireEvent,
-} from './encounter';
+import { type CueAction, EncounterDirector } from './encounter';
 import { drainPendingCues, isHandlesDependent } from './encounter/pendingCueQueue';
 import { installTestHooks, now } from './engine/clock';
 import { Game } from './game/Game';
 import type { GameState } from './game/GameState';
 import {
-	awardQuarters,
 	getBalance,
 	getLifetimeStats,
 	grantFriendBailout,
 	initQuarters,
-	rollBossDrop,
 	spendQuarter,
 	subscribe as subscribeQuarters,
 } from './game/quarters';
@@ -70,7 +56,7 @@ import {
 } from './runtime/cueHelpers';
 import {
 	buildTitleScene as buildTitleSceneImpl,
-	loadBossGlb as loadBossGlbImpl,
+	createEncounterListener,
 } from './runtime/levelLifecycle';
 import {
 	type PickResult,
@@ -562,98 +548,20 @@ function constructLevel(levelId: LevelId): void {
 		}
 	});
 
-	const listener: EncounterListener = {
-		onCueFire(cue: Cue, action: CueAction) {
-			console.debug('[cue]', cue.id, action.verb);
-			handleCueAction(action);
-		},
-		onEnemySpawn(enemy: Enemy) {
-			if (!scene) return;
-			const mesh = MeshBuilder.CreateCapsule(
-				`enemy-${enemy.id}`,
-				{ radius: CAPSULE_RADIUS, height: CAPSULE_HEIGHT },
-				scene,
-			);
-			mesh.position.copyFrom(enemy.position);
-			mesh.position.y += CAPSULE_HALF_HEIGHT;
-			// Placeholder material so the capsule reads as a threat until
-			// archetype GLBs land. Without this, the capsule has no material
-			// and renders as a near-invisible default-shaded silhouette,
-			// which is what the visual audit caught.
-			const mat = new StandardMaterial(`mat-enemy-${enemy.id}`, scene);
-			const isBoss = bossIdForEnemy(enemy.id) !== null;
-			// Bosses get a distinct color so they're not lost in a wave of
-			// red grunt-capsules. Reaper goes near-black/purple; the other
-			// four bosses go gold so the player knows which target carries
-			// the boss HP bar.
-			if (enemy.archetypeId === 'reaper') {
-				mat.diffuseColor = new Color3(0.4, 0.05, 0.4);
-				mat.emissiveColor = new Color3(0.25, 0.0, 0.25);
-			} else if (isBoss) {
-				mat.diffuseColor = new Color3(0.95, 0.75, 0.15);
-				mat.emissiveColor = new Color3(0.3, 0.2, 0.0);
-			} else {
-				mat.diffuseColor = new Color3(0.85, 0.18, 0.18);
-				mat.emissiveColor = new Color3(0.12, 0.0, 0.0);
-			}
-			mat.specularColor = new Color3(0.05, 0.05, 0.05);
-			mesh.material = mat;
-			mesh.metadata = { enemyId: enemy.id };
-			enemySpawnHp.set(enemy.id, enemy.hp);
-			enemyMeshes.set(enemy.id, mesh);
-
-			// For bosses, attempt to load the archetype GLB and parent it to
-			// the capsule. The capsule remains as the hitbox; the GLB is
-			// purely visual. If the GLB load fails (404, network), the
-			// colored capsule stays as the visible body.
-			if (isBoss) {
-				loadBossGlbImpl(scene, mesh, enemy, () => scene);
-			}
-		},
-		onEnemyMove(enemyId, position) {
-			const mesh = enemyMeshes.get(enemyId);
-			if (!mesh) return;
-			mesh.position.copyFrom(position);
-			mesh.position.y += CAPSULE_HALF_HEIGHT;
-		},
-		onEnemyHit(enemyId, target, _damage) {
-			enemyLastHitTarget.set(enemyId, target);
-		},
-		onEnemyKill(enemyId) {
-			disposeEnemy(enemyId);
-			const target = enemyLastHitTarget.get(enemyId) ?? 'body';
-			game.hit(target);
-			enemyLastHitTarget.delete(enemyId);
-			// Boss kills drop quarters per docs/spec/06-economy.md.
-			const bossId = bossIdForEnemy(enemyId);
-			if (bossId !== null) {
-				const drop = rollBossDrop(BOSSES[bossId].quarterDrop);
-				if (drop > 0) {
-					awardQuarters(drop).catch((err) => {
-						console.error(`[economy] failed to award boss drop for ${bossId}`, err);
-					});
-				}
-			}
-		},
-		onEnemyCease(enemyId) {
-			disposeEnemy(enemyId);
-			enemyLastHitTarget.delete(enemyId);
-		},
-		onFireEvent(_enemyId, event: FireEvent) {
-			void event;
-		},
-		onPlayerDamage(damage) {
-			// `IS_DEV` is a Vite compile-time constant — this entire branch
-			// tree-shakes in production builds, so the `__dordGod` cheat
-			// surface never ships.
-			if (IS_DEV && (globalThis as { __dordGod?: boolean }).__dordGod) return;
-			game.takeDamage(damage);
-		},
-		onCameraUpdate(position, lookAt) {
-			camera.position.copyFrom(position);
-			camera.setTarget(lookAt);
-		},
-	};
+	const listener = createEncounterListener({
+		capsuleHeight: CAPSULE_HEIGHT,
+		capsuleRadius: CAPSULE_RADIUS,
+		capsuleHalfHeight: CAPSULE_HALF_HEIGHT,
+		enemyMeshes,
+		enemySpawnHp,
+		enemyLastHitTarget,
+		game,
+		isDev: IS_DEV,
+		getScene: () => scene,
+		getCamera: () => camera,
+		disposeEnemy,
+		handleCueAction,
+	});
 
 	director = new EncounterDirector({
 		cameraRail: currentLevel.cameraRail,
