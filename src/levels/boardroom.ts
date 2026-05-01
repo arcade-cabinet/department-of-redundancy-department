@@ -63,7 +63,8 @@ const primitives: Primitive[] = [
 		emissiveCutouts: [
 			// chandelier centerpiece
 			{ width: 1.5, depth: 1.5, offset: [0, 0], intensity: 0.6, color: [1.0, 0.95, 0.85] },
-			// 4 vent cutouts (intensity 0 — animated to open via cue if needed)
+			// 4 vent cutouts (intensity 0 — static; the vent doors open via
+			// `door` cue, not via a cutout-animation pipeline).
 			{ width: 0.6, depth: 0.6, offset: [-3, -4], intensity: 0, color: [1.0, 1.0, 1.0] },
 			{ width: 0.6, depth: 0.6, offset: [3, -4], intensity: 0, color: [1.0, 1.0, 1.0] },
 			{ width: 0.6, depth: 0.6, offset: [-3, 4], intensity: 0, color: [1.0, 1.0, 1.0] },
@@ -260,20 +261,14 @@ const cues: Cue[] = [
 		trigger: { kind: 'wall-clock', atMs: 1500 },
 		action: { verb: 'door', doorId: 'door-entry-double', to: 'open' },
 	},
-	{
-		id: 'door-slam',
-		trigger: { kind: 'wall-clock', atMs: 4000 },
-		action: { verb: 'door', doorId: 'door-entry-double', to: 'closed' },
-	},
+	// `to: 'closed'` door cues and `camera-shake` are deferred — both have
+	// no current runtime handler in main.ts. The slam beat lands with their
+	// runtime support in subsequent feature-queue work. Until then, leaving
+	// silently-no-op cues here would violate the wiring rule.
 	{
 		id: 'door-thunder',
 		trigger: { kind: 'wall-clock', atMs: 4100 },
-		action: { verb: 'audio-stinger', audio: 'stinger/stinger-floor-cleared.mp3' },
-	},
-	{
-		id: 'shake-slam',
-		trigger: { kind: 'wall-clock', atMs: 4100 },
-		action: { verb: 'camera-shake', intensity: 0.25, durationMs: 600 },
+		action: { verb: 'audio-stinger', audio: 'stinger/stinger-100-percent.mp3' },
 	},
 
 	// Reaper reveal — spotlight + boss-spawn + theme stinger.
@@ -300,6 +295,19 @@ const cues: Cue[] = [
 		id: 'reaper-narr',
 		trigger: { kind: 'on-arrive', railNodeId: 'boss-arena' },
 		action: { verb: 'narrator', text: 'THE REAPER', durationMs: 2500 },
+	},
+	// Until the boss controller is director-tracked, an immediate vent ad
+	// keeps the boss-arena position in `combat` state — otherwise the
+	// rail's clear-detection would fire on-arrive and skip the fight.
+	{
+		id: 'reaper-anchor-ad',
+		trigger: { kind: 'on-arrive', railNodeId: 'boss-arena' },
+		action: {
+			verb: 'enemy-spawn',
+			railId: 'rail-spawn-reaper-entry',
+			archetype: 'hitman',
+			fireProgram: 'pistol-pop-aim',
+		},
 	},
 
 	// Phase 1 — REDACT. Vents pop and ads drop in.
@@ -340,11 +348,9 @@ const cues: Cue[] = [
 		trigger: { kind: 'wall-clock', atMs: 24000 },
 		action: { verb: 'boss-phase', bossId: 'reaper', phase: 2 },
 	},
-	{
-		id: 'p2-chandelier',
-		trigger: { kind: 'wall-clock', atMs: 24500 },
-		action: { verb: 'prop-anim', propId: 'prop-chandelier', animId: 'swing' },
-	},
+	// Chandelier swing prop-anim is deferred — it lands with the prop GLB
+	// pipeline + prop-anim runtime handler, both subsequent feature-queue
+	// items. Authoring it here without those would silently no-op.
 	{
 		id: 'p2-vent-spawn',
 		trigger: { kind: 'wall-clock', atMs: 30000 },
@@ -467,7 +473,10 @@ export const boardroomLevel: Level = {
 		{
 			id: 'tense-drone',
 			audio: 'ambience/ambience-tense-drone.ogg',
-			volume: 0.0,
+			// Starts audible at 0.5 so the opening `amb-silence` fade-to-zero
+			// is the audible ramp that sells the boardroom approach. A 0→0
+			// fade would just be silence the whole way.
+			volume: 0.5,
 			loop: true,
 		},
 	],
