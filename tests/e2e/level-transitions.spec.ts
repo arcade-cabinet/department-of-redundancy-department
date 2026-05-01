@@ -7,6 +7,7 @@ import {
 	jumpToLevel,
 	readState,
 	setGodMode,
+	transitionLevel,
 	waitForLevel,
 	waitForLevelReady,
 	waitForPhase,
@@ -50,12 +51,7 @@ test.describe('level transitions', () => {
 			// re-running combat: the per-level transition wiring is what's
 			// under test, and this side-steps the runtime's dependence on
 			// pointer events and director-side enemy spawning.
-			await page.evaluate((target) => {
-				const dord = (
-					globalThis as { __dord?: { game: { transitionLevel: (id: string) => void } } }
-				).__dord;
-				dord?.game.transitionLevel(target);
-			}, to);
+			await transitionLevel(page, to);
 
 			await waitForLevel(page, to);
 			await fastForward(page, 250);

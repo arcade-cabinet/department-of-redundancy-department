@@ -1,5 +1,13 @@
 import { expect, test } from '@playwright/test';
-import { gotoApp, insertCoin, readState, setGodMode, waitForPhase } from '../harness/dord';
+import {
+	continueRun,
+	gotoApp,
+	insertCoin,
+	killPlayerOnce,
+	readState,
+	setGodMode,
+	waitForPhase,
+} from '../harness/dord';
 
 /**
  * Pins the death → continue-prompt → resume flow that the playability
@@ -25,22 +33,7 @@ test.describe('death + continue flow', () => {
 		// (clamped to 0). The continue/give-up decision is the user's;
 		// `damagePlayer` short-circuits when phase isn't 'playing'.
 		const livesBefore = (await readState(page)).remainingLives;
-		await page.evaluate(() => {
-			const dord = (
-				globalThis as {
-					__dord?: {
-						game: {
-							takeDamage: (n: number) => void;
-							getState: () => { run: { maxPlayerHp: number } | null };
-						};
-					};
-				}
-			).__dord;
-			if (!dord) throw new Error('__dord missing');
-			const run = dord.game.getState().run;
-			if (!run) throw new Error('no active run after insertCoin');
-			dord.game.takeDamage(run.maxPlayerHp);
-		});
+		await killPlayerOnce(page);
 
 		await waitForPhase(page, 'continue-prompt', 5_000);
 		const state = await readState(page);
@@ -55,28 +48,10 @@ test.describe('death + continue flow', () => {
 		await insertCoin(page);
 		await waitForPhase(page, 'playing');
 
-		await page.evaluate(() => {
-			const dord = (
-				globalThis as {
-					__dord?: {
-						game: {
-							takeDamage: (n: number) => void;
-							getState: () => { run: { maxPlayerHp: number } | null };
-						};
-					};
-				}
-			).__dord;
-			if (!dord) throw new Error('__dord missing');
-			const run = dord.game.getState().run;
-			if (!run) throw new Error('no active run');
-			dord.game.takeDamage(run.maxPlayerHp);
-		});
+		await killPlayerOnce(page);
 		await waitForPhase(page, 'continue-prompt', 5_000);
 
-		await page.evaluate(() => {
-			const dord = (globalThis as { __dord?: { game: { continueRun: () => void } } }).__dord;
-			dord?.game.continueRun();
-		});
+		await continueRun(page);
 		await waitForPhase(page, 'playing', 5_000);
 		const state = await readState(page);
 		expect(state.phase).toBe('playing');

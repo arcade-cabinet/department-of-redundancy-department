@@ -5,9 +5,14 @@ import type { Page } from '@playwright/test';
  * `src/main.ts` installs in dev/test builds (gated by `IS_DEV`).
  *
  * Tests run against `pnpm dev`, so `__dord` is always present. The
- * field-by-field shape here is what the harness uses; keep it in sync
- * with main.ts.
+ * shape here is the single source of truth for both this harness and
+ * any inline `page.evaluate` blocks in spec files — keep it in sync
+ * with `src/main.ts`. The `declare global` block makes
+ * `globalThis.__dord` typed inside `page.evaluate` callbacks (which
+ * run in the browser, so they can't import this file's exports —
+ * the global declaration is the only way to share the shape).
  */
+
 export type DordPhase =
 	| 'insert-coin'
 	| 'playing'
@@ -29,6 +34,42 @@ export type DordLevelId =
 	| 'boardroom'
 	| 'victory';
 
+export interface DordRunState {
+	currentLevelId: DordLevelId;
+	playerHp: number;
+	maxPlayerHp: number;
+	remainingLives: number;
+	score: number;
+	enemiesKilled: number;
+}
+
+export interface DordGameState {
+	phase: DordPhase;
+	run: DordRunState | null;
+}
+
+export interface DordGame {
+	getState: () => DordGameState;
+	insertCoin: (nowMs: number) => void;
+	takeDamage: (n: number) => void;
+	continueRun: () => void;
+	transitionLevel: (id: DordLevelId) => void;
+	endRun: (toGameOver: boolean) => void;
+}
+
+export interface DordSurface {
+	game: DordGame;
+	jumpToLevel: (id: DordLevelId) => void;
+	fastForward: (ms: number) => void;
+	levelHandlesReady: () => boolean;
+	now: () => number;
+}
+
+declare global {
+	var __dord: DordSurface | undefined;
+	var __dordGod: boolean | undefined;
+}
+
 export interface DordState {
 	phase: DordPhase;
 	currentLevelId: DordLevelId | null;
@@ -40,27 +81,14 @@ export interface DordState {
 
 export async function gotoApp(page: Page): Promise<void> {
 	await page.goto('/');
-	await page.waitForFunction(() => {
-		const dord = (globalThis as { __dord?: object }).__dord;
-		return dord != null && 'game' in dord;
-	});
+	await page.waitForFunction(() => globalThis.__dord != null && 'game' in globalThis.__dord);
 	await page.evaluate(() => document.fonts.ready);
 }
 
 export async function readState(page: Page): Promise<DordState> {
 	return page.evaluate(() => {
-		const dord = (globalThis as { __dord?: { game: { getState: () => unknown } } }).__dord;
-		if (!dord) throw new Error('__dord not present — dev hooks missing');
-		const s = dord.game.getState() as {
-			phase: DordPhase;
-			run: {
-				currentLevelId: DordLevelId;
-				playerHp: number;
-				remainingLives: number;
-				score: number;
-				enemiesKilled: number;
-			} | null;
-		};
+		if (!globalThis.__dord) throw new Error('__dord not present — dev hooks missing');
+		const s = globalThis.__dord.game.getState();
 		return {
 			phase: s.phase,
 			currentLevelId: s.run?.currentLevelId ?? null,
@@ -73,30 +101,66 @@ export async function readState(page: Page): Promise<DordState> {
 }
 
 export async function insertCoin(page: Page): Promise<void> {
+	// Use the engine-clock now() exposed via `__dord.now` rather than
+	// `performance.now()` — the ts-browser-game profile mandates the
+	// engine clock facade as the single time source so future test-mode
+	// virtual time (`?frame=N`) doesn't diverge from real time.
 	await page.evaluate(() => {
-		const dord = (globalThis as { __dord?: { game: { insertCoin: (n: number) => void } } }).__dord;
-		dord?.game.insertCoin(performance.now());
+		const dord = globalThis.__dord;
+		if (!dord) throw new Error('__dord not present — dev hooks missing');
+		dord.game.insertCoin(dord.now());
 	});
 }
 
 export async function setGodMode(page: Page, on: boolean): Promise<void> {
 	await page.evaluate((flag) => {
-		(globalThis as { __dordGod?: boolean }).__dordGod = flag;
+		globalThis.__dordGod = flag;
 	}, on);
 }
 
 export async function jumpToLevel(page: Page, id: DordLevelId): Promise<void> {
 	await page.evaluate((target) => {
-		const dord = (globalThis as { __dord?: { jumpToLevel: (id: string) => void } }).__dord;
-		dord?.jumpToLevel(target);
+		globalThis.__dord?.jumpToLevel(target);
 	}, id);
 }
 
 export async function fastForward(page: Page, ms: number): Promise<void> {
 	await page.evaluate((delta) => {
-		const dord = (globalThis as { __dord?: { fastForward: (ms: number) => void } }).__dord;
-		dord?.fastForward(delta);
+		globalThis.__dord?.fastForward(delta);
 	}, ms);
+}
+
+/**
+ * Apply lethal damage equal to current maxPlayerHp. damagePlayer()
+ * short-circuits when phase isn't 'playing', so this lands at most
+ * one transition into continue-prompt per call.
+ */
+export async function killPlayerOnce(page: Page): Promise<void> {
+	await page.evaluate(() => {
+		const dord = globalThis.__dord;
+		if (!dord) throw new Error('__dord missing');
+		const run = dord.game.getState().run;
+		if (!run) throw new Error('no active run');
+		dord.game.takeDamage(run.maxPlayerHp);
+	});
+}
+
+export async function continueRun(page: Page): Promise<void> {
+	await page.evaluate(() => {
+		globalThis.__dord?.game.continueRun();
+	});
+}
+
+export async function transitionLevel(page: Page, to: DordLevelId): Promise<void> {
+	await page.evaluate((target) => {
+		globalThis.__dord?.game.transitionLevel(target);
+	}, to);
+}
+
+export async function endRun(page: Page, toGameOver: boolean): Promise<void> {
+	await page.evaluate((go) => {
+		globalThis.__dord?.game.endRun(go);
+	}, toGameOver);
 }
 
 /**
@@ -107,14 +171,9 @@ export async function fastForward(page: Page, ms: number): Promise<void> {
  * until handles are present).
  */
 export async function waitForLevelReady(page: Page, timeoutMs = 30_000): Promise<void> {
-	await page.waitForFunction(
-		() => {
-			const dord = (globalThis as { __dord?: { levelHandlesReady?: () => boolean } }).__dord;
-			return dord?.levelHandlesReady?.() === true;
-		},
-		undefined,
-		{ timeout: timeoutMs },
-	);
+	await page.waitForFunction(() => globalThis.__dord?.levelHandlesReady?.() === true, undefined, {
+		timeout: timeoutMs,
+	});
 }
 
 export async function waitForPhase(
@@ -123,11 +182,7 @@ export async function waitForPhase(
 	timeoutMs = 30_000,
 ): Promise<void> {
 	await page.waitForFunction(
-		(target) => {
-			const dord = (globalThis as { __dord?: { game: { getState: () => { phase: string } } } })
-				.__dord;
-			return dord?.game.getState().phase === target;
-		},
+		(target) => globalThis.__dord?.game.getState().phase === target,
 		phase,
 		{ timeout: timeoutMs },
 	);
@@ -139,14 +194,7 @@ export async function waitForLevel(
 	timeoutMs = 30_000,
 ): Promise<void> {
 	await page.waitForFunction(
-		(target) => {
-			const dord = (
-				globalThis as {
-					__dord?: { game: { getState: () => { run: { currentLevelId: string } | null } } };
-				}
-			).__dord;
-			return dord?.game.getState().run?.currentLevelId === target;
-		},
+		(target) => globalThis.__dord?.game.getState().run?.currentLevelId === target,
 		levelId,
 		{ timeout: timeoutMs },
 	);
