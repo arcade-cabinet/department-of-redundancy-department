@@ -1,3 +1,4 @@
+import { BOSSES } from '../encounter/Boss';
 import type { Cue, CueAction } from '../encounter/cues';
 import { ARCHETYPES } from '../encounter/Enemy';
 import { FIRE_PATTERNS } from '../encounter/firePatterns';
@@ -215,6 +216,20 @@ const CUE_CHECKERS: Readonly<Partial<Record<CueAction['verb'], CheckerEntry>>> =
 		if (!index.propIds.has(a.propId))
 			log.warn('CUE_DANGLING_PROP', `cue '${cue.id}' targets unknown prop '${a.propId}'`);
 	},
+	'boss-spawn': (cue, a, index, log) => {
+		if (a.verb !== 'boss-spawn') return;
+		const def = checkBossIdAndPhase(cue, a.bossId, a.phase, log);
+		if (def && !index.spawnRailIds.has(def.railIdConvention)) {
+			log.err(
+				'CUE_BOSS_RAIL_MISSING',
+				`cue '${cue.id}' boss '${a.bossId}' requires spawnRail '${def.railIdConvention}'`,
+			);
+		}
+	},
+	'boss-phase': (cue, a, _index, log) => {
+		if (a.verb !== 'boss-phase') return;
+		checkBossIdAndPhase(cue, a.bossId, a.phase, log);
+	},
 	transition: (cue, a, _index, log) => {
 		if (a.verb !== 'transition') return;
 		if (a.toLevelId !== 'victory' && LEVELS[a.toLevelId] === undefined)
@@ -228,6 +243,26 @@ const CUE_CHECKERS: Readonly<Partial<Record<CueAction['verb'], CheckerEntry>>> =
 function checkCueAction(cue: Cue, a: CueAction, index: LevelIndex, log: IssueLog): void {
 	const checker = CUE_CHECKERS[a.verb];
 	if (checker) checker(cue, a, index, log);
+}
+
+function checkBossIdAndPhase(
+	cue: Cue,
+	bossId: string,
+	phase: number,
+	log: IssueLog,
+): (typeof BOSSES)[keyof typeof BOSSES] | undefined {
+	const def = BOSSES[bossId as keyof typeof BOSSES];
+	if (!def) {
+		log.err('CUE_UNKNOWN_BOSS', `cue '${cue.id}' uses unknown bossId '${bossId}'`);
+		return undefined;
+	}
+	if (!def.fireProgramByPhase[phase]) {
+		log.err(
+			'CUE_BOSS_PHASE_UNDEFINED',
+			`cue '${cue.id}' boss '${bossId}' has no phase ${phase} fire program`,
+		);
+	}
+	return def;
 }
 
 function checkEnemySpawn(

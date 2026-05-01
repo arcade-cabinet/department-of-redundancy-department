@@ -349,8 +349,9 @@ function handleCueAction(action: CueAction): void {
 		case 'prop-anim':
 			handlePropAnimCue(action.propId, action.animId);
 			return;
-		// boss-spawn / boss-phase / enemy-spawn
-		// are handled by their respective subsystems in subsequent commits.
+		// boss-spawn / boss-phase / enemy-spawn are handled by the director
+		// itself (see EncounterDirector.fireCue) — they don't reach this
+		// listener-side switch.
 		default:
 			return;
 	}

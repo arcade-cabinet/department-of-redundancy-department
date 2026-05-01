@@ -9,7 +9,8 @@ import {
 	resumeFromCombat,
 } from '../rail/Rail';
 import type { RailGraph } from '../rail/RailNode';
-import type { Cue, CueAction, DifficultyGate } from './cues';
+import { BOSSES, bossEnemyId } from './Boss';
+import type { BossId, Cue, CueAction, DifficultyGate } from './cues';
 import { ARCHETYPES, type ArchetypeId, type Enemy, type EnemyState } from './Enemy';
 import type { FireEvent, FirePattern, FirePatternId } from './FirePattern';
 import { getFirePattern } from './firePatterns';
@@ -215,10 +216,8 @@ export class EncounterDirector {
 		if (!enemy) return;
 		const archetype = ARCHETYPES[enemy.archetypeId];
 		const baseDamage = target === 'head' ? archetype.headDamage : archetype.bodyDamage;
-		const damage =
-			target === 'justice'
-				? archetype.bodyDamage // justice-shot disarms; HP not really the metric, but for now treat as body
-				: baseDamage * this.difficultyParams.enemyHpMultiplier;
+		// justice-shot disarms; HP not really the metric, but for now treat as body
+		const damage = target === 'justice' ? archetype.bodyDamage : baseDamage;
 		const newHp = enemy.hp - damage;
 		this.listener.onEnemyHit(enemyId, target, damage);
 		if (newHp <= 0) {
@@ -318,13 +317,79 @@ export class EncounterDirector {
 				// via the cue. Director doesn't track civilian props.
 				break;
 			case 'boss-spawn':
-				// Bosses are handled by the listener (a separate boss controller
-				// dispatches phase transitions). Director does not maintain boss state.
+				this.spawnBoss(cue.action.bossId, cue.action.phase);
+				break;
+			case 'boss-phase':
+				this.setBossPhase(cue.action.bossId, cue.action.phase);
 				break;
 			default:
 				// All other verbs are pure listener side-effects.
 				break;
 		}
+	}
+
+	private spawnBoss(bossId: BossId, phase: number): void {
+		const def = BOSSES[bossId];
+		if (!def) {
+			console.warn(`[director] boss-spawn unknown bossId '${bossId}'`);
+			return;
+		}
+		const id = bossEnemyId(bossId);
+		if (this.state.enemies.has(id)) {
+			console.warn(`[director] boss-spawn '${bossId}' already alive — refusing duplicate spawn`);
+			return;
+		}
+		const fireProgram = def.fireProgramByPhase[phase];
+		if (!fireProgram) {
+			console.warn(`[director] boss-spawn '${bossId}' has no phase ${phase} fire program`);
+			return;
+		}
+		const railGraph = this.spawnRailMap.get(def.railIdConvention);
+		if (!railGraph) {
+			console.warn(`[director] boss-spawn '${bossId}' rail '${def.railIdConvention}' not in level`);
+			return;
+		}
+		const archetype = ARCHETYPES[def.archetype];
+		const railState = createSpawnRailState(railGraph);
+		const enemy: Enemy = {
+			id,
+			archetypeId: def.archetype,
+			fireProgramId: fireProgram,
+			rail: railState,
+			elapsedMs: 0,
+			nextFireEventIdx: 0,
+			hp: archetype.hp * def.hpMultiplier * this.difficultyParams.enemyHpMultiplier,
+			state: 'sliding',
+			position: spawnRailPosition(railState),
+			ceaseAfterMs: null,
+			alerted: true,
+		};
+		const updated = new Map(this.state.enemies);
+		updated.set(id, enemy);
+		const dwell = new Set(this.state.currentDwellEnemyIds);
+		dwell.add(id);
+		this.state = { ...this.state, enemies: updated, currentDwellEnemyIds: dwell };
+		this.listener.onEnemySpawn(enemy);
+	}
+
+	private setBossPhase(bossId: BossId, phase: number): void {
+		const def = BOSSES[bossId];
+		const fireProgram = def?.fireProgramByPhase[phase];
+		if (!def || !fireProgram) {
+			console.warn(`[director] boss-phase '${bossId}' phase ${phase} undefined`);
+			return;
+		}
+		const id = bossEnemyId(bossId);
+		const live = this.state.enemies.get(id);
+		if (!live) {
+			console.warn(`[director] boss-phase '${bossId}' boss not alive`);
+			return;
+		}
+		const updated = new Map(this.state.enemies);
+		// Reset fire-program cursor + elapsed so the new program starts from
+		// event 0 instead of mid-stream.
+		updated.set(id, { ...live, fireProgramId: fireProgram, elapsedMs: 0, nextFireEventIdx: 0 });
+		this.state = { ...this.state, enemies: updated };
 	}
 
 	private spawnEnemy(
