@@ -6,6 +6,7 @@ import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
+import { GetEnvironmentBRDFTexture } from '@babylonjs/core/Misc/brdfTextureTools';
 import { Scene } from '@babylonjs/core/scene';
 import '@babylonjs/core/Audio/audioEngine';
 import '@babylonjs/core/Culling/ray'; // side-effect: enables scene.pick / pickWithRay
@@ -110,6 +111,26 @@ uiScene.autoClearDepthAndStencil = false;
 	uiScene.activeCamera = uiCam;
 }
 
+// PBR materials in every gameplay level (drywall / carpet / laminate /
+// ceiling-tile / whiteboard) trigger Babylon's environment BRDF lookup
+// texture load on first instantiation. The BRDF texture is RGBD-encoded
+// and decoded asynchronously via `RGBDTextureTools.ExpandRGBDTexture`,
+// which schedules `texture.getScene().postProcessManager.directRender(...)`
+// inside an `executeWhenCompiled` callback. If the gameplay scene
+// disposes between scheduling and the callback firing, the disposed
+// scene's `postProcessManager` is null and the engine throws
+// `Cannot read properties of null (reading 'postProcessManager')` —
+// the exact error reproduced by the e2e canonical-run test on every
+// level transition.
+//
+// Fix: pre-warm the BRDF texture on the long-lived `uiScene` (never
+// disposed), then re-use it across every gameplay scene by assigning
+// `scene.environmentBRDFTexture = sharedBrdf` before any PBR material
+// gets a chance to call `loadBRDFTexture`. The lazy loader bails out
+// when `scene[textureProperty]` is already set, so the async path
+// never runs against a soon-to-be-disposed scene.
+const sharedBrdf = GetEnvironmentBRDFTexture(uiScene);
+
 // Title-screen scene. While at the title we render this; constructLevel
 // disposes and replaces it on INSERT COIN. The UI scene above is the one
 // that hosts all overlays and survives the swap. After game-over /
@@ -117,6 +138,7 @@ uiScene.autoClearDepthAndStencil = false;
 // composite over a corpse-of-lobby.
 function buildTitleScene(): Scene {
 	const s = new Scene(engine);
+	s.environmentBRDFTexture = sharedBrdf;
 	s.clearColor = new Color4(0.082, 0.094, 0.11, 1);
 	const titleCam = new FreeCamera('title-cam', new Vector3(0, 1.6, 0), s);
 	titleCam.minZ = 0.05;
@@ -193,15 +215,6 @@ if (IS_DEV) {
 }
 const overlay = new Overlay('dord-ui', uiScene);
 const reticle = new Reticle(overlay);
-
-// Pre-warm the uiScene's GUI PassPostProcess shader compilation NOW —
-// after the AdvancedDynamicTexture has been attached by `new Overlay`.
-// On the first `uiScene.render()` after a `scene.dispose()` the engine's
-// shared post-process effect cache is invalidated, and Babylon throws
-// `null reading 'postProcessManager'` while recompiling. Forcing the
-// compile here, before the title scene ever disposes, ensures the
-// pipeline is hot when INSERT COIN first tears down a scene.
-uiScene.render();
 
 let activeOverlayDispose: (() => void) | null = null;
 // Bumped every time routeOverlay disposes the prior overlay. Async overlay
@@ -503,22 +516,14 @@ function loadBossGlb(spawnScene: Scene, capsule: AbstractMesh, enemy: Enemy): vo
 }
 
 function constructLevel(levelId: LevelId): void {
-	// Pause the render loop across the dispose+rebuild boundary. Without
-	// this, the engine fires a `tick` between `scene.dispose()` and the
-	// new `new Scene(engine)` assignment, and the persistent uiScene's
-	// PassPostProcess blits against a now-null postProcessManager. The
-	// render loop is reattached at the bottom of this function once the
-	// new scene is wired and async `buildLevel` is dispatched.
+	// Pause the render loop across the dispose+rebuild boundary. Defence
+	// against any partial-frame rendering of a scene that's mid-teardown
+	// or a brand-new scene whose camera/handles aren't wired yet. The
+	// loop is re-attached at the bottom of this function once the new
+	// scene is fully constructed and the async `buildLevel` is dispatched.
 	engine.stopRenderLoop(tick);
 	if (scene) {
-		// Re-warm the uiScene's pipeline AFTER dispose: when Babylon tears
-		// down a scene with `stencil: true`, it invalidates the engine's
-		// shared post-process effect cache. Forcing the uiScene to render
-		// once here recompiles the GUI's PassPostProcess against the
-		// engine's new state, so the next render-loop tick doesn't see a
-		// null postProcessManager.
 		scene.dispose();
-		uiScene.render();
 		scene = null;
 		currentCamera = null;
 		cameraShake = null;
@@ -540,6 +545,11 @@ function constructLevel(levelId: LevelId): void {
 	}
 	currentLevel = getLevel(levelId);
 	scene = new Scene(engine);
+	// Reuse the BRDF texture loaded on `uiScene` so PBR materials in
+	// this level skip the async `loadBRDFTexture` path entirely. See the
+	// `sharedBrdf` declaration above for the full rationale (postProcessManager
+	// race during scene dispose).
+	scene.environmentBRDFTexture = sharedBrdf;
 	audioBus = new AudioBus(scene, settings);
 	for (const layer of currentLevel.ambienceLayers) {
 		audioBus.startAmbience(layer.id, layer.audio, layer.volume, layer.loop);
@@ -985,23 +995,19 @@ function tick(): void {
 		if (currentCamera) applyCameraShake(currentCamera);
 	}
 
-	// Render-side guards: a Scene built mid-tick (e.g. a level jump that
-	// resets `scene` and starts the async `buildLevel`) can be visited
+	// Render-side guard: a gameplay scene built mid-tick (e.g. a level jump
+	// that resets `scene` and starts the async `buildLevel`) can be visited
 	// by the render loop before primitives have attached their materials.
-	// At that point Babylon tries to compile a default post-process effect
-	// against a still-null postProcessManager and throws. Holding off the
-	// scene render until `levelHandles` resolves keeps the uiScene drawing
-	// (the InsertCoin overlay et al composite over a black framebuffer)
-	// while the level finishes async construction; the gameplay scene
-	// catches up on the next tick. The title scene's clear-color
-	// background is intentionally not drawn here — exposing it would mean
-	// the title scene's camera ever gets rendered, and once Babylon binds
-	// a post-process pipeline to that camera, disposing the title scene
-	// on INSERT COIN invalidates the engine's shared effect cache and the
-	// next uiScene.render() throws on a null postProcessManager. The
-	// uiScene's overlays are visually sufficient on a transparent black
-	// background, so we accept the cosmetic loss to keep the engine sane.
-	if (scene?.activeCamera && !scene.isDisposed && levelHandles) {
+	// At that point Babylon tries to render meshes whose effects are still
+	// compiling, which is harmless but visually jarring (one frame of flat-
+	// shaded geometry before PBR kicks in). Holding off the gameplay-scene
+	// render until `levelHandles` resolves keeps the uiScene drawing while
+	// the level finishes async construction; the gameplay scene catches up
+	// on the next tick. The title scene has no async build — its single
+	// FreeCamera + clearColor is ready synchronously — so `levelHandles`
+	// stays null for it and we let it render via the `title-cam` sentinel.
+	const isTitleScene = scene?.activeCamera?.name === 'title-cam';
+	if (scene?.activeCamera && !scene.isDisposed && (levelHandles != null || isTitleScene)) {
 		scene.render();
 	}
 	// Composite the GUI on top. `uiScene.autoClear=false` preserves the
