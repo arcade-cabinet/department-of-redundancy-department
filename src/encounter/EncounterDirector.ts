@@ -123,6 +123,13 @@ interface DirectorState {
 	readonly currentDwellEnemyIds: ReadonlySet<string>;
 }
 
+// Adaptive difficulty within a dwell node — per docs/spec/03:
+//   effective_windup = base * max(ADAPTIVE_FLOOR, 1 - ADAPTIVE_STEP * hitlessKills)
+// Streak resets on damage taken, missed shot, or entering a new dwell node.
+// Director-internal mutation only; not surfaced to GameState.
+const ADAPTIVE_FLOOR = 0.5;
+const ADAPTIVE_STEP = 0.05;
+
 export class EncounterDirector {
 	private readonly cues: readonly Cue[];
 	private readonly spawnRailMap: ReadonlyMap<string, SpawnRailGraph>;
@@ -131,6 +138,9 @@ export class EncounterDirector {
 	private readonly listener: EncounterListener;
 	private state: DirectorState;
 	private nextEnemySerial = 0;
+	// Hitless-kill streak within the current dwell node. Director-internal;
+	// resets on damage / miss / new dwell node.
+	private hitlessKills = 0;
 
 	constructor(config: EncounterDirectorConfig) {
 		this.cues = config.cues.filter((c) => this.passesDifficultyGate(c, config.difficulty));
@@ -176,6 +186,13 @@ export class EncounterDirector {
 			if (!enemy.rail.atEnd) {
 				this.listener.onEnemyMove(id, stepped.position);
 			}
+		}
+
+		// New dwell node → reset the adaptive-difficulty streak. Skill from a
+		// past position should not carry forward as a discount on the next
+		// firing line.
+		if (arrivedNodeId !== null && arrivedNodeId !== prev.currentDwellNodeId) {
+			this.hitlessKills = 0;
 		}
 
 		this.state = {
@@ -239,7 +256,12 @@ export class EncounterDirector {
 			enemies: updated,
 			currentDwellEnemyIds: dwell,
 		};
+		this.hitlessKills += 1;
 		this.listener.onEnemyKill(enemyId);
+	}
+
+	notifyShotResult(hit: boolean): void {
+		if (!hit) this.hitlessKills = 0;
 	}
 
 	private allDwellEnemiesCleared(): boolean {
@@ -427,12 +449,19 @@ export class EncounterDirector {
 		this.listener.onEnemySpawn(enemy);
 	}
 
+	private adaptiveWindupMultiplier(): number {
+		return Math.max(ADAPTIVE_FLOOR, 1 - ADAPTIVE_STEP * this.hitlessKills);
+	}
+
 	private applyDifficultyToEvent(event: FireEvent): FireEvent {
 		switch (event.verb) {
 			case 'aim-laser':
 				return {
 					...event,
-					durationMs: event.durationMs * this.difficultyParams.windupMultiplier,
+					durationMs:
+						event.durationMs *
+						this.difficultyParams.windupMultiplier *
+						this.adaptiveWindupMultiplier(),
 				};
 			case 'fire-hitscan':
 			case 'projectile-throw':
@@ -465,6 +494,9 @@ export class EncounterDirector {
 		this.listener.onFireEvent(enemyId, event);
 		if (event.verb === 'fire-hitscan' || event.verb === 'melee-contact') {
 			this.listener.onPlayerDamage(event.damage, enemyId);
+			// Player took damage → reset the adaptive-difficulty streak. The
+			// player is meant to feel pressure restart when they get tagged.
+			this.hitlessKills = 0;
 		}
 	}
 

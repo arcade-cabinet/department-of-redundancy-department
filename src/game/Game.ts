@@ -118,6 +118,14 @@ export class Game {
 		this.update(setPhase(this.state, 'insert-coin'));
 	}
 
+	openCabinetStats(): void {
+		this.update(setPhase(this.state, 'cabinet-stats'));
+	}
+
+	closeCabinetStats(): void {
+		this.update(setPhase(this.state, 'insert-coin'));
+	}
+
 	private update(next: GameState): void {
 		if (next === this.state) return;
 		this.state = next;

@@ -1,9 +1,10 @@
-import { Button } from '@babylonjs/gui/2D/controls/button';
+import type { Button } from '@babylonjs/gui/2D/controls/button';
 import { Control } from '@babylonjs/gui/2D/controls/control';
-import { Rectangle } from '@babylonjs/gui/2D/controls/rectangle';
+import type { Rectangle } from '@babylonjs/gui/2D/controls/rectangle';
 import { TextBlock } from '@babylonjs/gui/2D/controls/textBlock';
 import { HIGH_SCORE_TABLE_SIZE, type HighScore } from '../preferences';
 import { COLOR_PAPER, FONT_BODY, FONT_DISPLAY } from './brand';
+import { makeLedgerCloseButton, makeLedgerPanel, makeLedgerTitle } from './ledgerPanel';
 import type { Overlay } from './Overlay';
 
 const ROW_HEIGHT = 32;
@@ -70,10 +71,10 @@ export class HighScoresOverlay {
 		const panelHeight =
 			PANEL_HEADER_HEIGHT + ROW_HEIGHT * Math.max(visible.length, 1) + PANEL_FOOTER_HEIGHT;
 
-		this.panel = this.makePanel(panelHeight);
+		this.panel = makeLedgerPanel('high-scores', PANEL_WIDTH, panelHeight);
 		overlay.add(this.panel);
 
-		this.title = this.makeTitle(panelHeight);
+		this.title = makeLedgerTitle('high-scores', 'HIGH SCORES', PANEL_WIDTH, panelHeight);
 		overlay.add(this.title);
 
 		if (visible.length === 0) {
@@ -93,34 +94,8 @@ export class HighScoresOverlay {
 		this.footnote = this.makeFootnote(panelHeight);
 		overlay.add(this.footnote);
 
-		this.closeButton = this.makeCloseButton(panelHeight, onClose);
+		this.closeButton = makeLedgerCloseButton('high-scores', panelHeight, onClose);
 		overlay.add(this.closeButton);
-	}
-
-	private makePanel(panelHeight: number): Rectangle {
-		const r = new Rectangle('high-scores-panel');
-		r.width = `${PANEL_WIDTH}px`;
-		r.height = `${panelHeight}px`;
-		r.thickness = 2;
-		r.color = COLOR_PAPER;
-		r.background = 'rgba(21, 24, 28, 0.92)';
-		r.cornerRadius = 8;
-		return r;
-	}
-
-	private makeTitle(panelHeight: number): TextBlock {
-		const t = new TextBlock('high-scores-title');
-		t.text = 'HIGH SCORES';
-		t.color = COLOR_PAPER;
-		t.fontSize = 36;
-		t.fontFamily = FONT_DISPLAY;
-		t.fontWeight = 'bold';
-		t.height = '48px';
-		t.width = `${PANEL_WIDTH - 40}px`;
-		t.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
-		t.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
-		t.top = `${-(panelHeight / 2) + 24}px`;
-		return t;
 	}
 
 	private makeFootnote(panelHeight: number): TextBlock {
@@ -135,21 +110,6 @@ export class HighScoresOverlay {
 		f.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
 		f.top = `${panelHeight / 2 - 56}px`;
 		return f;
-	}
-
-	private makeCloseButton(panelHeight: number, onClose: () => void): Button {
-		const b = Button.CreateSimpleButton('high-scores-close', 'BACK');
-		b.width = '180px';
-		b.height = '44px';
-		b.color = COLOR_PAPER;
-		b.background = '#15181C';
-		b.fontSize = 20;
-		b.fontWeight = 'bold';
-		b.thickness = 2;
-		b.cornerRadius = 6;
-		b.top = `${panelHeight / 2 - 22}px`;
-		b.onPointerUpObservable.add(() => onClose());
-		return b;
 	}
 
 	dispose(): void {

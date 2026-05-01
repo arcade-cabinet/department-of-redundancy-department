@@ -48,7 +48,8 @@ export type GamePhase =
 	| 'game-over'
 	| 'victory'
 	| 'settings'
-	| 'high-scores';
+	| 'high-scores'
+	| 'cabinet-stats';
 
 export interface RunState {
 	readonly currentLevelId: LevelId;
