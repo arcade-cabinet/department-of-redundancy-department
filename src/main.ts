@@ -223,6 +223,14 @@ if (IS_DEV) {
 		isJusticeWindowOpen: (enemyId: string): boolean => {
 			return director?.isJusticeWindowOpen(enemyId) ?? false;
 		},
+		// Whether a prop with the given id is currently in the level handles
+		// and not yet disposed. Used by the boardroom-chandelier e2e to
+		// confirm the procedural chandelier built into the scene before the
+		// Phase-2 swing cue fires. Dev-only — strips with the rest of __dord.
+		hasProp: (propId: string): boolean => {
+			const mesh = levelHandles?.props.get(propId);
+			return !!mesh && !mesh.isDisposed();
+		},
 		enemySnapshots: (): Array<{ id: string; clientX: number; clientY: number; hp: number }> => {
 			if (!scene?.activeCamera || !director) return [];
 			const cam = scene.activeCamera;
