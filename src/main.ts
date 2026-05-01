@@ -142,10 +142,13 @@ function routeOverlay(state: GameState): void {
 					overlay,
 					unlocked,
 					(difficulty, lives, mode, dailyMod) => {
-						game.chooseDifficulty(difficulty, lives, mode, now(), dailyMod?.id ?? null);
-						// Always rewrite — never leak a stale daily modifier from a
-						// prior abandoned daily-challenge selection into a standard run.
+						// Set the buffer BEFORE chooseDifficulty — the state update
+						// broadcasts synchronously and the 'playing' branch of
+						// routeOverlay reads pendingDailyAnnounce to fire the narrator
+						// card. Always rewrite so an abandoned prior daily selection
+						// can't leak into a standard run.
 						pendingDailyAnnounce = mode === 'daily-challenge' ? dailyMod : null;
+						game.chooseDifficulty(difficulty, lives, mode, now(), dailyMod?.id ?? null);
 					},
 				);
 				activeOverlayDispose = () => picker.dispose();

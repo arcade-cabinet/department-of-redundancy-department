@@ -107,10 +107,13 @@ export class DifficultySelectOverlay {
 
 		// Today's daily-challenge — fixed Normal difficulty + one modifier
 		// chosen deterministically from the UTC date. Resets at midnight UTC.
-		const todayMod = selectDailyModifier();
+		// The label captures the modifier at construction; the click handler
+		// re-reads `selectDailyModifier()` so a session that crosses midnight
+		// UTC starts the run on the new day's modifier rather than yesterday's.
+		const labelMod = selectDailyModifier();
 		this.dailyButton = Button.CreateSimpleButton(
 			'diffsel-daily',
-			`★ TODAY'S CHALLENGE: ${todayMod.title}`,
+			`★ TODAY'S CHALLENGE: ${labelMod.title}`,
 		);
 		this.dailyButton.height = '64px';
 		this.dailyButton.width = '560px';
@@ -123,11 +126,11 @@ export class DifficultySelectOverlay {
 		this.dailyButton.cornerRadius = 8;
 		this.dailyButton.top = '260px';
 		this.dailyButton.onPointerUpObservable.add(() =>
-			onChoose('normal', 'three-lives', 'daily-challenge', todayMod),
+			onChoose('normal', 'three-lives', 'daily-challenge', selectDailyModifier()),
 		);
 		this.overlay.add(this.dailyButton);
 
-		this.dailyLabel = new TextBlock('diffsel-daily-tag', todayMod.tagline);
+		this.dailyLabel = new TextBlock('diffsel-daily-tag', labelMod.tagline);
 		this.dailyLabel.color = COLOR_PAPER;
 		this.dailyLabel.fontSize = 14;
 		this.dailyLabel.fontFamily = FONT_BODY;
