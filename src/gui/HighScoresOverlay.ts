@@ -2,7 +2,7 @@ import { Button } from '@babylonjs/gui/2D/controls/button';
 import { Control } from '@babylonjs/gui/2D/controls/control';
 import { Rectangle } from '@babylonjs/gui/2D/controls/rectangle';
 import { TextBlock } from '@babylonjs/gui/2D/controls/textBlock';
-import type { HighScore } from '../preferences';
+import { HIGH_SCORE_TABLE_SIZE, type HighScore } from '../preferences';
 import { COLOR_PAPER, FONT_BODY, FONT_DISPLAY } from './brand';
 import type { Overlay } from './Overlay';
 
@@ -66,7 +66,7 @@ export class HighScoresOverlay {
 		scores: readonly HighScore[],
 		onClose: () => void,
 	) {
-		const visible = scores.slice(0, 10);
+		const visible = scores.slice(0, HIGH_SCORE_TABLE_SIZE);
 		const panelHeight =
 			PANEL_HEADER_HEIGHT + ROW_HEIGHT * Math.max(visible.length, 1) + PANEL_FOOTER_HEIGHT;
 
@@ -82,14 +82,11 @@ export class HighScoresOverlay {
 			overlay.add(this.emptyLabel);
 		} else {
 			this.emptyLabel = null;
-			const rows: TextBlock[] = [];
-			for (let i = 0; i < visible.length; i++) {
-				const s = visible[i];
-				if (!s) continue;
+			const rows = visible.map((s, i) => {
 				const row = buildRow(s, i, panelHeight);
 				overlay.add(row);
-				rows.push(row);
-			}
+				return row;
+			});
 			this.rows = rows;
 		}
 

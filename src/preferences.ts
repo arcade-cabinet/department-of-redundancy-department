@@ -40,6 +40,14 @@ const KEYS = {
 
 export const HIGH_SCORE_TABLE_SIZE = 10;
 
+// Hard caps to keep a tampered Preferences value from blocking the main
+// thread on cold-load. Real payload at MAX size is ~600 bytes; 64KB is
+// generous headroom while still bounding parse cost.
+const MAX_HIGH_SCORES_BYTES = 64 * 1024;
+const MAX_HIGH_SCORES_ROWS = 1000;
+const MAX_HIGH_SCORE_VALUE = 1e12;
+const UTC_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 export async function loadSettings(): Promise<Settings> {
 	const { value } = await Preferences.get({ key: KEYS.settings });
 	if (!value) return DEFAULT_SETTINGS;
@@ -72,27 +80,36 @@ export async function saveHighScoreIfBetter(score: HighScore): Promise<boolean> 
 	return true;
 }
 
+function isValidHighScore(r: unknown): r is HighScore {
+	if (typeof r !== 'object' || r === null) return false;
+	const row = r as Record<string, unknown>;
+	return (
+		typeof row.score === 'number' &&
+		Number.isInteger(row.score) &&
+		row.score >= 0 &&
+		row.score <= MAX_HIGH_SCORE_VALUE &&
+		typeof row.clearedRun === 'boolean' &&
+		typeof row.utcDate === 'string' &&
+		UTC_DATE_RE.test(row.utcDate)
+	);
+}
+
 /**
  * Load the persisted top-N high-score table, sorted descending by score.
  * Returns an empty array on missing or corrupted storage. Always
  * normalized: clamps to HIGH_SCORE_TABLE_SIZE entries, drops malformed
- * rows.
+ * rows. Bytes/row count are capped to bound parse cost on tampered
+ * storage.
  */
 export async function loadHighScores(): Promise<readonly HighScore[]> {
 	const { value } = await Preferences.get({ key: KEYS.highScoresTop });
 	if (!value) return [];
+	if (value.length > MAX_HIGH_SCORES_BYTES) return [];
 	try {
 		const parsed = JSON.parse(value);
 		if (!Array.isArray(parsed)) return [];
-		const rows = parsed.filter(
-			(r): r is HighScore =>
-				typeof r === 'object' &&
-				r !== null &&
-				typeof r.score === 'number' &&
-				Number.isFinite(r.score) &&
-				typeof r.clearedRun === 'boolean' &&
-				typeof r.utcDate === 'string',
-		);
+		const capped = parsed.slice(0, MAX_HIGH_SCORES_ROWS);
+		const rows = capped.filter(isValidHighScore);
 		return rows
 			.slice()
 			.sort((a, b) => b.score - a.score)
@@ -102,20 +119,41 @@ export async function loadHighScores(): Promise<readonly HighScore[]> {
 	}
 }
 
+// Single-writer chain so concurrent recordHighScore calls (e.g. game-over
+// + auto-save) cannot interleave the read-modify-write and lose entries.
+let highScoreWriteChain: Promise<unknown> = Promise.resolve();
+
+function enqueueHighScoreWrite<T>(fn: () => Promise<T>): Promise<T> {
+	const next = highScoreWriteChain.then(fn, fn);
+	highScoreWriteChain = next.catch(() => undefined);
+	return next;
+}
+
+async function recordHighScoreLocked(score: HighScore): Promise<number | null> {
+	if (!isValidHighScore(score)) return null;
+	const existing = await loadHighScores();
+	// Compute rank by counting strictly-greater scores. Stable across
+	// duplicate-score ties (newest tying entry sorts after existing) and
+	// independent of object identity.
+	const greater = existing.reduce((n, e) => (e.score > score.score ? n + 1 : n), 0);
+	if (greater >= HIGH_SCORE_TABLE_SIZE) return null;
+	const merged = [...existing, score].sort((a, b) => b.score - a.score);
+	const top = merged.slice(0, HIGH_SCORE_TABLE_SIZE);
+	await Preferences.set({ key: KEYS.highScoresTop, value: JSON.stringify(top) });
+	// Update the legacy single-best key only when this score is the new #1,
+	// inline (no second RMW). Order matters: legacy key written last so a
+	// crash between writes leaves the table authoritative.
+	if (greater === 0) {
+		await Preferences.set({ key: KEYS.highScore, value: JSON.stringify(score) });
+	}
+	return greater + 1;
+}
+
 /**
  * Insert a score into the top-N table if it qualifies. Returns the rank
  * (1-indexed) the new score landed at, or null if it did not make the
- * cut. Updates the persistent best (loadHighScore) as a side effect.
+ * cut. Serialized so concurrent calls cannot drop entries.
  */
-export async function recordHighScore(score: HighScore): Promise<number | null> {
-	const existing = await loadHighScores();
-	const merged = [...existing, score].sort((a, b) => b.score - a.score);
-	const top = merged.slice(0, HIGH_SCORE_TABLE_SIZE);
-	const rank = top.indexOf(score);
-	if (rank === -1) return null;
-	await Preferences.set({ key: KEYS.highScoresTop, value: JSON.stringify(top) });
-	// Keep the legacy single-best key in sync so saveHighScoreIfBetter and
-	// the GameOver "NEW HIGH" banner remain authoritative.
-	await saveHighScoreIfBetter(score);
-	return rank + 1;
+export function recordHighScore(score: HighScore): Promise<number | null> {
+	return enqueueHighScoreWrite(() => recordHighScoreLocked(score));
 }
