@@ -34,17 +34,20 @@ interface ImportedMeshTree {
 	readonly meshes: readonly AbstractMesh[];
 	readonly particleSystems?: readonly { dispose(): void }[];
 	readonly skeletons?: readonly { dispose(): void }[];
+	readonly animationGroups?: readonly { dispose(): void }[];
 }
 
 /**
  * Imported nodes arrive as a tree of multiple top-level meshes, plus
- * particle systems and skeletons that need their own dispose calls to
- * release GPU buffers — `meshes[0].dispose()` alone leaks the rest.
+ * particle systems, skeletons, and animation groups — each needs its
+ * own dispose call. `meshes[0].dispose()` alone leaks the rest, and
+ * AnimationGroups in particular hold onto target nodes and observers.
  */
 export function disposeImportResult(result: ImportedMeshTree): void {
 	for (const m of result.meshes) m.dispose();
 	for (const ps of result.particleSystems ?? []) ps.dispose();
 	for (const sk of result.skeletons ?? []) sk.dispose();
+	for (const ag of result.animationGroups ?? []) ag.dispose();
 }
 
 /**
@@ -192,10 +195,12 @@ export function createEncounterListener(host: EncounterListenerHost): EncounterL
 			host.enemyLastHitTarget.set(enemyId, target);
 		},
 		onEnemyKill(enemyId) {
-			host.disposeEnemy(enemyId);
+			// Read the last-hit-target BEFORE dispose — `disposeEnemy` clears
+			// the map entry now (C.5 fix) so reading after would always get
+			// the 'body' fallback and silently downgrade head/justice scoring.
 			const target = host.enemyLastHitTarget.get(enemyId) ?? 'body';
+			host.disposeEnemy(enemyId);
 			host.game.hit(target);
-			host.enemyLastHitTarget.delete(enemyId);
 			// Boss kills drop quarters per docs/spec/06-economy.md.
 			const bossId = bossIdForEnemy(enemyId);
 			if (bossId !== null) {
@@ -209,7 +214,6 @@ export function createEncounterListener(host: EncounterListenerHost): EncounterL
 		},
 		onEnemyCease(enemyId) {
 			host.disposeEnemy(enemyId);
-			host.enemyLastHitTarget.delete(enemyId);
 		},
 		onFireEvent(_enemyId, event: FireEvent) {
 			void event;
