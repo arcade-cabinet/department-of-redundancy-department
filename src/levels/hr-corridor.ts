@@ -293,7 +293,13 @@ const cues: Cue[] = [
 	},
 
 	// Position 1 — frosted-glass silhouette read. Three doors burst over 14s;
-	// E1 is left intentionally closed (silhouette-only passive civilian).
+	// E1 stays closed but a passive civilian sits behind the frosted glass — the
+	// silhouette is the "do not shoot through" discipline test.
+	{
+		id: 'p1-civ-passive',
+		trigger: { kind: 'on-arrive', railNodeId: 'pos-1' },
+		action: { verb: 'civilian-spawn', railId: 'rail-civ-frosted-E1-passive' },
+	},
 	{
 		id: 'p1-door-W1',
 		trigger: { kind: 'on-arrive', railNodeId: 'pos-1' },
@@ -422,7 +428,7 @@ const cues: Cue[] = [
 	{
 		id: 'p3-stinger',
 		trigger: { kind: 'on-arrive', railNodeId: 'pos-3-phelps' },
-		action: { verb: 'audio-stinger', audio: 'stinger/stinger-boss-cleared.mp3' },
+		action: { verb: 'audio-stinger', audio: 'stinger/stinger-bright.mp3' },
 	},
 	{
 		id: 'p3-door',
@@ -446,9 +452,11 @@ const cues: Cue[] = [
 		trigger: { kind: 'on-clear', railNodeId: 'pos-3-phelps' },
 		action: { verb: 'level-event', event: 'lights-restored' },
 	},
+	// Transition fires only after the Phelps fight clears, so higher
+	// difficulties (where the boss takes longer) don't get cut off.
 	{
 		id: 'transition',
-		trigger: { kind: 'wall-clock', atMs: 75000 },
+		trigger: { kind: 'on-clear', railNodeId: 'pos-3-phelps' },
 		action: { verb: 'transition', toLevelId: 'stairway-C' },
 	},
 ];
@@ -502,6 +510,15 @@ export const hrCorridorLevel: Level = {
 		},
 	],
 	civilianRails: [
+		// Behind frosted-glass door E1 at Pos 1 — silhouette-only passive
+		// civilian. The discipline test: don't shoot through frosted glass at
+		// a non-aggressive silhouette pose.
+		{
+			id: 'rail-civ-frosted-E1-passive',
+			path: [new Vector3(3.5, 0, 6), new Vector3(3.2, 0, 6)],
+			speed: 0.05,
+			archetype: 'intern',
+		},
 		{
 			id: 'rail-civ-hostage-1',
 			path: [new Vector3(3.5, 0, 16), new Vector3(3, 0, 16)],
