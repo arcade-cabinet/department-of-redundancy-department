@@ -1,3 +1,4 @@
+import { executiveLevel } from './executive';
 import { hrCorridorLevel } from './hr-corridor';
 import { lobbyLevel } from './lobby';
 import { openPlanLevel } from './open-plan';
@@ -22,6 +23,7 @@ export const LEVELS: Readonly<Partial<Record<LevelId, Level>>> = {
 	'stairway-B': stairwayBLevel,
 	'hr-corridor': hrCorridorLevel,
 	'stairway-C': stairwayCLevel,
+	executive: executiveLevel,
 };
 
 export function getLevel(id: LevelId): Level {
