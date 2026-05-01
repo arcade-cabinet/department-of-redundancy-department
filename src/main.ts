@@ -10,6 +10,8 @@ import '@babylonjs/loaders/glTF';
 
 import { AudioBus } from './audio/AudioBus';
 import {
+	BOSSES,
+	bossIdForEnemy,
 	type Cue,
 	type CueAction,
 	EncounterDirector,
@@ -20,10 +22,19 @@ import {
 import { now } from './engine/clock';
 import { rand } from './engine/rng';
 import { Game } from './game/Game';
-import { activeModifierFlags, type GameState } from './game/GameState';
+import type { GameState } from './game/GameState';
+import {
+	awardQuarters,
+	getBalance,
+	grantFriendBailout,
+	initQuarters,
+	rollBossDrop,
+	spendQuarter,
+	subscribe as subscribeQuarters,
+} from './game/quarters';
 import {
 	ContinueOverlay,
-	DifficultySelectOverlay,
+	FriendModalOverlay,
 	GameOverOverlay,
 	HudOverlay,
 	InsertCoinOverlay,
@@ -38,7 +49,6 @@ import type { Door, LevelId, Light, Shutter } from './levels/types';
 import {
 	loadHighScore,
 	loadSettings,
-	loadUnlockedDifficulties,
 	type Settings,
 	saveHighScoreIfBetter,
 	saveSettings,
@@ -48,8 +58,11 @@ import {
  * src/main.ts — runtime boot.
  *
  * Owns: Babylon Engine, Scene, current Level, EncounterDirector, GUI overlays,
- * Game state machine. Ticks once per frame. Listens to game state changes to
- * swap overlays, handles input, dispatches director events to the world.
+ * Game state machine, quarter-balance subscription. Ticks once per frame.
+ *
+ * Per the canonical-run pivot: INSERT COIN → playing direct (no picker, no
+ * daily, no modifier toggles). Continues consume 1 quarter from the
+ * persistent balance. Zero balance + INSERT COIN fires the friend modal.
  */
 
 const canvas = document.getElementById('game') as HTMLCanvasElement | null;
@@ -78,6 +91,7 @@ let audioBus: AudioBus | null = null;
 const enemySpawnHp = new Map<string, number>();
 const enemyLastHitTarget = new Map<string, 'head' | 'body' | 'justice'>();
 const enemyMeshes = new Map<string, AbstractMesh>();
+const healthKitMeshes = new Map<string, AbstractMesh>();
 
 const game = new Game();
 const overlay = new Overlay('dord-ui');
@@ -86,21 +100,20 @@ const reticle = new Reticle(overlay);
 let activeOverlayDispose: (() => void) | null = null;
 let hud: HudOverlay | null = null;
 let narrator: NarratorOverlay | null = null;
-// Daily-challenge modifier picked at difficulty-select time; consumed on the
-// transition to 'playing' so the narrator flashes the modifier card on the
-// frame the run begins.
-let pendingDailyAnnounce: import('./game/dailyChallenge').DailyModifierDef | null = null;
-// Bumped on every routeOverlay call so stale async overlay constructors no-op.
-let overlayRouteToken = 0;
 let lastTickMs = performance.now();
 
 const settings: Settings = await loadSettings();
+await initQuarters();
+
+// Keep the HUD's quarter readout in sync with the persistent balance.
+subscribeQuarters((balance) => {
+	hud?.setQuarters(balance);
+});
 
 window.addEventListener('resize', () => engine.resize());
 document.addEventListener('visibilitychange', () => {
 	// Pause/resume when tab loses/gains focus. No Capacitor app lifecycle.
 	if (document.hidden) {
-		// Pause via stopping render loop is the simplest approach.
 		engine.stopRenderLoop();
 	} else {
 		engine.runRenderLoop(tick);
@@ -112,7 +125,6 @@ document.addEventListener('visibilitychange', () => {
 game.subscribe((state) => routeOverlay(state));
 
 function routeOverlay(state: GameState): void {
-	const token = ++overlayRouteToken;
 	if (activeOverlayDispose) {
 		activeOverlayDispose();
 		activeOverlayDispose = null;
@@ -120,6 +132,7 @@ function routeOverlay(state: GameState): void {
 	const wantsHud = state.phase === 'playing' || state.phase === 'continue-prompt';
 	if (wantsHud && !hud) {
 		hud = new HudOverlay(overlay);
+		hud.setQuarters(getBalance());
 		narrator = new NarratorOverlay(overlay);
 	} else if (!wantsHud && hud) {
 		hud.dispose();
@@ -130,45 +143,26 @@ function routeOverlay(state: GameState): void {
 	hud?.render(state);
 	switch (state.phase) {
 		case 'insert-coin': {
-			const coin = new InsertCoinOverlay(overlay, () => game.insertCoin());
+			const coin = new InsertCoinOverlay(overlay, () => handleInsertCoin());
 			activeOverlayDispose = () => coin.dispose();
 			break;
 		}
-		case 'difficulty-select': {
-			void loadUnlockedDifficulties().then((unlocked) => {
-				if (token !== overlayRouteToken) return;
-				if (game.getState().phase !== 'difficulty-select') return;
-				const picker = new DifficultySelectOverlay(
-					overlay,
-					unlocked,
-					(difficulty, lives, mode, dailyMod) => {
-						// Set the buffer BEFORE chooseDifficulty — the state update
-						// broadcasts synchronously and the 'playing' branch of
-						// routeOverlay reads pendingDailyAnnounce to fire the narrator
-						// card. Always rewrite so an abandoned prior daily selection
-						// can't leak into a standard run.
-						pendingDailyAnnounce = mode === 'daily-challenge' ? dailyMod : null;
-						game.chooseDifficulty(difficulty, lives, mode, now(), dailyMod?.id ?? null);
-					},
-				);
-				activeOverlayDispose = () => picker.dispose();
-			});
-			break;
-		}
 		case 'playing': {
-			// On daily-challenge entry, flash the modifier card via the narrator
-			// overlay so the player sees what's twisting today's run.
-			if (pendingDailyAnnounce && narrator) {
-				const mod = pendingDailyAnnounce;
-				narrator.show(`★ ${mod.title}`, 3000);
-				pendingDailyAnnounce = null;
-			}
 			break;
 		}
 		case 'continue-prompt': {
+			const balance = getBalance();
+			if (balance <= 0) {
+				// Out of quarters → run wipes immediately. No continue offered.
+				game.endRun(true);
+				break;
+			}
 			const cont = new ContinueOverlay(
 				overlay,
-				() => game.continueRun(),
+				balance,
+				() => {
+					void handleContinue();
+				},
 				() => game.endRun(true),
 			);
 			activeOverlayDispose = () => cont.dispose();
@@ -198,14 +192,59 @@ function routeOverlay(state: GameState): void {
 	}
 }
 
+// Set when the friend modal is on screen so a rapid second tap on the
+// title-screen INSERT COIN button cannot stack a second modal (which would
+// resolve into a double bailout). Always cleared in the modal dismiss.
+let friendModalOpen = false;
+
+function handleInsertCoin(): void {
+	if (getBalance() > 0) {
+		game.insertCoin(now());
+		return;
+	}
+	if (friendModalOpen) return;
+	friendModalOpen = true;
+	// Zero balance → friend modal, then auto-start the run. Caller is
+	// always in 'insert-coin' phase; dispose the InsertCoinOverlay so the
+	// modal sits alone on the screen.
+	if (activeOverlayDispose) {
+		activeOverlayDispose();
+		activeOverlayDispose = null;
+	}
+	const modal = new FriendModalOverlay(overlay, () => {
+		modal.dispose();
+		activeOverlayDispose = null;
+		friendModalOpen = false;
+		grantFriendBailout()
+			.then(() => game.insertCoin(now()))
+			.catch((err) => {
+				console.error('[economy] friend bailout failed', err);
+				// Still let the player play — re-route to insert-coin so they
+				// can tap again or see the modal again with a fresh attempt.
+				game.returnToTitle();
+			});
+	});
+	activeOverlayDispose = () => {
+		modal.dispose();
+		friendModalOpen = false;
+	};
+}
+
+async function handleContinue(): Promise<void> {
+	const ok = await spendQuarter();
+	if (!ok) {
+		game.endRun(true);
+		return;
+	}
+	game.continueRun();
+}
+
 async function emitGameOver(state: GameState, score: number, cleared: boolean): Promise<void> {
 	const run = state.run;
 	if (!run) return;
 	const utcDate = new Date().toISOString().slice(0, 10);
 	const newHighScore = await saveHighScoreIfBetter({
 		score,
-		difficulty: run.difficulty,
-		lives: run.lives,
 		clearedRun: cleared,
 		utcDate,
 	});
@@ -220,13 +259,15 @@ async function emitGameOver(state: GameState, score: number, cleared: boolean): 
 		clearedRun: cleared,
 	};
 	const overlayInstance = new GameOverOverlay(overlay, summary, () => {
-		game.insertCoin();
+		// "Another coin?" — return to insert-coin, then handleInsertCoin chooses
+		// between free-start and friend-modal based on the persisted balance.
+		game.returnToTitle();
 	});
 	activeOverlayDispose = () => overlayInstance.dispose(overlay);
 	void loadHighScore(); // pre-warm cache for next coin
 }
 
-// ── Level construction (minimal v1 — no PBR materials, no GLB props yet) ────
+// ── Level construction ──────────────────────────────────────────────────────
 
 function constructLevel(levelId: LevelId): void {
 	if (scene) {
@@ -241,6 +282,7 @@ function constructLevel(levelId: LevelId): void {
 		enemySpawnHp.clear();
 		enemyLastHitTarget.clear();
 		enemyMeshes.clear();
+		healthKitMeshes.clear();
 		activeCivilians.clear();
 		civilianSeq = 0;
 		activePropAnims.clear();
@@ -261,7 +303,13 @@ function constructLevel(levelId: LevelId): void {
 	const builtScene = scene;
 	const builtLevel = currentLevel;
 	void buildLevel(builtScene, builtLevel).then((handles) => {
-		if (scene === builtScene) levelHandles = handles;
+		if (scene === builtScene) {
+			levelHandles = handles;
+			// Capture health-kit meshes for pickAt + collection bookkeeping.
+			for (const [id, mesh] of handles.healthKits) {
+				healthKitMeshes.set(id, mesh);
+			}
+		}
 	});
 
 	const listener: EncounterListener = {
@@ -271,8 +319,6 @@ function constructLevel(levelId: LevelId): void {
 		},
 		onEnemySpawn(enemy: Enemy) {
 			if (!scene) return;
-			// Placeholder enemy visual — a capsule, taller than wide so head vs body
-			// raycasts have a meaningful split. Replaced when archetype GLBs are wired.
 			const mesh = MeshBuilder.CreateCapsule(
 				`enemy-${enemy.id}`,
 				{ radius: CAPSULE_RADIUS, height: CAPSULE_HEIGHT },
@@ -298,6 +344,16 @@ function constructLevel(levelId: LevelId): void {
 			const target = enemyLastHitTarget.get(enemyId) ?? 'body';
 			game.hit(target);
 			enemyLastHitTarget.delete(enemyId);
+			// Boss kills drop quarters per docs/spec/06-economy.md.
+			const bossId = bossIdForEnemy(enemyId);
+			if (bossId !== null) {
+				const drop = rollBossDrop(BOSSES[bossId].quarterDrop);
+				if (drop > 0) {
+					awardQuarters(drop).catch((err) => {
+						console.error(`[economy] failed to award boss drop for ${bossId}`, err);
+					});
+				}
+			}
 		},
 		onEnemyCease(enemyId) {
 			disposeEnemy(enemyId);
@@ -319,7 +375,9 @@ function constructLevel(levelId: LevelId): void {
 		cameraRail: currentLevel.cameraRail,
 		cues: [...currentLevel.cues],
 		spawnRails: [...currentLevel.spawnRails],
-		difficulty: settings.difficulty,
+		// Director is locked to the canonical Normal column per
+		// docs/spec/03-difficulty-and-modifiers.md (post-pivot).
+		difficulty: 'normal',
 		listener,
 	});
 }
@@ -337,7 +395,6 @@ function handleCueAction(action: CueAction): void {
 			const light = levelHandles?.lights.get(action.lightId);
 			if (!light) return;
 			if (action.tween.kind === 'snap') light.intensity = action.tween.intensity;
-			// fade/oscillate handled in a later commit when we wire animations
 			return;
 		}
 		case 'civilian-spawn': {
@@ -369,9 +426,6 @@ function handleCueAction(action: CueAction): void {
 		case 'prop-anim':
 			handlePropAnimCue(action.propId, action.animId);
 			return;
-		// boss-spawn / boss-phase / enemy-spawn are handled by the director
-		// itself (see EncounterDirector.fireCue) — they don't reach this
-		// listener-side switch.
 		default:
 			return;
 	}
@@ -412,13 +466,9 @@ function handleLevelEvent(
 		}
 		return;
 	}
-	// fire-alarm + elevator-ding are pure audio cues — emitted via separate
-	// audio-stinger cues in the level data. No render side-effect here.
 }
 
 // ── Camera shake ─────────────────────────────────────────────────────────────
-// Decaying random per-axis offset added to the camera's authored rail position
-// each tick. Owned by main.ts so cues from any director can drive it.
 
 interface CameraShake {
 	readonly intensity: number;
@@ -426,10 +476,6 @@ interface CameraShake {
 	readonly endMs: number;
 }
 let cameraShake: CameraShake | null = null;
-// Previously-applied shake offset. Undone at the start of each apply so the
-// camera's authoritative rail position is restored before adding the new
-// offset — guards against frames where the director did not write a fresh
-// onCameraUpdate (e.g., director.isFinished).
 let lastShakeDx = 0;
 let lastShakeDy = 0;
 
@@ -467,10 +513,6 @@ function disposeEnemy(enemyId: string): void {
 }
 
 // ── Prop animations ──────────────────────────────────────────────────────────
-// Three authored animIds drive prop-anim cues across lobby + open-plan:
-// drop (clipboard falls to floor), roll-in (printer-dolly slides in along
-// prop yaw), shatter (mug disappears). Each is a per-frame tween over a fixed
-// duration. Stored in a Map and ticked alongside civilians.
 
 interface ActivePropAnim {
 	readonly mesh: AbstractMesh;
@@ -492,9 +534,6 @@ const activePropAnims = new Map<string, ActivePropAnim>();
 function handlePropAnimCue(propId: string, animId: string): void {
 	const mesh = levelHandles?.props.get(propId);
 	if (!mesh || mesh.isDisposed()) return;
-	// Re-entrancy guard: if a prop is mid-animation, drop the second cue. The
-	// authored prop position is captured at construction time; firing a new
-	// roll-in while the mesh is offset would corrupt the destination capture.
 	if (activePropAnims.has(propId)) return;
 	if (animId === 'shatter') {
 		mesh.dispose();
@@ -537,7 +576,6 @@ function handlePropAnimCue(propId: string, animId: string): void {
 			fromRotZ: mesh.rotation.z,
 			toRotZ: mesh.rotation.z,
 		});
-		// Snap to start position so the tween rolls in from offscreen.
 		mesh.position.x = destX - Math.sin(yaw) * rollDist;
 		mesh.position.z = destZ - Math.cos(yaw) * rollDist;
 		return;
@@ -560,15 +598,13 @@ function tickPropAnims(): void {
 }
 
 // ── Civilians ────────────────────────────────────────────────────────────────
-// Civilians are placeholder cyan capsules that lerp along their authored path.
-// They're not director-tracked — main.ts owns their lifecycle and ticks them.
 
 interface ActiveCivilian {
 	readonly id: string;
 	readonly path: readonly Vector3[];
 	readonly speed: number;
 	readonly mesh: AbstractMesh;
-	t: number; // arc-length traveled, meters
+	t: number;
 }
 
 const activeCivilians = new Map<string, ActiveCivilian>();
@@ -627,7 +663,7 @@ function sampleCivilianPath(civ: ActiveCivilian): { position: Vector3; finished:
 
 function tick(): void {
 	const tickT = performance.now();
-	const dtMs = Math.min(64, tickT - lastTickMs); // cap at 64ms (16fps floor) to avoid huge dt
+	const dtMs = Math.min(64, tickT - lastTickMs);
 	lastTickMs = tickT;
 
 	const state = game.getState();
@@ -645,9 +681,10 @@ function tick(): void {
 // ── Hit-test: reticle hover + fire ───────────────────────────────────────────
 
 interface PickResult {
-	readonly kind: 'enemy' | 'civilian' | 'air';
+	readonly kind: 'enemy' | 'civilian' | 'health-kit' | 'air';
 	readonly enemyId?: string;
 	readonly civilianId?: string;
+	readonly healthKitId?: string;
 	readonly target?: 'head' | 'body';
 }
 
@@ -656,11 +693,10 @@ function pickAt(xPx: number, yPx: number): PickResult {
 	const pick = scene.pick(xPx, yPx);
 	if (!pick?.hit || !pick.pickedMesh) return { kind: 'air' };
 	const meta = pick.pickedMesh.metadata as
-		| { enemyId?: string; civilianId?: string }
+		| { enemyId?: string; civilianId?: string; healthKitId?: string }
 		| null
 		| undefined;
 	if (meta?.enemyId) {
-		// Headshot if the picked point is in the top quarter of the capsule.
 		const meshY = pick.pickedMesh.position.y;
 		const hitY = pick.pickedPoint?.y ?? meshY;
 		const fromTop = meshY + CAPSULE_HALF_HEIGHT - hitY;
@@ -670,21 +706,20 @@ function pickAt(xPx: number, yPx: number): PickResult {
 	if (meta?.civilianId) {
 		return { kind: 'civilian', civilianId: meta.civilianId };
 	}
+	if (meta?.healthKitId) {
+		return { kind: 'health-kit', healthKitId: meta.healthKitId };
+	}
 	return { kind: 'air' };
 }
 
 function reticleColorFor(pick: PickResult): 'green' | 'orange' | 'red' | 'blue' {
 	if (pick.kind === 'civilian') return 'blue';
+	if (pick.kind === 'health-kit') return 'green';
 	if (pick.kind !== 'enemy' || !pick.enemyId || !director) return 'green';
 	const enemy = director.getEnemy(pick.enemyId);
 	const spawn = enemySpawnHp.get(pick.enemyId);
 	if (!enemy || !spawn || spawn <= 0) return 'green';
 	const frac = enemy.hp / spawn;
-	// Reticle gradient maps to "how dangerous is this thing right now" — full
-	// HP is red (commit), mid is orange, low is green-ish-armed. Spec says
-	// green→orange→red as the windup advances. For a hover baseline we treat
-	// the highest-HP enemy as the most-active threat: red when fresh, orange
-	// at half, green-armed near death.
 	if (frac > 0.66) return 'red';
 	if (frac > 0.33) return 'orange';
 	return 'green';
@@ -709,37 +744,34 @@ canvas.addEventListener('pointermove', (e) => {
 });
 canvas.addEventListener('pointerdown', (e) => {
 	if (game.getState().phase !== 'playing' || !director) return;
-	// Pull the trigger first — gates target resolution on having a real shot.
 	const fired = game.tryFire(now());
-	if (!fired) return; // reloading or dry-pulled (auto-reload triggered)
+	if (!fired) return;
 	const pick = pickAt(e.clientX, e.clientY);
 	if (pick.kind === 'enemy' && pick.enemyId && pick.target) {
-		const flags = activeModifierFlags(game.getState());
-		// Headshots-only: bullets at the body register a hit visually (the
-		// trigger pulls, the round leaves the barrel) but do no damage and
-		// don't count toward score. Headshots and justice-shots still land.
-		if (!(flags.headshotsOnly && pick.target === 'body')) {
-			director.hitEnemy(pick.enemyId, pick.target);
-		}
+		director.hitEnemy(pick.enemyId, pick.target);
 	} else if (pick.kind === 'civilian' && pick.civilianId) {
 		game.hitCivilian();
 		const civ = activeCivilians.get(pick.civilianId);
 		civ?.mesh.dispose();
 		activeCivilians.delete(pick.civilianId);
+	} else if (pick.kind === 'health-kit' && pick.healthKitId) {
+		const kit = healthKitMeshes.get(pick.healthKitId);
+		if (kit) {
+			const hp = (kit.metadata as { healthKitHp?: number } | null)?.healthKitHp;
+			game.collectHealthKit(hp);
+			kit.dispose();
+			healthKitMeshes.delete(pick.healthKitId);
+			levelHandles?.healthKits.delete(pick.healthKitId);
+		}
 	}
-	// Any actual shot — at an enemy or a civilian — wakes pre-aggro enemies.
-	if (pick.kind !== 'air') director.emitAlert();
+	if (pick.kind !== 'air' && pick.kind !== 'health-kit') director.emitAlert();
 });
 
-// Canvas needs tabindex to receive focus + keydown directly. Capture-phase
-// listener so e.preventDefault() suppresses Tab focus-cycling before the
-// browser processes it (window-level handlers are too late on Firefox).
 canvas.setAttribute('tabindex', '0');
 canvas.addEventListener(
 	'keydown',
 	(e) => {
 		if (game.getState().phase !== 'playing') return;
-		// Ignore key-repeat: held keys should not spam reload or oscillate weapons.
 		if (e.repeat) {
 			if (e.key === 'Tab') e.preventDefault();
 			return;
@@ -756,7 +788,6 @@ canvas.addEventListener(
 	},
 	{ capture: true },
 );
-// Focus the canvas on first pointer interaction so keys reach it.
 canvas.addEventListener('pointerdown', () => canvas.focus(), { passive: true });
 
 engine.runRenderLoop(tick);

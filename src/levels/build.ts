@@ -43,6 +43,7 @@ export interface LevelHandles {
 	readonly props: Map<string, AbstractMesh>;
 	readonly shutters: Map<string, AbstractMesh>;
 	readonly whiteboards: Map<string, AbstractMesh>;
+	readonly healthKits: Map<string, AbstractMesh>;
 }
 
 const PBR_BASE = '/assets/textures';
@@ -79,7 +80,7 @@ function retroOverlayMaterial(
 	return mat;
 }
 
-function buildWall(scene: Scene, wall: Wall): Mesh {
+function buildWall(scene: Scene, wall: Wall, handles: LevelHandles): Mesh {
 	const mesh = MeshBuilder.CreatePlane(
 		`wall-${wall.id}`,
 		{ width: wall.width, height: wall.height },
@@ -105,7 +106,40 @@ function buildWall(scene: Scene, wall: Wall): Mesh {
 			`mat-wall-overlay-${wall.id}`,
 		);
 	}
+	if (wall.healthKit) {
+		buildHealthKit(scene, wall.healthKit, mesh, handles);
+	}
 	return mesh;
+}
+
+const HEALTH_KIT_BOX_SIZE = 0.45;
+const HEALTH_KIT_BOX_DEPTH = 0.18;
+
+function buildHealthKit(
+	scene: Scene,
+	kit: import('./types').HealthKitMount,
+	wallMesh: Mesh,
+	handles: LevelHandles,
+): void {
+	const box = MeshBuilder.CreateBox(
+		`health-kit-${kit.id}`,
+		{ width: HEALTH_KIT_BOX_SIZE, height: HEALTH_KIT_BOX_SIZE, depth: HEALTH_KIT_BOX_DEPTH },
+		scene,
+	);
+	const mat = new StandardMaterial(`mat-health-kit-${kit.id}`, scene);
+	mat.diffuseColor = new Color3(1, 1, 1);
+	mat.emissiveColor = new Color3(0.9, 0.05, 0.05);
+	mat.specularColor = new Color3(0, 0, 0);
+	box.material = mat;
+	box.parent = wallMesh;
+	const [hOff = 0, vOff = 0] = kit.offset ?? [0, 0];
+	// Wall plane is in local XY (X = width, Y = height).
+	box.position.x = hOff;
+	box.position.y = vOff;
+	// Bias slightly off the wall in the wall's local -Z (the plane normal).
+	box.position.z = -HEALTH_KIT_BOX_DEPTH / 2 - 0.005;
+	box.metadata = { healthKitId: kit.id, healthKitHp: kit.hp };
+	handles.healthKits.set(kit.id, box);
 }
 
 function buildFloor(scene: Scene, floor: Floor): Mesh {
@@ -337,6 +371,7 @@ export async function buildLevel(scene: Scene, level: Level): Promise<LevelHandl
 		props: new Map(),
 		shutters: new Map(),
 		whiteboards: new Map(),
+		healthKits: new Map(),
 	};
 	const propPromises: Promise<void>[] = [];
 	for (const p of level.primitives) {
@@ -354,7 +389,7 @@ function dispatchPrimitive(
 ): void {
 	switch (p.kind) {
 		case 'wall':
-			buildWall(scene, p);
+			buildWall(scene, p, handles);
 			break;
 		case 'floor':
 			buildFloor(scene, p);

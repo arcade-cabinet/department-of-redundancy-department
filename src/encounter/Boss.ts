@@ -27,6 +27,10 @@ export interface BossDefinition {
 	readonly hpMultiplier: number;
 	readonly railIdConvention: string;
 	readonly fireProgramByPhase: Readonly<Record<number, FirePatternId>>;
+	// [min, max] inclusive — see docs/spec/06-economy.md.
+	// Mini-bosses drop 1–2 quarters on phase clear. The Reaper drops 5.
+	// Resolved via quarters.rollBossDrop(range) on enemy-kill.
+	readonly quarterDrop: readonly [number, number];
 }
 
 export const BOSSES: Readonly<Record<BossId, BossDefinition>> = {
@@ -37,6 +41,7 @@ export const BOSSES: Readonly<Record<BossId, BossDefinition>> = {
 		fireProgramByPhase: {
 			1: 'garrison-burst',
 		},
+		quarterDrop: [1, 2],
 	},
 	whitcomb: {
 		archetype: 'middle-manager',
@@ -45,6 +50,7 @@ export const BOSSES: Readonly<Record<BossId, BossDefinition>> = {
 		fireProgramByPhase: {
 			1: 'whitcomb-throw',
 		},
+		quarterDrop: [1, 2],
 	},
 	phelps: {
 		archetype: 'middle-manager',
@@ -54,6 +60,7 @@ export const BOSSES: Readonly<Record<BossId, BossDefinition>> = {
 			1: 'phelps-aim',
 			2: 'phelps-snipe',
 		},
+		quarterDrop: [1, 2],
 	},
 	crawford: {
 		archetype: 'swat',
@@ -63,6 +70,7 @@ export const BOSSES: Readonly<Record<BossId, BossDefinition>> = {
 			1: 'crawford-suppress',
 			2: 'crawford-charge',
 		},
+		quarterDrop: [1, 2],
 	},
 	reaper: {
 		archetype: 'reaper',
@@ -73,8 +81,19 @@ export const BOSSES: Readonly<Record<BossId, BossDefinition>> = {
 			2: 'reaper-volley',
 			3: 'reaper-rush',
 		},
+		quarterDrop: [5, 5],
 	},
 };
+
+/**
+ * Map an enemy id back to its BossId, if any. Returns null for non-boss
+ * enemies. Used by the boss-kill hook to look up the quarter drop range.
+ */
+export function bossIdForEnemy(enemyId: string): BossId | null {
+	if (!enemyId.startsWith('boss-')) return null;
+	const tail = enemyId.slice('boss-'.length);
+	return tail in BOSSES ? (tail as BossId) : null;
+}
 
 export function bossEnemyId(bossId: BossId): string {
 	return `boss-${bossId}`;
