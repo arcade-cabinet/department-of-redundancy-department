@@ -587,6 +587,10 @@ function constructLevel(levelId: LevelId): void {
 			if (IS_DEV && (globalThis as { __dordGod?: boolean }).__dordGod) return;
 			game.takeDamage(damage);
 		},
+		// Route SFX through the live `audioBus` let — captured by closure so
+		// listener never holds a stale reference across level transitions
+		// (audioBus is reconstructed per level).
+		playSfx: (audioFile, volume) => audioBus?.playStinger(audioFile, volume),
 	});
 
 	director = new EncounterDirector({
@@ -685,7 +689,11 @@ function handleLevelEvent(
 // lobby's scripted opener never played for the player.
 function handleFireAlarm(): void {
 	if (!levelHandles || !currentLevel) return;
-	audioBus?.startAmbience('fire-alarm-klaxon', 'sfx/klaxon-loop.ogg', 0.6, true);
+	// Klaxon loop substitute — the dedicated klaxon sample isn't in the
+	// curated PixelLoops library so we use the tense ambience drone at
+	// elevated volume. Distinguishable from the regular threat-tier
+	// ambience playing at lower volume on `ambience-tense-drone`.
+	audioBus?.startAmbience('fire-alarm-klaxon', 'ambience/ambience-tense-drone.ogg', 0.85, true);
 	runtime.fireAlarm.start(levelHandles);
 	openDoorsByImpl(levelHandles, currentLevel, (door) => door.spawnRailId != null);
 }
@@ -693,7 +701,10 @@ function handleFireAlarm(): void {
 // Lobby exit + HR-corridor exit set piece — stinger + open the lift door.
 function handleElevatorDing(): void {
 	if (!levelHandles || !currentLevel) return;
-	audioBus?.playStinger('stingers/elevator-ding.ogg', 0.7);
+	// Elevator-ding substitute — the curated library has no dedicated
+	// 'ding' sample; the floor-cleared stinger reads as a bright affirmative
+	// chime which fits the doors-opening beat.
+	audioBus?.playStinger('stinger/stinger-floor-cleared.mp3', 0.7);
 	openDoorsByImpl(levelHandles, currentLevel, (door) => door.family === 'lift');
 }
 
@@ -780,6 +791,10 @@ canvas.addEventListener('pointerdown', (e) => {
 	if (game.getState().phase !== 'playing' || !director) return;
 	const fired = game.tryFire(now());
 	if (!fired) return;
+	// Player-fire stinger fires on every successful trigger pull (whether or
+	// not it lands). Generated synth pop in `sfx/player-fire.wav` — see
+	// `scripts/generate-player-fire-sfx.mjs`.
+	audioBus?.playStinger('sfx/player-fire.wav', 0.6);
 	const pick = pickAt(e.clientX, e.clientY);
 	// Adaptive difficulty: enemy hits AND deliberate health-kit pickups
 	// preserve the hitless-kill streak — both are intentional, useful trigger
@@ -792,6 +807,10 @@ canvas.addEventListener('pointerdown', (e) => {
 		director.hitEnemy(pick.enemyId, pick.target);
 	} else if (pick.kind === 'civilian' && pick.civilianId) {
 		game.hitCivilian();
+		// Civilian-hit stinger — distinguishable body-impact so the player
+		// hears the −500 score event happen even when the HUD is not in
+		// view. Pairs with the health-bar damage flash.
+		audioBus?.playStinger('impact/impact-body-02.ogg', 0.9);
 		const civ = runtime.civilians.getById(pick.civilianId);
 		civ?.mesh.dispose();
 		runtime.civilians.deleteById(pick.civilianId);
@@ -818,12 +837,17 @@ canvas.addEventListener(
 			return;
 		}
 		if (e.key === 'r' || e.key === 'R') {
-			game.reload(now());
+			const reloading = game.reload(now());
+			// Only fire the reload stinger if the call actually started a new
+			// reload — `game.reload` is a no-op if mag is full or already
+			// reloading. Without this gate, holding R would spam the SFX.
+			if (reloading) audioBus?.playStinger('inventory/weapon-equip.ogg', 0.7);
 			e.preventDefault();
 			return;
 		}
 		if (e.key === 'Tab') {
-			game.swapWeapon();
+			const swapped = game.swapWeapon();
+			if (swapped) audioBus?.playStinger('inventory/weapon-unequip.ogg', 0.7);
 			e.preventDefault();
 		}
 	},
