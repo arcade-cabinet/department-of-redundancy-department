@@ -102,6 +102,27 @@ const primitives: Primitive[] = [
 		height: 9,
 		pbr: 'drywall',
 	},
+	// End-cap walls so the shaft reads as enclosed. yaw values picked so
+	// each wall's front face points INWARD toward the shaft interior
+	// (camera always inside).
+	{
+		id: 'wall-shaft-bottom-end',
+		kind: 'wall',
+		origin: new Vector3(0, 0, -2),
+		yaw: Math.PI,
+		width: 6,
+		height: 9,
+		pbr: 'drywall',
+	},
+	{
+		id: 'wall-shaft-top-end',
+		kind: 'wall',
+		origin: new Vector3(0, 0, 12),
+		yaw: 0,
+		width: 6,
+		height: 9,
+		pbr: 'drywall',
+	},
 
 	// Doors.
 	{
@@ -186,6 +207,25 @@ const primitives: Primitive[] = [
 		color: [1.0, 1.0, 0.95],
 		intensity: 0,
 		range: 4,
+	},
+	{
+		id: 'ceiling-shaft',
+		kind: 'ceiling',
+		origin: new Vector3(0, 0, 5),
+		yaw: 0,
+		width: 6,
+		depth: 14,
+		pbr: 'ceiling-tile',
+		height: 9,
+	},
+	{
+		id: 'light-fill',
+		kind: 'light',
+		origin: new Vector3(0, 6, 5),
+		yaw: 0,
+		light: 'hemispheric',
+		color: [0.95, 0.95, 1.0],
+		intensity: 0.3,
 	},
 ];
 

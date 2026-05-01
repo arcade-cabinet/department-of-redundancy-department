@@ -95,6 +95,37 @@ const primitives: Primitive[] = [
 		pbr: 'drywall',
 		overlay: { texture: 'T_Window_Wood_018.png' },
 	},
+	// Entry-side wall closes the south end of the cubicle field. Without
+	// this the camera looking back at entry sees void.
+	{
+		id: 'wall-entry',
+		kind: 'wall',
+		origin: new Vector3(0, 0, 0),
+		yaw: Math.PI,
+		width: 24,
+		height: 3,
+		pbr: 'drywall',
+	},
+	// Ceiling. Open-plan offices are flat 3m drop-ceiling tile.
+	{
+		id: 'ceiling-cubicle-field',
+		kind: 'ceiling',
+		origin: new Vector3(0, 0, 12),
+		yaw: 0,
+		width: 24,
+		depth: 24,
+		pbr: 'ceiling-tile',
+		height: 3,
+	},
+	{
+		id: 'light-fill',
+		kind: 'light',
+		origin: new Vector3(0, 2.5, 12),
+		yaw: 0,
+		light: 'hemispheric',
+		color: [1.0, 1.0, 0.95],
+		intensity: 0.4,
+	},
 
 	// Whiteboards — readable plants for tone + boss-office signage.
 	{
