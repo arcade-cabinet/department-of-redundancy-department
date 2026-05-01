@@ -17,6 +17,7 @@ import {
 	type Enemy,
 	type FireEvent,
 } from './encounter';
+import { rand } from './engine/rng';
 import { Game } from './game/Game';
 import type { GameState } from './game/GameState';
 import {
@@ -212,6 +213,8 @@ function constructLevel(levelId: LevelId): void {
 		scene = null;
 		currentCamera = null;
 		cameraShake = null;
+		lastShakeDx = 0;
+		lastShakeDy = 0;
 		levelHandles = null;
 		audioBus = null;
 		enemySpawnHp.clear();
@@ -358,6 +361,12 @@ interface CameraShake {
 	readonly endMs: number;
 }
 let cameraShake: CameraShake | null = null;
+// Previously-applied shake offset. Undone at the start of each apply so the
+// camera's authoritative rail position is restored before adding the new
+// offset — guards against frames where the director did not write a fresh
+// onCameraUpdate (e.g., director.isFinished).
+let lastShakeDx = 0;
+let lastShakeDy = 0;
 
 function beginCameraShake(intensity: number, durationMs: number): void {
 	const startMs = performance.now();
@@ -365,19 +374,24 @@ function beginCameraShake(intensity: number, durationMs: number): void {
 }
 
 function applyCameraShake(camera: FreeCamera): void {
+	camera.position.x -= lastShakeDx;
+	camera.position.y -= lastShakeDy;
+	lastShakeDx = 0;
+	lastShakeDy = 0;
 	if (!cameraShake) return;
 	const now = performance.now();
 	if (now >= cameraShake.endMs) {
 		cameraShake = null;
 		return;
 	}
-	// Linear falloff: full amplitude at start, zero at end.
 	const totalMs = cameraShake.endMs - cameraShake.startMs;
 	const remainingMs = cameraShake.endMs - now;
 	const t = totalMs > 0 ? remainingMs / totalMs : 0;
 	const amp = cameraShake.intensity * t;
-	camera.position.x += (Math.random() - 0.5) * 2 * amp;
-	camera.position.y += (Math.random() - 0.5) * 2 * amp;
+	lastShakeDx = (rand() - 0.5) * 2 * amp;
+	lastShakeDy = (rand() - 0.5) * 2 * amp;
+	camera.position.x += lastShakeDx;
+	camera.position.y += lastShakeDy;
 }
 
 function disposeEnemy(enemyId: string): void {

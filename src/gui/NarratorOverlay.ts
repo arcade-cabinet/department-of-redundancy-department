@@ -54,5 +54,6 @@ export class NarratorOverlay {
 			this.hideHandle = null;
 		}
 		this.overlay.remove(this.card);
+		this.card.dispose();
 	}
 }
