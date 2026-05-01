@@ -101,6 +101,13 @@ describe('EncounterDirector — dwell early-resume gate', () => {
 		// Find the spawned enemy id (deterministic: middle-manager-0).
 		const spawned = director.getEnemy('middle-manager-0');
 		expect(spawned).toBeDefined();
+		// Pin the contract: BEFORE the kill, camera must hold at pos-1 even
+		// after another long tick. If the gate were broken, the camera
+		// would have already advanced because `currentDwellEnemyIds` was
+		// briefly empty between arrival and the spawn cue firing.
+		director.tick(2000);
+		expect(director.cameraPosition.z).toBeCloseTo(5, 1);
+
 		// Headshot it dead in one tap (250 head damage vs 60 base hp).
 		director.hitEnemy('middle-manager-0', 'head');
 		// Next tick — early-resume sets phase back to gliding. A subsequent
