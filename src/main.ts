@@ -108,6 +108,13 @@ uiScene.autoClearDepthAndStencil = false;
 	// builds and emit a "no active camera" warning on the first render).
 	uiCam.setTarget(Vector3.Zero());
 	uiScene.activeCamera = uiCam;
+	// Pre-warm: render the uiScene once before any gameplay-scene swap
+	// so its PassPostProcess shader compiles against a stable engine
+	// state. Without this prewarm, the first gameplay-scene dispose
+	// invalidates the engine's postProcessManager cache mid-compile and
+	// the next uiScene.render() throws a null deref. (Reproduced by the
+	// `every level constructs cleanly` e2e test on first INSERT COIN.)
+	uiScene.render();
 }
 
 // Title-screen scene. While at the title we render this; constructLevel
@@ -174,6 +181,11 @@ if (IS_DEV) {
 		// without waiting real time. Clamped to non-negative finite to
 		// guard against negative or NaN deltas corrupting director state.
 		fastForward: (ms: number) => director?.tick(Math.max(0, Number.isFinite(ms) ? ms : 0)),
+		// Used by Playwright e2e tests to await async `buildLevel`
+		// completion after a jumpToLevel — the render guard skips frames
+		// until handles are populated, so without this hook the scene
+		// stays black throughout a fast-jump test.
+		levelHandlesReady: () => levelHandles !== null,
 	};
 	// God-mode toggle for the visual-audit harness. When true, takeDamage
 	// is short-circuited so the audit can fast-forward through firing
@@ -483,8 +495,23 @@ function loadBossGlb(spawnScene: Scene, capsule: AbstractMesh, enemy: Enemy): vo
 }
 
 function constructLevel(levelId: LevelId): void {
+	// Pause the render loop across the dispose+rebuild boundary. Without
+	// this, the engine fires a `tick` between `scene.dispose()` and the
+	// new `new Scene(engine)` assignment, and the persistent uiScene's
+	// PassPostProcess blits against a now-null postProcessManager. The
+	// render loop is reattached at the bottom of this function once the
+	// new scene is wired and async `buildLevel` is dispatched.
+	engine.stopRenderLoop(tick);
 	if (scene) {
+		// Re-warm the uiScene's pipeline AFTER dispose: when Babylon tears
+		// down a scene with `stencil: true`, it invalidates the engine's
+		// shared post-process effect cache. Forcing the uiScene to render
+		// once here recompiles the GUI's PassPostProcess against the
+		// engine's new state, so the next render-loop tick doesn't see a
+		// null postProcessManager. The boot-time prewarm (above the
+		// title-scene block) does the same for the first dispose.
 		scene.dispose();
+		uiScene.render();
 		scene = null;
 		currentCamera = null;
 		cameraShake = null;
@@ -636,6 +663,11 @@ function constructLevel(levelId: LevelId): void {
 		difficulty: 'normal',
 		listener,
 	});
+	// Re-attach the render loop now that the new scene + camera + director
+	// are wired. The render guard (`if scene?.activeCamera ...`) keeps
+	// the gameplay scene off-screen until `levelHandles` resolves; the
+	// uiScene draws normally throughout.
+	engine.runRenderLoop(tick);
 }
 
 function handleCueAction(action: CueAction): void {
@@ -946,7 +978,17 @@ function tick(): void {
 		if (currentCamera) applyCameraShake(currentCamera);
 	}
 
-	scene?.render();
+	// Render-side guards: a Scene built mid-tick (e.g. a level jump that
+	// resets `scene` and starts the async `buildLevel`) can be visited
+	// by the render loop before primitives have attached their materials.
+	// At that point Babylon tries to compile a default post-process effect
+	// against a still-null postProcessManager and throws. Holding off the
+	// scene render until `levelHandles` resolves keeps the title/UI scene
+	// drawing while the level finishes async construction; the gameplay
+	// scene catches up on the next tick.
+	if (scene?.activeCamera && !scene.isDisposed && levelHandles) {
+		scene.render();
+	}
 	// Composite the GUI on top. `uiScene.autoClear=false` preserves the
 	// gameplay framebuffer; this draw lays the ADT over it.
 	uiScene.render();
