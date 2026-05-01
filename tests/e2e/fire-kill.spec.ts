@@ -65,36 +65,47 @@ test.describe('fire → kill', () => {
 		// `clientY` straight off the event and doesn't depend on the
 		// browser's event-routing — this gives us deterministic coord
 		// delivery without window-focus / hover-trail flakiness.
-		const lastSeen = { hp: target.hp, x: 0, y: 0 };
-		for (let i = 0; i < 8; i++) {
+		let killed = false;
+		let lastLive = target;
+		for (let i = 0; i < 8 && !killed; i++) {
 			const snaps = await readEnemySnapshots(page);
 			const live = snaps.find((s) => s.id === targetId);
-			if (!live) return;
-			lastSeen.hp = live.hp;
-			lastSeen.x = live.clientX;
-			lastSeen.y = live.clientY;
+			if (!live) {
+				killed = true;
+				break;
+			}
+			lastLive = live;
 			await page.evaluate(
 				(coord: { x: number; y: number }) => {
 					const canvas = document.querySelector('canvas#game');
 					if (!canvas) throw new Error('canvas#game missing');
-					const evt = new PointerEvent('pointerdown', {
-						clientX: coord.x,
-						clientY: coord.y,
-						bubbles: true,
-						cancelable: true,
-						pointerType: 'mouse',
-						button: 0,
-					});
-					canvas.dispatchEvent(evt);
+					canvas.dispatchEvent(
+						new PointerEvent('pointerdown', {
+							clientX: coord.x,
+							clientY: coord.y,
+							bubbles: true,
+							cancelable: true,
+							pointerType: 'mouse',
+							button: 0,
+						}),
+					);
 				},
 				{ x: live.clientX, y: live.clientY },
 			);
 		}
 
-		throw new Error(
-			`enemy ${targetId} survived 8 clicks (last shot at (${lastSeen.x.toFixed(0)}, ${lastSeen.y.toFixed(0)})) — ` +
-				`hp went from ${target.hp} to ${lastSeen.hp}, ` +
+		// Explicit kill assertion — `enemySnapshots` filters by `director.getEnemy`,
+		// so absence here proves both `director.hitEnemy → killEnemy` ran AND the
+		// `onEnemyKill` listener disposed the mesh / removed it from `enemyMeshes`.
+		// Without this expect the test would silently pass on bare loop fall-through;
+		// see the reviewer note on PR #72.
+		const finalSnaps = await readEnemySnapshots(page);
+		expect(
+			finalSnaps.find((s) => s.id === targetId),
+			`enemy ${targetId} survived 8 clicks (last shot at (${lastLive.clientX.toFixed(0)}, ${lastLive.clientY.toFixed(0)})) — ` +
+				`hp went from ${target.hp} to ${lastLive.hp}, ` +
 				`suggesting pickray missed (regression in projection or pointer wiring)`,
-		);
+		).toBeUndefined();
+		expect(killed, 'expected the kill loop to set `killed` before exiting').toBe(true);
 	});
 });

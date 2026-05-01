@@ -45,12 +45,9 @@ const CANONICAL_CHAIN: readonly DordLevelId[] = [
 ];
 
 interface CanvasFrameStats {
-	width: number;
-	height: number;
 	totalPixels: number;
 	nonBlackPixels: number;
 	uniqueColorBuckets: number;
-	avgBrightness: number;
 }
 
 async function readCanvasFrameStats(page: Page): Promise<CanvasFrameStats> {
@@ -58,14 +55,18 @@ async function readCanvasFrameStats(page: Page): Promise<CanvasFrameStats> {
 	// composited frame even with `preserveDrawingBuffer: false`. Direct
 	// `readPixels` from inside `page.evaluate` returns zeros because the
 	// drawing buffer is discarded after compositing.
-	const canvasHandle = page.locator('canvas#game').first();
-	const buffer = await canvasHandle.screenshot();
+	const buffer = await page.locator('canvas#game').first().screenshot();
 
 	// Decode the PNG via the browser to get raw RGBA — Playwright nodes
-	// don't have an obvious decoder, but the page does. Pass the bytes
-	// back in.
-	return page.evaluate(async (bytes: number[]) => {
-		const blob = new Blob([new Uint8Array(bytes)], { type: 'image/png' });
+	// don't have an obvious decoder, but the page does. Ship the bytes
+	// as base64 rather than `Array.from(buffer)` to avoid serializing
+	// every byte as a JSON number across CDP — that path hits the CDP
+	// message-size cap on retina canvases (4× pixels).
+	return page.evaluate(async (b64: string) => {
+		const binary = atob(b64);
+		const bytes = new Uint8Array(binary.length);
+		for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+		const blob = new Blob([bytes], { type: 'image/png' });
 		const bitmap = await createImageBitmap(blob);
 		const off = new OffscreenCanvas(bitmap.width, bitmap.height);
 		const ctx = off.getContext('2d');
@@ -74,13 +75,11 @@ async function readCanvasFrameStats(page: Page): Promise<CanvasFrameStats> {
 		const data = ctx.getImageData(0, 0, bitmap.width, bitmap.height).data;
 
 		let nonBlackPixels = 0;
-		let totalBrightness = 0;
 		const buckets = new Set<number>();
 		for (let i = 0; i < data.length; i += 4) {
 			const r = data[i] ?? 0;
 			const g = data[i + 1] ?? 0;
 			const b = data[i + 2] ?? 0;
-			totalBrightness += (r + g + b) / 3;
 			if (r > 8 || g > 8 || b > 8) nonBlackPixels++;
 			// 8-step-per-channel histogram (8^3 = 512 buckets). A solid-fill
 			// frame populates one bucket; a real PBR-lit scene populates
@@ -88,17 +87,12 @@ async function readCanvasFrameStats(page: Page): Promise<CanvasFrameStats> {
 			buckets.add(((r >> 5) << 6) | ((g >> 5) << 3) | (b >> 5));
 		}
 
-		const w = bitmap.width;
-		const h = bitmap.height;
 		return {
-			width: w,
-			height: h,
-			totalPixels: w * h,
+			totalPixels: bitmap.width * bitmap.height,
 			nonBlackPixels,
 			uniqueColorBuckets: buckets.size,
-			avgBrightness: totalBrightness / (w * h),
 		};
-	}, Array.from(buffer));
+	}, buffer.toString('base64'));
 }
 
 test.describe('level visual gate', () => {

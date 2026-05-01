@@ -214,23 +214,32 @@ if (IS_DEV) {
 		// real shooting pipeline (pickAt → director.hitEnemy → onEnemyKill)
 		// without faking enemy positions or bypassing pointer wiring.
 		enemySnapshots: (): Array<{ id: string; clientX: number; clientY: number; hp: number }> => {
-			if (!scene?.activeCamera || !director) return [];
+			if (!scene?.activeCamera || scene.isDisposed || !director) return [];
 			const cam = scene.activeCamera;
 			const rect = canvas.getBoundingClientRect();
 			const rw = engine.getRenderWidth();
 			const rh = engine.getRenderHeight();
 			const viewport = cam.viewport.toGlobal(rw, rh);
-			const transform = scene.getTransformMatrix();
+			// Compute view×projection fresh rather than reading the cached
+			// `scene.getTransformMatrix()` — the cache is only repopulated
+			// during `scene.render()`, so calling `enemySnapshots` between
+			// ticks (or right after `jumpToLevel` before the first render)
+			// would otherwise project against the previous camera's matrix.
+			const transform = cam.getViewMatrix().multiply(cam.getProjectionMatrix());
 			// `Vector3.Project(local, world, viewProj, viewport)` applies world×viewProj
 			// internally. Passing `absolutePosition` AS the local vector requires
 			// the world matrix to be `Identity` — otherwise the world transform is
 			// applied twice and the projected coords land somewhere off-screen.
-			const identity = Matrix.IdentityReadOnly;
-			const out: Array<{ id: string; clientX: number; clientY: number; hp: number }> = [];
+			const out = [];
 			for (const [id, mesh] of enemyMeshes) {
 				const enemy = director.getEnemy(id);
 				if (!enemy) continue;
-				const projected = Vector3.Project(mesh.absolutePosition, identity, transform, viewport);
+				const projected = Vector3.Project(
+					mesh.absolutePosition,
+					Matrix.IdentityReadOnly,
+					transform,
+					viewport,
+				);
 				// Project returns render-target pixels (engine size). Convert to
 				// CSS pixels by scaling against the canvas's bounding rect.
 				const clientX = rect.left + (projected.x / rw) * rect.width;
