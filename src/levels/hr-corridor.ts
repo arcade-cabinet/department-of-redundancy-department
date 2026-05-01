@@ -95,6 +95,10 @@ const primitives: Primitive[] = [
 		width: 24,
 		height: 3,
 		pbr: 'drywall',
+		// HR-corridor mid-pass kit. Phelps's frosted-glass cover game eats
+		// HP fast — this is the pre-boss insurance shot. Mounted on the east
+		// wall ahead of the Phelps spawn.
+		healthKit: { id: 'kit-hr-corridor-east', hp: 35, offset: [-4, 1.4] },
 	},
 	{
 		id: 'wall-west',

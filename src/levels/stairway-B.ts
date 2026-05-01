@@ -85,6 +85,10 @@ const primitives: Primitive[] = [
 		width: 14,
 		height: 9,
 		pbr: 'drywall',
+		// Mid-shaft kit on the north wall — pacing beat between the Open
+		// Plan boss clear and the HR Corridor. The wall is unadorned per
+		// spec (chalk-arrow pending), so the kit is the visual anchor.
+		healthKit: { id: 'kit-stairway-B-shaft', hp: 35, offset: [-2, 1.6] },
 	},
 	{
 		// Spec calls for a chalk-arrow "AUDITOR ↑" graffiti decal on this

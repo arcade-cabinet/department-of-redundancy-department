@@ -119,6 +119,10 @@ const primitives: Primitive[] = [
 		width: 18,
 		height: 13,
 		pbr: 'drywall',
+		// Last kit before Executive Suites + the final Reaper push. Mounted
+		// at the head of the long oppressive walnut hallway — psychological
+		// breath of "the cabinet is letting you live for now."
+		healthKit: { id: 'kit-stairway-C-N', hp: 35, offset: [-4, 1.6] },
 	},
 	{
 		id: 'wall-S',

@@ -67,23 +67,69 @@ function addUnique<T extends string>(
 	else set.add(id);
 }
 
-function indexLevel(level: Level, log: IssueLog): LevelIndex {
-	const seenPrim = new Set<string>();
-	const doorIds = new Set<string>();
-	const shutterIds = new Set<string>();
-	const lightIds = new Set<string>();
-	const propIds = new Set<string>();
+function checkHealthKit(
+	wallId: string,
+	kit: { id: string; hp: number },
+	healthKitIds: Set<string>,
+	log: IssueLog,
+): void {
+	if (healthKitIds.has(kit.id)) {
+		log.err('DUP_HEALTH_KIT_ID', `duplicate healthKit id '${kit.id}'`);
+	} else {
+		healthKitIds.add(kit.id);
+	}
+	if (!Number.isFinite(kit.hp) || kit.hp <= 0) {
+		log.err(
+			'HEALTH_KIT_BAD_HP',
+			`healthKit '${kit.id}' on wall '${wallId}' must have positive finite hp (got ${kit.hp})`,
+		);
+	}
+}
+
+interface PrimitiveBuckets {
+	readonly doorIds: Set<string>;
+	readonly shutterIds: Set<string>;
+	readonly lightIds: Set<string>;
+	readonly propIds: Set<string>;
+	readonly healthKitIds: Set<string>;
+}
+
+function bucketPrimitive(p: Level['primitives'][number], buckets: PrimitiveBuckets): void {
+	if (p.kind === 'door') buckets.doorIds.add(p.id);
+	else if (p.kind === 'shutter') buckets.shutterIds.add(p.id);
+	else if (p.kind === 'light') buckets.lightIds.add(p.id);
+	else if (p.kind === 'prop') buckets.propIds.add(p.id);
+}
+
+function indexPrimitives(level: Level, log: IssueLog): PrimitiveBuckets {
+	const seen = new Set<string>();
+	const buckets: PrimitiveBuckets = {
+		doorIds: new Set(),
+		shutterIds: new Set(),
+		lightIds: new Set(),
+		propIds: new Set(),
+		// Wall.healthKit?.id collisions silently clobber the LevelHandles
+		// healthKits map at runtime; catch them here.
+		healthKitIds: new Set(),
+	};
 	for (const p of level.primitives) {
-		if (seenPrim.has(p.id)) {
+		if (seen.has(p.id)) {
 			log.err('DUP_PRIMITIVE_ID', `duplicate primitive id '${p.id}'`);
 			continue;
 		}
-		seenPrim.add(p.id);
-		if (p.kind === 'door') doorIds.add(p.id);
-		else if (p.kind === 'shutter') shutterIds.add(p.id);
-		else if (p.kind === 'light') lightIds.add(p.id);
-		else if (p.kind === 'prop') propIds.add(p.id);
+		seen.add(p.id);
+		bucketPrimitive(p, buckets);
+		if (p.kind === 'wall' && p.healthKit) {
+			checkHealthKit(p.id, p.healthKit, buckets.healthKitIds, log);
+		}
 	}
+	return buckets;
+}
+
+function indexLevel(level: Level, log: IssueLog): LevelIndex {
+	// healthKitIds bucket is built + validated in indexPrimitives but not
+	// returned in the LevelIndex — no cue verb references kits today.
+	const { doorIds, shutterIds, lightIds, propIds } = indexPrimitives(level, log);
 
 	const spawnRailIds = new Set<string>();
 	for (const r of level.spawnRails) {

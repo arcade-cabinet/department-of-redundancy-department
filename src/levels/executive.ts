@@ -128,6 +128,10 @@ const primitives: Primitive[] = [
 		width: 32,
 		height: 3,
 		pbr: 'drywall',
+		// Pre-Crawford kit. Crawford's desk-bunker phase is the last big
+		// HP burn before the boss elevator to the Boardroom. Authored on
+		// the long north wall mid-suite, before the lounge frosted glass.
+		healthKit: { id: 'kit-executive-N', hp: 35, offset: [-6, 1.4] },
 	},
 	{
 		id: 'wall-S',
