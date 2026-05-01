@@ -86,6 +86,10 @@ const reticle = new Reticle(overlay);
 let activeOverlayDispose: (() => void) | null = null;
 let hud: HudOverlay | null = null;
 let narrator: NarratorOverlay | null = null;
+// Daily-challenge modifier picked at difficulty-select time; consumed on the
+// transition to 'playing' so the narrator flashes the modifier card on the
+// frame the run begins.
+let pendingDailyAnnounce: import('./game/dailyChallenge').DailyModifierDef | null = null;
 // Bumped on every routeOverlay call so stale async overlay constructors no-op.
 let overlayRouteToken = 0;
 let lastTickMs = performance.now();
@@ -134,15 +138,28 @@ function routeOverlay(state: GameState): void {
 			void loadUnlockedDifficulties().then((unlocked) => {
 				if (token !== overlayRouteToken) return;
 				if (game.getState().phase !== 'difficulty-select') return;
-				const picker = new DifficultySelectOverlay(overlay, unlocked, (difficulty, lives) => {
-					game.chooseDifficulty(difficulty, lives, 'standard', now());
-				});
+				const picker = new DifficultySelectOverlay(
+					overlay,
+					unlocked,
+					(difficulty, lives, mode, dailyMod) => {
+						game.chooseDifficulty(difficulty, lives, mode, now(), dailyMod?.id ?? null);
+						if (mode === 'daily-challenge' && dailyMod) {
+							pendingDailyAnnounce = dailyMod;
+						}
+					},
+				);
 				activeOverlayDispose = () => picker.dispose();
 			});
 			break;
 		}
 		case 'playing': {
-			// HUD already mounted above; nothing else to do here.
+			// On daily-challenge entry, flash the modifier card via the narrator
+			// overlay so the player sees what's twisting today's run.
+			if (pendingDailyAnnounce && narrator) {
+				const mod = pendingDailyAnnounce;
+				narrator.show(`★ ${mod.title}`, 3000);
+				pendingDailyAnnounce = null;
+			}
 			break;
 		}
 		case 'continue-prompt': {

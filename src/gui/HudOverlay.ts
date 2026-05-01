@@ -1,6 +1,7 @@
 import { Control } from '@babylonjs/gui/2D/controls/control';
 import { Rectangle } from '@babylonjs/gui/2D/controls/rectangle';
 import { TextBlock } from '@babylonjs/gui/2D/controls/textBlock';
+import { getDailyModifier } from '../game/dailyChallenge';
 import { comboMultiplier, type GameState, WEAPONS } from '../game/GameState';
 import {
 	COLOR_HP_HIGH,
@@ -32,6 +33,7 @@ export class HudOverlay {
 	private readonly comboLabel: TextBlock;
 	private readonly livesLabel: TextBlock;
 	private readonly ammoLabel: TextBlock;
+	private readonly dailyBadge: TextBlock;
 	private readonly controls: readonly Control[];
 
 	constructor(private readonly overlay: Overlay) {
@@ -117,7 +119,30 @@ export class HudOverlay {
 		this.ammoLabel.shadowOffsetX = 1;
 		this.ammoLabel.shadowOffsetY = 1;
 
-		this.controls = [this.hpBar, this.scoreLabel, this.comboLabel, this.livesLabel, this.ammoLabel];
+		this.dailyBadge = new TextBlock('hud-daily-badge', '');
+		this.dailyBadge.color = COLOR_HP_LOW;
+		this.dailyBadge.fontSize = 14;
+		this.dailyBadge.fontFamily = FONT_DISPLAY;
+		this.dailyBadge.fontWeight = 'bold';
+		this.dailyBadge.height = '20px';
+		this.dailyBadge.width = '420px';
+		this.dailyBadge.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
+		this.dailyBadge.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
+		this.dailyBadge.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+		this.dailyBadge.top = '88px';
+		this.dailyBadge.shadowColor = 'rgba(0, 0, 0, 0.95)';
+		this.dailyBadge.shadowOffsetX = 1;
+		this.dailyBadge.shadowOffsetY = 1;
+		this.dailyBadge.isVisible = false;
+
+		this.controls = [
+			this.hpBar,
+			this.scoreLabel,
+			this.comboLabel,
+			this.livesLabel,
+			this.ammoLabel,
+			this.dailyBadge,
+		];
 		for (const c of this.controls) overlay.add(c);
 	}
 
@@ -148,6 +173,13 @@ export class HudOverlay {
 			? `${w.active.toUpperCase()}  reloading…`
 			: `${w.active.toUpperCase()}  ${ammo} / ${mag}`;
 		this.ammoLabel.color = ammo === 0 && !reloading ? COLOR_HP_LOW : COLOR_PAPER;
+
+		if (run.mode === 'daily-challenge' && run.dailyModifier) {
+			this.dailyBadge.text = `★ DAILY: ${getDailyModifier(run.dailyModifier).title}`;
+			this.dailyBadge.isVisible = true;
+		} else {
+			this.dailyBadge.isVisible = false;
+		}
 	}
 
 	dispose(): void {

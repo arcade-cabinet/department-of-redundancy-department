@@ -1,6 +1,7 @@
 import type { Difficulty } from '../encounter';
 import type { LevelId } from '../levels/types';
 import type { Lives } from '../preferences';
+import type { DailyModifierId } from './dailyChallenge';
 import {
 	damagePlayer,
 	type GameMode,
@@ -48,10 +49,11 @@ export class Game {
 	chooseDifficulty(
 		difficulty: Difficulty,
 		lives: Lives,
-		mode: GameMode = 'standard',
+		mode: GameMode,
 		nowMs: number,
+		dailyModifier: DailyModifierId | null = null,
 	): void {
-		this.update(startRun(difficulty, lives, mode, nowMs));
+		this.update(startRun(difficulty, lives, mode, nowMs, dailyModifier));
 	}
 
 	hit(target: 'head' | 'body' | 'justice'): void {
