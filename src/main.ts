@@ -5,8 +5,10 @@ import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { Scene } from '@babylonjs/core/scene';
 import '@babylonjs/core/Loading/sceneLoader';
+import '@babylonjs/core/Audio/audioEngine';
 import '@babylonjs/loaders/glTF';
 
+import { AudioBus } from './audio/AudioBus';
 import {
 	type Cue,
 	type CueAction,
@@ -57,6 +59,7 @@ let scene: Scene | null = null;
 let director: EncounterDirector | null = null;
 let currentLevel: Level | null = null;
 let levelHandles: LevelHandles | null = null;
+let audioBus: AudioBus | null = null;
 
 // Per-enemy bookkeeping for the reticle gradient and kill scoring.
 // Mesh refs cached so hit/kill/cease lookups are O(1) instead of scene
@@ -149,6 +152,7 @@ function routeOverlay(state: GameState): void {
 				settings,
 				(next) => {
 					Object.assign(settings, next);
+					audioBus?.updateSettings(next);
 					void saveSettings(next);
 				},
 				() => game.closeSettings(),
@@ -194,6 +198,7 @@ function constructLevel(levelId: LevelId): void {
 		scene.dispose();
 		scene = null;
 		levelHandles = null;
+		audioBus = null;
 		enemySpawnHp.clear();
 		enemyLastHitTarget.clear();
 		enemyMeshes.clear();
@@ -202,6 +207,10 @@ function constructLevel(levelId: LevelId): void {
 	}
 	currentLevel = getLevel(levelId);
 	scene = new Scene(engine);
+	audioBus = new AudioBus(scene, settings);
+	for (const layer of currentLevel.ambienceLayers) {
+		audioBus.startAmbience(layer.id, layer.audio, layer.volume, layer.loop);
+	}
 
 	const camera = new FreeCamera('camera', new Vector3(0, 1.6, 0), scene);
 	camera.minZ = 0.05;
@@ -294,7 +303,15 @@ function handleCueAction(action: CueAction): void {
 			spawnCivilian(action.railId);
 			return;
 		}
-		// audio-stinger / ambience-fade / narrator / prop-anim / boss-spawn
+		case 'audio-stinger': {
+			audioBus?.playStinger(action.audio, action.volume);
+			return;
+		}
+		case 'ambience-fade': {
+			audioBus?.fadeAmbience(action.layerId, action.toVolume, action.durationMs);
+			return;
+		}
+		// narrator / prop-anim / boss-spawn
 		// are handled by their respective subsystems in subsequent commits.
 		default:
 			return;

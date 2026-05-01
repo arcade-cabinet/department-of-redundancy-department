@@ -156,7 +156,7 @@ const cues: readonly Cue[] = [
 	{
 		id: 'p3-elevator-ding',
 		trigger: { kind: 'on-arrive', railNodeId: 'pos-3' },
-		action: { verb: 'audio-stinger', audio: 'stingers/elevator-ding.ogg' },
+		action: { verb: 'audio-stinger', audio: 'ui/ui-notification.mp3' },
 	},
 	{
 		id: 'p3-elevator-door',
@@ -187,7 +187,7 @@ const cues: readonly Cue[] = [
 	{
 		id: 'exit-stinger',
 		trigger: { kind: 'on-clear', railNodeId: 'pos-3' },
-		action: { verb: 'audio-stinger', audio: 'stingers/garrison-down.ogg' },
+		action: { verb: 'audio-stinger', audio: 'stinger/stinger-boss-cleared.mp3' },
 	},
 	{
 		id: 'exit-elevator-A',
@@ -545,7 +545,8 @@ export const lobbyLevel: Level = {
 		},
 	],
 	ambienceLayers: [
-		{ id: 'managers-only', audio: 'ambience/managers-only.ogg', volume: 0.55, loop: true },
+		// Starts silent; the wall-clock 0ms ambience-fade cue ramps to 0.55 over 1s.
+		{ id: 'managers-only', audio: 'ambience/ambience-managers-only.ogg', volume: 0, loop: true },
 	],
 	cameraRail,
 	cues,
