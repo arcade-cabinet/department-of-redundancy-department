@@ -74,6 +74,7 @@ export interface DordSurface {
 	enemySnapshots: () => DordEnemySnapshot[];
 	hitEnemy: (enemyId: string, target: 'head' | 'body' | 'justice') => void;
 	isJusticeWindowOpen: (enemyId: string) => boolean;
+	hasProp: (propId: string) => boolean;
 }
 
 declare global {

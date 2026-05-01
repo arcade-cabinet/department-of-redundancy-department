@@ -186,6 +186,17 @@ const primitives: Primitive[] = [
 		spawnRailId: 'rail-spawn-floor-2',
 	},
 
+	// Chandelier — hangs from the ceiling pivot at (0, 6, 12). The visible
+	// chain + ring + bulb cluster hang ~1.2m below. Phase-2 `prop-anim`
+	// `swing` cue rotates it around the pivot for a damped 3s pendulum.
+	{
+		id: 'prop-chandelier',
+		kind: 'prop',
+		origin: new Vector3(0, 6, 12),
+		yaw: 0,
+		glb: 'procedural:chandelier',
+	},
+
 	// Conference table — long executive table dominating the arena. Built
 	// from three desk GLBs end-to-end so it reads as a single 12m mahogany
 	// slab. The Reaper hovers behind/above; the player sees the table in
@@ -416,9 +427,11 @@ const cues: Cue[] = [
 		trigger: { kind: 'wall-clock', atMs: 24000 },
 		action: { verb: 'boss-phase', bossId: 'reaper', phase: 2 },
 	},
-	// Chandelier swing prop-anim is deferred — it lands with the prop GLB
-	// pipeline + prop-anim runtime handler, both subsequent feature-queue
-	// items. Authoring it here without those would silently no-op.
+	{
+		id: 'p2-chandelier-swing',
+		trigger: { kind: 'wall-clock', atMs: 24100 },
+		action: { verb: 'prop-anim', propId: 'prop-chandelier', animId: 'swing' },
+	},
 	{
 		id: 'p2-vent-spawn',
 		trigger: { kind: 'wall-clock', atMs: 30000 },

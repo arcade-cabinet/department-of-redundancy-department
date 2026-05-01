@@ -373,12 +373,76 @@ function buildPillar(scene: Scene, pillar: Pillar): Mesh {
 }
 
 async function buildProp(scene: Scene, prop: Prop, handles: LevelHandles): Promise<void> {
+	if (prop.glb.startsWith('procedural:')) {
+		buildProceduralProp(scene, prop, handles);
+		return;
+	}
 	const result = await ImportMeshAsync(`${MODEL_BASE}${prop.glb}`, scene);
 	const root = result.meshes[0];
 	if (!root) return;
 	root.name = `prop-${prop.id}`;
 	root.position.copyFrom(prop.origin);
 	root.rotation.y = prop.yaw;
+	if (prop.scale != null) root.scaling.setAll(prop.scale);
+	handles.props.set(prop.id, root);
+}
+
+/**
+ * Procedural prop builder for cases where shipping a GLB is overkill.
+ * Currently only `procedural:chandelier` — a brass-tinted ring of bulbs
+ * for the boardroom Phase-2 swing beat. Origin is the pivot point so the
+ * `swing` prop-anim rotates around the chain anchor (origin), not the
+ * geometry centroid.
+ */
+function buildProceduralProp(scene: Scene, prop: Prop, handles: LevelHandles): void {
+	const kind = prop.glb.slice('procedural:'.length);
+	if (kind !== 'chandelier') {
+		console.warn(`[build] unknown procedural prop kind '${kind}' for prop '${prop.id}'`);
+		return;
+	}
+	const root = MeshBuilder.CreateBox(`prop-${prop.id}-pivot`, { size: 0.001 }, scene);
+	root.isVisible = false;
+	root.position.copyFrom(prop.origin);
+	root.rotation.y = prop.yaw;
+
+	const chain = MeshBuilder.CreateCylinder(
+		`prop-${prop.id}-chain`,
+		{ height: 1.2, diameter: 0.06 },
+		scene,
+	);
+	chain.parent = root;
+	chain.position.y = -0.6;
+	const chainMat = new StandardMaterial(`mat-${prop.id}-chain`, scene);
+	chainMat.diffuseColor = new Color3(0.3, 0.3, 0.3);
+	chain.material = chainMat;
+
+	const ring = MeshBuilder.CreateTorus(
+		`prop-${prop.id}-ring`,
+		{ diameter: 1.2, thickness: 0.08, tessellation: 24 },
+		scene,
+	);
+	ring.parent = root;
+	ring.position.y = -1.2;
+	const brassMat = new StandardMaterial(`mat-${prop.id}-brass`, scene);
+	brassMat.diffuseColor = new Color3(0.9, 0.7, 0.3);
+	brassMat.emissiveColor = new Color3(0.2, 0.15, 0.05);
+	ring.material = brassMat;
+
+	const bulbMat = new StandardMaterial(`mat-${prop.id}-bulb`, scene);
+	bulbMat.diffuseColor = new Color3(1, 0.95, 0.85);
+	bulbMat.emissiveColor = new Color3(0.9, 0.85, 0.7);
+	for (let i = 0; i < 6; i++) {
+		const angle = (i / 6) * Math.PI * 2;
+		const bulb = MeshBuilder.CreateSphere(
+			`prop-${prop.id}-bulb-${i}`,
+			{ diameter: 0.18, segments: 8 },
+			scene,
+		);
+		bulb.parent = root;
+		bulb.position.set(Math.cos(angle) * 0.6, -1.2, Math.sin(angle) * 0.6);
+		bulb.material = bulbMat;
+	}
+
 	if (prop.scale != null) root.scaling.setAll(prop.scale);
 	handles.props.set(prop.id, root);
 }

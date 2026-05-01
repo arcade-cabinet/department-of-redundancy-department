@@ -6,7 +6,7 @@ interface ActivePropAnim {
 	readonly mesh: AbstractMesh;
 	readonly startMs: number;
 	readonly durationMs: number;
-	readonly animId: 'drop' | 'roll-in';
+	readonly animId: 'drop' | 'roll-in' | 'swing';
 	readonly fromX: number;
 	readonly fromY: number;
 	readonly fromZ: number;
@@ -17,12 +17,21 @@ interface ActivePropAnim {
 	readonly toRotZ: number;
 }
 
+// Swing-pendulum constants. ~25° peak amplitude, two damped cycles over
+// the duration. Inlined here rather than threaded through ActivePropAnim
+// because every `swing` invocation uses identical values.
+const SWING_AMPLITUDE_RAD = Math.PI / 7;
+const SWING_CYCLES_RAD = Math.PI * 4;
+
 /**
- * Active prop tween state. Three authored anim ids:
+ * Active prop tween state. Four authored anim ids:
  *  - `shatter` — instant dispose; never lands in the active map.
  *  - `drop`    — 600ms quadratic-ease-in fall, +30° z-roll.
  *  - `roll-in` — 800ms ease-out from `rollDist` units behind the prop's
  *                facing yaw.
+ *  - `swing`   — 3000ms damped pendulum on z-rotation around the prop's
+ *                origin, peak amplitude 25°. Used by the boardroom Phase-2
+ *                chandelier beat.
  */
 export class PropAnims {
 	private readonly active = new Map<string, ActivePropAnim>();
@@ -57,6 +66,25 @@ export class PropAnims {
 			});
 			return;
 		}
+		if (animId === 'swing') {
+			// Position fields are unused by swing; carry the current values
+			// as a no-op so the shared ActivePropAnim shape stays uniform.
+			this.active.set(propId, {
+				mesh,
+				startMs: now(),
+				durationMs: 3000,
+				animId: 'swing',
+				fromX: mesh.position.x,
+				fromY: mesh.position.y,
+				fromZ: mesh.position.z,
+				toX: mesh.position.x,
+				toY: mesh.position.y,
+				toZ: mesh.position.z,
+				fromRotZ: mesh.rotation.z,
+				toRotZ: mesh.rotation.z,
+			});
+			return;
+		}
 		if (animId === 'roll-in') {
 			const yaw = mesh.rotation.y;
 			const rollDist = 3;
@@ -88,6 +116,18 @@ export class PropAnims {
 		for (const [id, anim] of this.active) {
 			const elapsed = t0 - anim.startMs;
 			const t = Math.min(1, elapsed / anim.durationMs);
+			if (anim.animId === 'swing') {
+				// Two damped pendulum cycles over the duration; (1 - t)
+				// decay brings the chandelier to rest at the authored
+				// fromRotZ.
+				anim.mesh.rotation.z =
+					anim.fromRotZ + SWING_AMPLITUDE_RAD * Math.sin(t * SWING_CYCLES_RAD) * (1 - t);
+				if (t >= 1) {
+					anim.mesh.rotation.z = anim.fromRotZ;
+					this.active.delete(id);
+				}
+				continue;
+			}
 			const eased = anim.animId === 'drop' ? t * t : 1 - (1 - t) * (1 - t);
 			anim.mesh.position.x = anim.fromX + (anim.toX - anim.fromX) * eased;
 			anim.mesh.position.y = anim.fromY + (anim.toY - anim.fromY) * eased;
