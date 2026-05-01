@@ -57,12 +57,20 @@ export interface DordGame {
 	endRun: (toGameOver: boolean) => void;
 }
 
+export interface DordEnemySnapshot {
+	id: string;
+	clientX: number;
+	clientY: number;
+	hp: number;
+}
+
 export interface DordSurface {
 	game: DordGame;
 	jumpToLevel: (id: DordLevelId) => void;
 	fastForward: (ms: number) => void;
 	levelHandlesReady: () => boolean;
 	now: () => number;
+	enemySnapshots: () => DordEnemySnapshot[];
 }
 
 declare global {
@@ -198,4 +206,25 @@ export async function waitForLevel(
 		levelId,
 		{ timeout: timeoutMs },
 	);
+}
+
+export async function readEnemySnapshots(page: Page): Promise<DordEnemySnapshot[]> {
+	return page.evaluate(() => globalThis.__dord?.enemySnapshots() ?? []);
+}
+
+/**
+ * Fast-forward the director in 250ms slices until at least one enemy is
+ * spawned, then return the snapshots. Times out after `maxMs` of simulated
+ * time — keeps the test from hanging on a level that has no early spawns.
+ */
+export async function waitForEnemySpawn(page: Page, maxMs = 30_000): Promise<DordEnemySnapshot[]> {
+	const slice = 250;
+	let elapsed = 0;
+	while (elapsed < maxMs) {
+		await fastForward(page, slice);
+		const snaps = await readEnemySnapshots(page);
+		if (snaps.length > 0) return snaps;
+		elapsed += slice;
+	}
+	throw new Error(`waitForEnemySpawn: no enemies spawned after ${maxMs}ms of simulated time`);
 }
