@@ -1,5 +1,7 @@
+import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { describe, expect, it } from 'vitest';
 import { LEVELS } from './index';
+import type { Level } from './types';
 import {
 	formatReport,
 	levelDurationMs,
@@ -32,21 +34,6 @@ describe('level validator', () => {
 		}
 	});
 
-	it('every cue trigger references a real cameraRail node', () => {
-		for (const [id, level] of Object.entries(LEVELS)) {
-			if (!level) continue;
-			const nodeIds = new Set(level.cameraRail.nodes.map((n) => n.id));
-			for (const cue of level.cues) {
-				if (cue.trigger.kind === 'on-arrive' || cue.trigger.kind === 'on-clear') {
-					expect(
-						nodeIds.has(cue.trigger.railNodeId),
-						`level '${id}' cue '${cue.id}' references missing rail node '${cue.trigger.railNodeId}'`,
-					).toBe(true);
-				}
-			}
-		}
-	});
-
 	it('lobby-specific shape (sanity baseline)', () => {
 		const lobby = LEVELS.lobby;
 		expect(lobby).toBeDefined();
@@ -57,12 +44,37 @@ describe('level validator', () => {
 		expect(levelDurationMs(lobby)).toBeGreaterThan(60000);
 	});
 
-	it('formatReport renders ok when there are no issues', () => {
-		const lobby = LEVELS.lobby;
-		if (!lobby) return;
-		const report = validateLevel(lobby);
+	it('formatReport renders ok-line for a clean level', () => {
+		// Synthetic minimal level — exercises the zero-issues "ok" branch in
+		// formatReport that no real registered level can reach (every shipped
+		// level has at least informational warnings on forward references).
+		const clean: Level = {
+			id: 'victory',
+			displayName: 'test-clean',
+			primitives: [],
+			spawnRails: [],
+			civilianRails: [],
+			ambienceLayers: [],
+			cameraRail: {
+				defaultSpeedUps: 3,
+				nodes: [
+					{ id: 'a', kind: 'glide', position: new Vector3(0, 0, 0), lookAt: new Vector3(0, 0, 1) },
+					{ id: 'b', kind: 'glide', position: new Vector3(0, 0, 1), lookAt: new Vector3(0, 0, 2) },
+				],
+			},
+			cues: [
+				{
+					id: 'end',
+					trigger: { kind: 'wall-clock', atMs: 1000 },
+					action: { verb: 'transition', toLevelId: 'victory' },
+				},
+			],
+		};
+		const report = validateLevel(clean);
+		expect(report.issues.filter((i) => i.severity === 'error')).toHaveLength(0);
 		const formatted = formatReport(report);
-		expect(formatted).toContain("level 'lobby'");
+		expect(formatted).toContain("level 'victory'");
+		expect(formatted).toContain('  ok');
 	});
 
 	// Surfaces all warnings (e.g. transitions to unimplemented levels) on

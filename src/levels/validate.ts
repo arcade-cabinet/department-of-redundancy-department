@@ -55,45 +55,96 @@ class IssueLog {
 	}
 }
 
+function addUnique<T extends string>(
+	set: Set<T>,
+	id: T,
+	code: string,
+	what: string,
+	log: IssueLog,
+): void {
+	if (set.has(id)) log.err(code, `duplicate ${what} id '${id}'`);
+	else set.add(id);
+}
+
 function indexLevel(level: Level, log: IssueLog): LevelIndex {
-	const seen = new Set<string>();
+	const seenPrim = new Set<string>();
 	const doorIds = new Set<string>();
 	const shutterIds = new Set<string>();
 	const lightIds = new Set<string>();
 	const propIds = new Set<string>();
 	for (const p of level.primitives) {
-		if (seen.has(p.id)) log.err('DUP_PRIMITIVE_ID', `duplicate primitive id '${p.id}'`);
-		seen.add(p.id);
+		if (seenPrim.has(p.id)) {
+			log.err('DUP_PRIMITIVE_ID', `duplicate primitive id '${p.id}'`);
+			continue;
+		}
+		seenPrim.add(p.id);
 		if (p.kind === 'door') doorIds.add(p.id);
 		else if (p.kind === 'shutter') shutterIds.add(p.id);
 		else if (p.kind === 'light') lightIds.add(p.id);
 		else if (p.kind === 'prop') propIds.add(p.id);
 	}
+
+	const spawnRailIds = new Set<string>();
+	for (const r of level.spawnRails) {
+		addUnique(spawnRailIds, r.id, 'DUP_SPAWN_RAIL_ID', 'spawnRail', log);
+	}
+	const civilianRailIds = new Set<string>();
+	for (const r of level.civilianRails) {
+		addUnique(civilianRailIds, r.id, 'DUP_CIV_RAIL_ID', 'civilianRail', log);
+	}
+	const ambienceLayerIds = new Set<string>();
+	for (const l of level.ambienceLayers) {
+		addUnique(ambienceLayerIds, l.id, 'DUP_AMBIENCE_ID', 'ambienceLayer', log);
+	}
+	const railNodeIds = new Set<string>();
+	for (const n of level.cameraRail.nodes) {
+		addUnique(railNodeIds, n.id, 'DUP_RAIL_NODE_ID', 'cameraRail node', log);
+	}
+
 	return {
 		doorIds,
 		shutterIds,
 		lightIds,
 		propIds,
-		spawnRailIds: new Set(level.spawnRails.map((r) => r.id)),
-		civilianRailIds: new Set(level.civilianRails.map((r) => r.id)),
-		ambienceLayerIds: new Set(level.ambienceLayers.map((l) => l.id)),
-		railNodeIds: new Set(level.cameraRail.nodes.map((n) => n.id)),
+		spawnRailIds,
+		civilianRailIds,
+		ambienceLayerIds,
+		railNodeIds,
 	};
 }
 
-function checkRails(level: Level, index: LevelIndex, log: IssueLog): void {
+function checkSpawnRails(level: Level, log: IssueLog): void {
 	for (const r of level.spawnRails) {
 		if (r.path.length < 2) log.err('SPAWN_RAIL_TOO_SHORT', `spawnRail '${r.id}' has <2 points`);
 		if (r.speed <= 0) log.err('SPAWN_RAIL_BAD_SPEED', `spawnRail '${r.id}' speed must be > 0`);
 	}
+}
+
+function checkCivilianRails(level: Level, log: IssueLog): void {
 	for (const r of level.civilianRails) {
 		if (r.path.length < 2) log.err('CIV_RAIL_TOO_SHORT', `civilianRail '${r.id}' has <2 points`);
+		if (r.speed <= 0) log.err('CIV_RAIL_BAD_SPEED', `civilianRail '${r.id}' speed must be > 0`);
 	}
+}
+
+function checkPrimitiveRailRefs(level: Level, index: LevelIndex, log: IssueLog): void {
 	for (const p of level.primitives) {
 		if (p.kind === 'door' && p.spawnRailId && !index.spawnRailIds.has(p.spawnRailId)) {
 			log.err('DOOR_DANGLING_RAIL', `door '${p.id}' spawnRailId '${p.spawnRailId}' not found`);
 		}
+		if (p.kind === 'shutter' && p.spawnRailId && !index.spawnRailIds.has(p.spawnRailId)) {
+			log.err(
+				'SHUTTER_DANGLING_RAIL',
+				`shutter '${p.id}' spawnRailId '${p.spawnRailId}' not found`,
+			);
+		}
 	}
+}
+
+function checkRails(level: Level, index: LevelIndex, log: IssueLog): void {
+	checkSpawnRails(level, log);
+	checkCivilianRails(level, log);
+	checkPrimitiveRailRefs(level, index, log);
 }
 
 function checkCameraRail(level: Level, log: IssueLog): void {
@@ -123,7 +174,7 @@ function checkCueTrigger(cue: Cue, index: LevelIndex, log: IssueLog): void {
 // per-verb branching out of one cognitively-large switch.
 type CheckerEntry = (cue: Cue, a: CueAction, index: LevelIndex, log: IssueLog) => void;
 
-const CUE_CHECKERS: Readonly<Record<string, CheckerEntry>> = {
+const CUE_CHECKERS: Readonly<Partial<Record<CueAction['verb'], CheckerEntry>>> = {
 	door: (cue, a, index, log) => {
 		if (a.verb !== 'door') return;
 		if (!index.doorIds.has(a.doorId))
@@ -166,7 +217,7 @@ const CUE_CHECKERS: Readonly<Record<string, CheckerEntry>> = {
 	},
 	transition: (cue, a, _index, log) => {
 		if (a.verb !== 'transition') return;
-		if (a.toLevelId !== 'victory' && !(a.toLevelId in LEVELS))
+		if (a.toLevelId !== 'victory' && LEVELS[a.toLevelId] === undefined)
 			log.warn(
 				'CUE_TRANSITION_UNIMPLEMENTED',
 				`cue '${cue.id}' transitions to unimplemented level '${a.toLevelId}'`,
@@ -201,15 +252,15 @@ function checkEnemySpawn(
 
 function checkCues(level: Level, index: LevelIndex, log: IssueLog): void {
 	const seenIds = new Set<string>();
-	let sawTransition = false;
+	let sawEnd = false;
 	for (const cue of level.cues) {
 		if (seenIds.has(cue.id)) log.err('DUP_CUE_ID', `duplicate cue id '${cue.id}'`);
 		seenIds.add(cue.id);
 		checkCueTrigger(cue, index, log);
 		checkCueAction(cue, cue.action, index, log);
-		if (cue.action.verb === 'transition') sawTransition = true;
+		if (cue.action.verb === 'transition' || cue.action.verb === 'boss-spawn') sawEnd = true;
 	}
-	if (!sawTransition) log.warn('LEVEL_NO_TRANSITION', `level '${level.id}' has no transition cue`);
+	if (!sawEnd) log.warn('LEVEL_NO_END', `level '${level.id}' has no transition or boss-spawn cue`);
 }
 
 export function validateLevel(level: Level): ValidationReport {
