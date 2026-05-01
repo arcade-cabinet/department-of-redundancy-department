@@ -294,6 +294,34 @@ const primitives: Primitive[] = [
 		direction: new Vector3(0, -1, 0),
 		conicalAngle: 0.9,
 	},
+
+	// Three stair flights connecting the four landings (Y=0 → 3 → 6 → 9).
+	// Without these, the camera ascends through visible void between the
+	// laminate floor slabs.
+	{
+		id: 'stair-flight-1',
+		kind: 'prop',
+		origin: new Vector3(0, 0, 2.5),
+		yaw: 0,
+		glb: 'props/staircase-1.glb',
+		scale: 0.05,
+	},
+	{
+		id: 'stair-flight-2',
+		kind: 'prop',
+		origin: new Vector3(0, 3, 7.5),
+		yaw: 0,
+		glb: 'props/staircase-1.glb',
+		scale: 0.05,
+	},
+	{
+		id: 'stair-flight-3',
+		kind: 'prop',
+		origin: new Vector3(0, 6, 12),
+		yaw: 0,
+		glb: 'props/staircase-1.glb',
+		scale: 0.05,
+	},
 ];
 
 const cues: Cue[] = [

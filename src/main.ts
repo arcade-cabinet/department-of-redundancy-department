@@ -1,18 +1,19 @@
 import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
 import { Engine } from '@babylonjs/core/Engines/engine';
+import { ImportMeshAsync } from '@babylonjs/core/Loading/sceneLoader';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { Scene } from '@babylonjs/core/scene';
-import '@babylonjs/core/Loading/sceneLoader';
 import '@babylonjs/core/Audio/audioEngine';
 import '@babylonjs/core/Culling/ray'; // side-effect: enables scene.pick / pickWithRay
 import '@babylonjs/loaders/glTF';
 
 import { AudioBus } from './audio/AudioBus';
 import {
+	ARCHETYPES,
 	BOSSES,
 	bossIdForEnemy,
 	type Cue,
@@ -149,7 +150,17 @@ const game = new Game();
 // pointer-event flakiness. Stripped from production by the same
 // `import.meta.env.PROD` gate as the engine clock test hooks.
 if (!(import.meta?.env?.PROD ?? false)) {
-	(globalThis as { __dord?: unknown }).__dord = { game, engine };
+	(globalThis as { __dord?: unknown }).__dord = {
+		game,
+		engine,
+		// Jump directly to a level for the visual audit. Tears down the
+		// current level scene and constructs the target. Dev-only — gated by
+		// the same PROD check that strips the rest of this surface.
+		jumpToLevel: (id: LevelId) => {
+			constructLevel(id);
+			game.transitionLevel(id);
+		},
+	};
 }
 const overlay = new Overlay('dord-ui', uiScene);
 const reticle = new Reticle(overlay);
@@ -483,13 +494,59 @@ function constructLevel(levelId: LevelId): void {
 			// and renders as a near-invisible default-shaded silhouette,
 			// which is what the visual audit caught.
 			const mat = new StandardMaterial(`mat-enemy-${enemy.id}`, scene);
-			mat.diffuseColor = new Color3(0.85, 0.18, 0.18);
-			mat.emissiveColor = new Color3(0.12, 0.0, 0.0);
+			const isBoss = bossIdForEnemy(enemy.id) !== null;
+			// Bosses get a distinct color so they're not lost in a wave of
+			// red grunt-capsules. Reaper goes near-black/purple; the other
+			// four bosses go gold so the player knows which target carries
+			// the boss HP bar.
+			if (enemy.archetypeId === 'reaper') {
+				mat.diffuseColor = new Color3(0.4, 0.05, 0.4);
+				mat.emissiveColor = new Color3(0.25, 0.0, 0.25);
+			} else if (isBoss) {
+				mat.diffuseColor = new Color3(0.95, 0.75, 0.15);
+				mat.emissiveColor = new Color3(0.3, 0.2, 0.0);
+			} else {
+				mat.diffuseColor = new Color3(0.85, 0.18, 0.18);
+				mat.emissiveColor = new Color3(0.12, 0.0, 0.0);
+			}
 			mat.specularColor = new Color3(0.05, 0.05, 0.05);
 			mesh.material = mat;
 			mesh.metadata = { enemyId: enemy.id };
 			enemySpawnHp.set(enemy.id, enemy.hp);
 			enemyMeshes.set(enemy.id, mesh);
+
+			// For bosses, attempt to load the archetype GLB and parent it to
+			// the capsule. The capsule remains as the hitbox; the GLB is
+			// purely visual. If the GLB load fails (404, network), the
+			// colored capsule stays as the visible body.
+			if (isBoss) {
+				const glb = ARCHETYPES[enemy.archetypeId].glb;
+				ImportMeshAsync(`/assets/models/${glb}`, scene)
+					.then((result) => {
+						const root = result.meshes[0];
+						if (!root) return;
+						// Re-check that the boss is still alive — the level
+						// could have torn down before the async load
+						// resolved, in which case `mesh` is disposed and
+						// parenting would orphan the GLB.
+						if (mesh.isDisposed()) {
+							root.dispose();
+							return;
+						}
+						root.name = `boss-glb-${enemy.id}`;
+						root.parent = mesh;
+						root.position.y = -CAPSULE_HALF_HEIGHT;
+						// Reaper is the final boss — scale up so they read
+						// as a 3m menacing figure. Other bosses are
+						// reskinned grunts; native scale.
+						if (enemy.archetypeId === 'reaper') {
+							root.scaling.setAll(2.0);
+						}
+					})
+					.catch((err) => {
+						console.warn(`[boss-glb] failed to load ${glb}`, err);
+					});
+			}
 		},
 		onEnemyMove(enemyId, position) {
 			const mesh = enemyMeshes.get(enemyId);

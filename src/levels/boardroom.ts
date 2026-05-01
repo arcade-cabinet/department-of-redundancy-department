@@ -204,7 +204,93 @@ const primitives: Primitive[] = [
 		spawnRailId: 'rail-spawn-floor-2',
 	},
 
-	// Lights — skyline-backlit hemi, chandelier, Reaper red spot.
+	// Conference table — long executive table dominating the arena. Built
+	// from three desk GLBs end-to-end so it reads as a single 12m mahogany
+	// slab. The Reaper hovers behind/above; the player sees the table in
+	// foreground as the boss enters.
+	{
+		id: 'prop-conf-table-1',
+		kind: 'prop',
+		origin: new Vector3(0, 0, 8),
+		yaw: 0,
+		glb: 'props/desk.glb',
+		scale: 2.5,
+	},
+	{
+		id: 'prop-conf-table-2',
+		kind: 'prop',
+		origin: new Vector3(0, 0, 12),
+		yaw: 0,
+		glb: 'props/desk.glb',
+		scale: 2.5,
+	},
+	{
+		id: 'prop-conf-table-3',
+		kind: 'prop',
+		origin: new Vector3(0, 0, 16),
+		yaw: 0,
+		glb: 'props/desk.glb',
+		scale: 2.5,
+	},
+
+	// Executive chairs flanking the table (cabinets as stand-ins per the
+	// asset reuse table; the silhouette reads as upright furniture).
+	{
+		id: 'prop-chair-N-1',
+		kind: 'prop',
+		origin: new Vector3(-3, 0, 8),
+		yaw: Math.PI / 2,
+		glb: 'props/cabinet-3.glb',
+	},
+	{
+		id: 'prop-chair-N-2',
+		kind: 'prop',
+		origin: new Vector3(-3, 0, 12),
+		yaw: Math.PI / 2,
+		glb: 'props/cabinet-3.glb',
+	},
+	{
+		id: 'prop-chair-N-3',
+		kind: 'prop',
+		origin: new Vector3(-3, 0, 16),
+		yaw: Math.PI / 2,
+		glb: 'props/cabinet-3.glb',
+	},
+	{
+		id: 'prop-chair-S-1',
+		kind: 'prop',
+		origin: new Vector3(3, 0, 8),
+		yaw: -Math.PI / 2,
+		glb: 'props/cabinet-3.glb',
+	},
+	{
+		id: 'prop-chair-S-2',
+		kind: 'prop',
+		origin: new Vector3(3, 0, 12),
+		yaw: -Math.PI / 2,
+		glb: 'props/cabinet-3.glb',
+	},
+	{
+		id: 'prop-chair-S-3',
+		kind: 'prop',
+		origin: new Vector3(3, 0, 16),
+		yaw: -Math.PI / 2,
+		glb: 'props/cabinet-3.glb',
+	},
+
+	// Lights — hemispheric fill, skyline-backlit point, chandelier, Reaper red spot.
+	{
+		// Without this, the boardroom renders pitch-black until the Reaper
+		// spot fires — making the entry glide unreadable. Low-intensity hemi
+		// fill so PBR walls/floor read while still feeling foreboding.
+		id: 'light-fill',
+		kind: 'light',
+		origin: new Vector3(0, 6, 12),
+		yaw: 0,
+		light: 'hemispheric',
+		color: [0.6, 0.65, 0.85],
+		intensity: 0.45,
+	},
 	{
 		id: 'light-skyline-backlit',
 		kind: 'light',
