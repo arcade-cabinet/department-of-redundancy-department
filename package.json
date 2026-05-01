@@ -11,8 +11,8 @@
 	"scripts": {
 		"dev": "vite",
 		"start": "vite",
-		"build": "tsc -p tsconfig.json --noEmit && vite build",
-		"build:native": "tsc -p tsconfig.json --noEmit && cross-env CAPACITOR=true vite build",
+		"build": "tsc -p tsconfig.json --noEmit && vite build && node scripts/assert-no-cheats-in-bundle.mjs",
+		"build:native": "tsc -p tsconfig.json --noEmit && cross-env CAPACITOR=true vite build && node scripts/assert-no-cheats-in-bundle.mjs",
 		"preview": "vite preview --port 5173",
 		"typecheck": "tsc -p tsconfig.json --noEmit",
 		"lint": "biome check .",

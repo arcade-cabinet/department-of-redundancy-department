@@ -1,11 +1,7 @@
 import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
 import { Engine } from '@babylonjs/core/Engines/engine';
-import { ImportMeshAsync } from '@babylonjs/core/Loading/sceneLoader';
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
-import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
-import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { GetEnvironmentBRDFTexture } from '@babylonjs/core/Misc/brdfTextureTools';
 import { Scene } from '@babylonjs/core/scene';
 import '@babylonjs/core/Audio/audioEngine';
@@ -13,30 +9,16 @@ import '@babylonjs/core/Culling/ray'; // side-effect: enables scene.pick / pickW
 import '@babylonjs/loaders/glTF';
 
 import { AudioBus } from './audio/AudioBus';
-import {
-	ARCHETYPES,
-	BOSSES,
-	bossIdForEnemy,
-	type Cue,
-	type CueAction,
-	EncounterDirector,
-	type EncounterListener,
-	type Enemy,
-	type FireEvent,
-	type LightingTween,
-} from './encounter';
+import { type CueAction, EncounterDirector } from './encounter';
 import { drainPendingCues, isHandlesDependent } from './encounter/pendingCueQueue';
 import { installTestHooks, now } from './engine/clock';
-import { rand } from './engine/rng';
 import { Game } from './game/Game';
 import type { GameState } from './game/GameState';
 import {
-	awardQuarters,
 	getBalance,
 	getLifetimeStats,
 	grantFriendBailout,
 	initQuarters,
-	rollBossDrop,
 	spendQuarter,
 	subscribe as subscribeQuarters,
 } from './game/quarters';
@@ -54,8 +36,8 @@ import {
 	SettingsOverlay,
 } from './gui';
 import { getLevel, type Level } from './levels';
-import { applyDoorOpen, applyShutterState, buildLevel, type LevelHandles } from './levels/build';
-import type { Door, LevelId, Light, Shutter } from './levels/types';
+import { buildLevel, type LevelHandles } from './levels/build';
+import type { LevelId } from './levels/types';
 import {
 	loadHighScore,
 	loadHighScores,
@@ -64,6 +46,23 @@ import {
 	type Settings,
 	saveSettings,
 } from './preferences';
+import { createRuntimeContext } from './runtime/context';
+import {
+	handleDoorCue as handleDoorCueImpl,
+	handleLightsRestored as handleLightsRestoredImpl,
+	handlePowerOut as handlePowerOutImpl,
+	handleShutterCue as handleShutterCueImpl,
+	openDoorsBy as openDoorsByImpl,
+} from './runtime/cueHelpers';
+import {
+	buildTitleScene as buildTitleSceneImpl,
+	createEncounterListener,
+} from './runtime/levelLifecycle';
+import {
+	type PickResult,
+	pickAt as pickAtImpl,
+	reticleColorFor as reticleColorForImpl,
+} from './runtime/picking';
 
 /**
  * src/main.ts — runtime boot.
@@ -132,20 +131,12 @@ uiScene.autoClearDepthAndStencil = false;
 // never runs against a soon-to-be-disposed scene.
 const sharedBrdf = GetEnvironmentBRDFTexture(uiScene);
 
-// Title-screen scene. While at the title we render this; constructLevel
-// disposes and replaces it on INSERT COIN. The UI scene above is the one
-// that hosts all overlays and survives the swap. After game-over /
-// returnToTitle, `enterTitleScene()` rebuilds this so overlays don't
-// composite over a corpse-of-lobby.
-function buildTitleScene(): Scene {
-	const s = new Scene(engine);
-	s.environmentBRDFTexture = sharedBrdf;
-	s.clearColor = new Color4(0.082, 0.094, 0.11, 1);
-	const titleCam = new FreeCamera('title-cam', new Vector3(0, 1.6, 0), s);
-	titleCam.minZ = 0.05;
-	s.activeCamera = titleCam;
-	return s;
-}
+// Title-screen scene factory bound to this module's engine + shared BRDF.
+// `constructLevel` disposes the result on INSERT COIN; `routeOverlay`
+// rebuilds via this same closure on game-over → title.
+const buildTitleScene = (): Scene => buildTitleSceneImpl(engine, sharedBrdf);
+
+const runtime = createRuntimeContext();
 
 let scene: Scene | null = buildTitleScene();
 let currentCamera: FreeCamera | null = null;
@@ -249,14 +240,7 @@ if (IS_DEV) {
 const overlay = new Overlay('dord-ui', uiScene);
 const reticle = new Reticle(overlay);
 
-let activeOverlayDispose: (() => void) | null = null;
-// Bumped every time routeOverlay disposes the prior overlay. Async overlay
-// constructors (e.g. high-scores' loadHighScores) capture this token at
-// dispatch time and bail when it has changed by resolution time, so they
-// cannot install a stale overlay over a newer phase.
-let overlayGeneration = 0;
-let hud: HudOverlay | null = null;
-let narrator: NarratorOverlay | null = null;
+// Overlay bookkeeping moved to runtime.overlayState. See src/runtime/overlayState.ts.
 
 // Install `?frame=N` deterministic-replay hook BEFORE the first wall-clock
 // read. Otherwise `lastTickMs` would be captured at virtualMs=0, then
@@ -273,7 +257,7 @@ await initQuarters();
 
 // Keep the HUD's quarter readout in sync with the persistent balance.
 subscribeQuarters((balance) => {
-	hud?.setQuarters(balance);
+	runtime.overlayState.hud?.setQuarters(balance);
 });
 
 window.addEventListener('resize', () => engine.resize());
@@ -291,24 +275,24 @@ document.addEventListener('visibilitychange', () => {
 game.subscribe((state) => routeOverlay(state));
 
 function routeOverlay(state: GameState): void {
-	if (activeOverlayDispose) {
-		activeOverlayDispose();
-		activeOverlayDispose = null;
+	if (runtime.overlayState.activeDispose) {
+		runtime.overlayState.activeDispose();
+		runtime.overlayState.activeDispose = null;
 	}
-	overlayGeneration++;
+	runtime.overlayState.generation++;
 	reticle.setVisible(state.phase === 'playing');
 	const wantsHud = state.phase === 'playing' || state.phase === 'continue-prompt';
-	if (wantsHud && !hud) {
-		hud = new HudOverlay(overlay);
-		hud.setQuarters(getBalance());
-		narrator = new NarratorOverlay(overlay);
-	} else if (!wantsHud && hud) {
-		hud.dispose();
-		hud = null;
-		narrator?.dispose();
-		narrator = null;
+	if (wantsHud && !runtime.overlayState.hud) {
+		runtime.overlayState.hud = new HudOverlay(overlay);
+		runtime.overlayState.hud.setQuarters(getBalance());
+		runtime.overlayState.narrator = new NarratorOverlay(overlay);
+	} else if (!wantsHud && runtime.overlayState.hud) {
+		runtime.overlayState.hud.dispose();
+		runtime.overlayState.hud = null;
+		runtime.overlayState.narrator?.dispose();
+		runtime.overlayState.narrator = null;
 	}
-	hud?.render(state);
+	runtime.overlayState.hud?.render(state);
 	switch (state.phase) {
 		case 'insert-coin': {
 			// If we just returned from a run, the gameplay scene is still alive
@@ -323,18 +307,15 @@ function routeOverlay(state: GameState): void {
 				scene.dispose();
 				scene = buildTitleScene();
 				currentCamera = null;
-				cameraShake = null;
-				lastShakeDx = 0;
-				lastShakeDy = 0;
+				runtime.cameraShake.reset();
 				levelHandles = null;
 				currentLevel = null;
 				enemySpawnHp.clear();
 				enemyLastHitTarget.clear();
 				enemyMeshes.clear();
 				healthKitMeshes.clear();
-				activeCivilians.clear();
-				civilianSeq = 0;
-				activePropAnims.clear();
+				runtime.civilians.clear();
+				runtime.propAnims.clear();
 				pendingCueActions.length = 0;
 			}
 			const coin = new InsertCoinOverlay(
@@ -343,19 +324,19 @@ function routeOverlay(state: GameState): void {
 				() => game.openHighScores(),
 				() => game.openCabinetStats(),
 			);
-			activeOverlayDispose = () => coin.dispose();
+			runtime.overlayState.activeDispose = () => coin.dispose();
 			break;
 		}
 		case 'high-scores': {
-			const generation = overlayGeneration;
+			const generation = runtime.overlayState.generation;
 			void loadHighScores().then((scores) => {
 				// Bail if the user navigated away (or back-and-forth) while
 				// the load was in flight — installing this overlay now would
 				// orphan whatever has replaced it.
-				if (generation !== overlayGeneration) return;
+				if (generation !== runtime.overlayState.generation) return;
 				if (game.getState().phase !== 'high-scores') return;
 				const panel = new HighScoresOverlay(overlay, scores, () => game.closeHighScores());
-				activeOverlayDispose = () => panel.dispose();
+				runtime.overlayState.activeDispose = () => panel.dispose();
 			});
 			break;
 		}
@@ -364,7 +345,7 @@ function routeOverlay(state: GameState): void {
 			// that initQuarters() populated at boot, so no async race window.
 			const stats = getLifetimeStats();
 			const panel = new CabinetStatsOverlay(overlay, stats, () => game.closeCabinetStats());
-			activeOverlayDispose = () => panel.dispose();
+			runtime.overlayState.activeDispose = () => panel.dispose();
 			break;
 		}
 		case 'playing': {
@@ -385,7 +366,7 @@ function routeOverlay(state: GameState): void {
 				},
 				() => game.endRun(true),
 			);
-			activeOverlayDispose = () => cont.dispose();
+			runtime.overlayState.activeDispose = () => cont.dispose();
 			break;
 		}
 		case 'game-over':
@@ -406,7 +387,7 @@ function routeOverlay(state: GameState): void {
 				},
 				() => game.closeSettings(),
 			);
-			activeOverlayDispose = () => overlayInstance.dispose(overlay);
+			runtime.overlayState.activeDispose = () => overlayInstance.dispose(overlay);
 			break;
 		}
 	}
@@ -415,16 +396,14 @@ function routeOverlay(state: GameState): void {
 // Set when the friend modal is on screen so a rapid second tap on the
 // title-screen INSERT COIN button cannot stack a second modal (which would
 // resolve into a double bailout). Always cleared in the modal dismiss.
-let friendModalOpen = false;
-
 function handleInsertCoin(): void {
 	if (getBalance() > 0) {
 		audioBus?.playStinger('ui/ui-confirm.mp3', 0.7);
 		game.insertCoin(now());
 		return;
 	}
-	if (friendModalOpen) return;
-	friendModalOpen = true;
+	if (runtime.overlayState.friendModalOpen) return;
+	runtime.overlayState.friendModalOpen = true;
 	// Friend bailout sting — cheery pickup-style cue announces the modal.
 	// Reused from the inventory pickup library per docs/spec/06-economy.md
 	// audio polish item.
@@ -432,9 +411,9 @@ function handleInsertCoin(): void {
 	// Zero balance → friend modal, then auto-start the run. Caller is
 	// always in 'insert-coin' phase; dispose the InsertCoinOverlay so the
 	// modal sits alone on the screen.
-	if (activeOverlayDispose) {
-		activeOverlayDispose();
-		activeOverlayDispose = null;
+	if (runtime.overlayState.activeDispose) {
+		runtime.overlayState.activeDispose();
+		runtime.overlayState.activeDispose = null;
 	}
 	let modalDisposed = false;
 	const disposeOnce = (): void => {
@@ -445,7 +424,7 @@ function handleInsertCoin(): void {
 	const modal = new FriendModalOverlay(overlay, () => {
 		audioBus?.playStinger('ui/ui-confirm.mp3', 0.7);
 		disposeOnce();
-		activeOverlayDispose = null;
+		runtime.overlayState.activeDispose = null;
 		// Hold `friendModalOpen=true` until the bailout has resolved so a
 		// rapid re-tap of INSERT COIN cannot stack a second modal (and a
 		// second +8 grant) while the first grant is still in flight.
@@ -458,12 +437,12 @@ function handleInsertCoin(): void {
 				game.returnToTitle();
 			})
 			.finally(() => {
-				friendModalOpen = false;
+				runtime.overlayState.friendModalOpen = false;
 			});
 	});
-	activeOverlayDispose = () => {
+	runtime.overlayState.activeDispose = () => {
 		disposeOnce();
-		friendModalOpen = false;
+		runtime.overlayState.friendModalOpen = false;
 	};
 }
 
@@ -501,52 +480,11 @@ async function emitGameOver(state: GameState, score: number, cleared: boolean): 
 		// between free-start and friend-modal based on the persisted balance.
 		game.returnToTitle();
 	});
-	activeOverlayDispose = () => overlayInstance.dispose(overlay);
+	runtime.overlayState.activeDispose = () => overlayInstance.dispose(overlay);
 	void loadHighScore(); // pre-warm cache for next coin
 }
 
 // ── Level construction ──────────────────────────────────────────────────────
-
-// Imported nodes arrive as a tree of multiple top-level meshes, plus
-// particle systems and skeletons that need their own dispose calls to
-// release GPU buffers — `meshes[0].dispose()` alone leaks the rest.
-function disposeImportResult(result: {
-	readonly meshes: readonly AbstractMesh[];
-	readonly particleSystems?: readonly { dispose(): void }[];
-	readonly skeletons?: readonly { dispose(): void }[];
-}): void {
-	for (const m of result.meshes) m.dispose();
-	for (const ps of result.particleSystems ?? []) ps.dispose();
-	for (const sk of result.skeletons ?? []) sk.dispose();
-}
-
-// Load the archetype GLB for a boss enemy and parent it to the hitbox
-// capsule. Async; bails if the spawn-time scene was disposed before the
-// import resolved (e.g., player died mid-load and the level was torn down).
-function loadBossGlb(spawnScene: Scene, capsule: AbstractMesh, enemy: Enemy): void {
-	const glb = ARCHETYPES[enemy.archetypeId].glb;
-	ImportMeshAsync(`/assets/models/${glb}`, spawnScene)
-		.then((result) => {
-			if (spawnScene.isDisposed || capsule.isDisposed() || scene !== spawnScene) {
-				disposeImportResult(result);
-				return;
-			}
-			const root = result.meshes[0];
-			if (!root) return;
-			root.name = `boss-glb-${enemy.id}`;
-			root.parent = capsule;
-			root.position.y = -CAPSULE_HALF_HEIGHT;
-			// Reaper is the final boss — scale up so they read as a ~3m
-			// menacing figure. Other bosses are reskinned grunts at native
-			// scale.
-			if (enemy.archetypeId === 'reaper') {
-				root.scaling.setAll(2.0);
-			}
-		})
-		.catch((err) => {
-			console.warn(`[boss-glb] failed to load ${glb}`, err);
-		});
-}
 
 function constructLevel(levelId: LevelId): void {
 	// Pause the render loop across the dispose+rebuild boundary. Defence
@@ -559,20 +497,17 @@ function constructLevel(levelId: LevelId): void {
 		scene.dispose();
 		scene = null;
 		currentCamera = null;
-		cameraShake = null;
-		lastShakeDx = 0;
-		lastShakeDy = 0;
+		runtime.cameraShake.reset();
 		levelHandles = null;
 		audioBus = null;
-		clearFireAlarmFlicker();
-		lightTweens.clear();
+		runtime.fireAlarm.clear(levelHandles);
+		runtime.lightTweens.clear();
 		enemySpawnHp.clear();
 		enemyLastHitTarget.clear();
 		enemyMeshes.clear();
 		healthKitMeshes.clear();
-		activeCivilians.clear();
-		civilianSeq = 0;
-		activePropAnims.clear();
+		runtime.civilians.clear();
+		runtime.propAnims.clear();
 		// Discard — the level is gone, queued cues for it are obsolete.
 		// Distinct from the drain in `buildLevel(...).then`, which captures
 		// a snapshot before re-dispatching.
@@ -613,98 +548,25 @@ function constructLevel(levelId: LevelId): void {
 		}
 	});
 
-	const listener: EncounterListener = {
-		onCueFire(cue: Cue, action: CueAction) {
-			console.debug('[cue]', cue.id, action.verb);
-			handleCueAction(action);
-		},
-		onEnemySpawn(enemy: Enemy) {
-			if (!scene) return;
-			const mesh = MeshBuilder.CreateCapsule(
-				`enemy-${enemy.id}`,
-				{ radius: CAPSULE_RADIUS, height: CAPSULE_HEIGHT },
-				scene,
-			);
-			mesh.position.copyFrom(enemy.position);
-			mesh.position.y += CAPSULE_HALF_HEIGHT;
-			// Placeholder material so the capsule reads as a threat until
-			// archetype GLBs land. Without this, the capsule has no material
-			// and renders as a near-invisible default-shaded silhouette,
-			// which is what the visual audit caught.
-			const mat = new StandardMaterial(`mat-enemy-${enemy.id}`, scene);
-			const isBoss = bossIdForEnemy(enemy.id) !== null;
-			// Bosses get a distinct color so they're not lost in a wave of
-			// red grunt-capsules. Reaper goes near-black/purple; the other
-			// four bosses go gold so the player knows which target carries
-			// the boss HP bar.
-			if (enemy.archetypeId === 'reaper') {
-				mat.diffuseColor = new Color3(0.4, 0.05, 0.4);
-				mat.emissiveColor = new Color3(0.25, 0.0, 0.25);
-			} else if (isBoss) {
-				mat.diffuseColor = new Color3(0.95, 0.75, 0.15);
-				mat.emissiveColor = new Color3(0.3, 0.2, 0.0);
-			} else {
-				mat.diffuseColor = new Color3(0.85, 0.18, 0.18);
-				mat.emissiveColor = new Color3(0.12, 0.0, 0.0);
-			}
-			mat.specularColor = new Color3(0.05, 0.05, 0.05);
-			mesh.material = mat;
-			mesh.metadata = { enemyId: enemy.id };
-			enemySpawnHp.set(enemy.id, enemy.hp);
-			enemyMeshes.set(enemy.id, mesh);
-
-			// For bosses, attempt to load the archetype GLB and parent it to
-			// the capsule. The capsule remains as the hitbox; the GLB is
-			// purely visual. If the GLB load fails (404, network), the
-			// colored capsule stays as the visible body.
-			if (isBoss) {
-				loadBossGlb(scene, mesh, enemy);
-			}
-		},
-		onEnemyMove(enemyId, position) {
-			const mesh = enemyMeshes.get(enemyId);
-			if (!mesh) return;
-			mesh.position.copyFrom(position);
-			mesh.position.y += CAPSULE_HALF_HEIGHT;
-		},
-		onEnemyHit(enemyId, target, _damage) {
-			enemyLastHitTarget.set(enemyId, target);
-		},
-		onEnemyKill(enemyId) {
-			disposeEnemy(enemyId);
-			const target = enemyLastHitTarget.get(enemyId) ?? 'body';
-			game.hit(target);
-			enemyLastHitTarget.delete(enemyId);
-			// Boss kills drop quarters per docs/spec/06-economy.md.
-			const bossId = bossIdForEnemy(enemyId);
-			if (bossId !== null) {
-				const drop = rollBossDrop(BOSSES[bossId].quarterDrop);
-				if (drop > 0) {
-					awardQuarters(drop).catch((err) => {
-						console.error(`[economy] failed to award boss drop for ${bossId}`, err);
-					});
-				}
-			}
-		},
-		onEnemyCease(enemyId) {
-			disposeEnemy(enemyId);
-			enemyLastHitTarget.delete(enemyId);
-		},
-		onFireEvent(_enemyId, event: FireEvent) {
-			void event;
-		},
-		onPlayerDamage(damage) {
-			// `IS_DEV` is a Vite compile-time constant — this entire branch
-			// tree-shakes in production builds, so the `__dordGod` cheat
-			// surface never ships.
+	const listener = createEncounterListener({
+		capsuleHeight: CAPSULE_HEIGHT,
+		capsuleRadius: CAPSULE_RADIUS,
+		enemyMeshes,
+		enemySpawnHp,
+		enemyLastHitTarget,
+		game,
+		camera,
+		getScene: () => scene,
+		disposeEnemy,
+		handleCueAction,
+		// `IS_DEV` is a Vite compile-time constant — this whole branch
+		// (including the `globalThis.__dordGod` read) folds to nothing in
+		// prod bundles, so the cheat surface never ships.
+		applyDamage: (damage) => {
 			if (IS_DEV && (globalThis as { __dordGod?: boolean }).__dordGod) return;
 			game.takeDamage(damage);
 		},
-		onCameraUpdate(position, lookAt) {
-			camera.position.copyFrom(position);
-			camera.setTarget(lookAt);
-		},
-	};
+	});
 
 	director = new EncounterDirector({
 		cameraRail: currentLevel.cameraRail,
@@ -736,13 +598,13 @@ function handleCueAction(action: CueAction): void {
 			game.transitionLevel(action.toLevelId);
 			return;
 		case 'door':
-			handleDoorCue(action.doorId, action.to);
+			handleDoorCueImpl(levelHandles, currentLevel, action.doorId, action.to);
 			return;
 		case 'lighting':
-			handleLightingCue(action.lightId, action.tween);
+			runtime.lightTweens.handle(levelHandles, action.lightId, action.tween);
 			return;
 		case 'civilian-spawn': {
-			spawnCivilian(action.railId);
+			runtime.civilians.spawn(scene, currentLevel, action.railId, CAPSULE_HEIGHT, CAPSULE_RADIUS);
 			return;
 		}
 		case 'audio-stinger': {
@@ -754,43 +616,25 @@ function handleCueAction(action: CueAction): void {
 			return;
 		}
 		case 'narrator': {
-			narrator?.show(action.text, action.durationMs);
+			runtime.overlayState.narrator?.show(action.text, action.durationMs);
 			return;
 		}
 		case 'camera-shake': {
-			beginCameraShake(action.intensity, action.durationMs);
+			runtime.cameraShake.begin(action.intensity, action.durationMs);
 			return;
 		}
 		case 'shutter':
-			handleShutterCue(action.shutterId, action.to);
+			handleShutterCueImpl(levelHandles, currentLevel, action.shutterId, action.to);
 			return;
 		case 'level-event':
 			handleLevelEvent(action.event);
 			return;
 		case 'prop-anim':
-			handlePropAnimCue(action.propId, action.animId);
+			runtime.propAnims.handle(levelHandles, action.propId, action.animId);
 			return;
 		default:
 			return;
 	}
-}
-
-function handleDoorCue(doorId: string, to: 'open' | 'closed'): void {
-	const mesh = levelHandles?.doors.get(doorId);
-	if (!mesh || !currentLevel) return;
-	const doorPrim = currentLevel.primitives.find(
-		(p): p is Door => p.kind === 'door' && p.id === doorId,
-	);
-	if (doorPrim && to === 'open') applyDoorOpen(mesh, doorPrim);
-}
-
-function handleShutterCue(shutterId: string, to: 'down' | 'up' | 'half'): void {
-	const mesh = levelHandles?.shutters.get(shutterId);
-	if (!mesh || !currentLevel) return;
-	const shutterPrim = currentLevel.primitives.find(
-		(p): p is Shutter => p.kind === 'shutter' && p.id === shutterId,
-	);
-	if (shutterPrim) applyShutterState(mesh, shutterPrim, to);
 }
 
 function handleLevelEvent(
@@ -799,10 +643,10 @@ function handleLevelEvent(
 	if (!levelHandles || !currentLevel) return;
 	switch (event) {
 		case 'power-out':
-			handlePowerOut();
+			handlePowerOutImpl(levelHandles);
 			return;
 		case 'lights-restored':
-			handleLightsRestored();
+			handleLightsRestoredImpl(levelHandles, currentLevel);
 			return;
 		case 'fire-alarm':
 			handleFireAlarm();
@@ -810,21 +654,6 @@ function handleLevelEvent(
 		case 'elevator-ding':
 			handleElevatorDing();
 			return;
-	}
-}
-
-function handlePowerOut(): void {
-	if (!levelHandles) return;
-	for (const light of levelHandles.lights.values()) light.intensity = 0;
-}
-
-function handleLightsRestored(): void {
-	if (!levelHandles || !currentLevel) return;
-	for (const prim of currentLevel.primitives) {
-		if (prim.kind !== 'light') continue;
-		const lightPrim = prim as Light;
-		const bl = levelHandles.lights.get(lightPrim.id);
-		if (bl) bl.intensity = lightPrim.intensity;
 	}
 }
 
@@ -836,227 +665,15 @@ function handleLightsRestored(): void {
 function handleFireAlarm(): void {
 	if (!levelHandles || !currentLevel) return;
 	audioBus?.startAmbience('fire-alarm-klaxon', 'sfx/klaxon-loop.ogg', 0.6, true);
-	fireAlarmActive = true;
-	fireAlarmStartedMs = now();
-	// Snapshot current intensities so the flicker can ride on top of
-	// authored levels and `clearFireAlarm` can restore them exactly.
-	fireAlarmBaseIntensity.clear();
-	for (const [id, light] of levelHandles.lights) {
-		fireAlarmBaseIntensity.set(id, light.intensity);
-	}
-	openDoorsBy((door) => door.spawnRailId != null);
+	runtime.fireAlarm.start(levelHandles);
+	openDoorsByImpl(levelHandles, currentLevel, (door) => door.spawnRailId != null);
 }
 
 // Lobby exit + HR-corridor exit set piece — stinger + open the lift door.
 function handleElevatorDing(): void {
 	if (!levelHandles || !currentLevel) return;
 	audioBus?.playStinger('stingers/elevator-ding.ogg', 0.7);
-	openDoorsBy((door) => door.family === 'lift');
-}
-
-function openDoorsBy(predicate: (door: Door) => boolean): void {
-	if (!levelHandles || !currentLevel) return;
-	for (const prim of currentLevel.primitives) {
-		if (prim.kind !== 'door') continue;
-		const door = prim as Door;
-		if (!predicate(door)) continue;
-		const mesh = levelHandles.doors.get(door.id);
-		if (mesh) applyDoorOpen(mesh, door);
-	}
-}
-
-// ── Cue-driven lighting tweens ──────────────────────────────────────────────
-
-// Active fade / flicker / colour-shift tweens keyed by light id. Each entry
-// is consumed by `tickLightTweens` per frame and removed when its end time
-// passes. The `lighting` cue handler installs entries here; `clearFireAlarmFlicker`
-// and the level-dispose path are responsible for stopping them on transition.
-type LightTween =
-	| {
-			readonly kind: 'fade';
-			readonly fromIntensity: number;
-			readonly toIntensity: number;
-			readonly startMs: number;
-			readonly endMs: number;
-	  }
-	| {
-			readonly kind: 'flicker';
-			readonly minIntensity: number;
-			readonly maxIntensity: number;
-			readonly hz: number;
-			readonly startMs: number;
-			readonly endMs: number;
-	  }
-	| {
-			readonly kind: 'colour-shift';
-			readonly fromColor: readonly [number, number, number];
-			readonly toColor: readonly [number, number, number];
-			readonly startMs: number;
-			readonly endMs: number;
-	  };
-const lightTweens = new Map<string, LightTween>();
-
-function handleLightingCue(lightId: string, tween: LightingTween): void {
-	const light = levelHandles?.lights.get(lightId);
-	if (!light) return;
-	if (tween.kind === 'snap') {
-		light.intensity = tween.intensity;
-		if (tween.color && 'diffuse' in light) {
-			const [r, g, b] = tween.color;
-			light.diffuse.set(r, g, b);
-		}
-		return;
-	}
-	const startMs = now();
-	const endMs = startMs + tween.durationMs;
-	if (tween.kind === 'fade') {
-		lightTweens.set(lightId, {
-			kind: 'fade',
-			fromIntensity: light.intensity,
-			toIntensity: tween.toIntensity,
-			startMs,
-			endMs,
-		});
-		return;
-	}
-	if (tween.kind === 'flicker') {
-		lightTweens.set(lightId, {
-			kind: 'flicker',
-			minIntensity: tween.minIntensity,
-			maxIntensity: tween.maxIntensity,
-			hz: tween.hz,
-			startMs,
-			endMs,
-		});
-		return;
-	}
-	if (tween.kind === 'colour-shift' && 'diffuse' in light) {
-		lightTweens.set(lightId, {
-			kind: 'colour-shift',
-			fromColor: [light.diffuse.r, light.diffuse.g, light.diffuse.b],
-			toColor: tween.toColor,
-			startMs,
-			endMs,
-		});
-	}
-}
-
-function tickLightTweens(nowMs: number): void {
-	if (!levelHandles || lightTweens.size === 0) return;
-	for (const [id, tween] of lightTweens) {
-		const light = levelHandles.lights.get(id);
-		if (!light) {
-			lightTweens.delete(id);
-			continue;
-		}
-		applyLightTween(light, tween, nowMs);
-		if (nowMs >= tween.endMs) lightTweens.delete(id);
-	}
-}
-
-function applyLightTween(
-	light: {
-		intensity: number;
-		diffuse?: { r: number; g: number; b: number; set: (r: number, g: number, b: number) => void };
-	},
-	tween: LightTween,
-	nowMs: number,
-): void {
-	const t = Math.min(1, (nowMs - tween.startMs) / Math.max(1, tween.endMs - tween.startMs));
-	if (tween.kind === 'fade') {
-		light.intensity = tween.fromIntensity + (tween.toIntensity - tween.fromIntensity) * t;
-		return;
-	}
-	if (tween.kind === 'flicker') {
-		const phase = ((nowMs - tween.startMs) * tween.hz) / 500;
-		light.intensity = Math.floor(phase) % 2 === 0 ? tween.minIntensity : tween.maxIntensity;
-		return;
-	}
-	if (tween.kind === 'colour-shift' && light.diffuse) {
-		const [fr, fg, fb] = tween.fromColor;
-		const [tr, tg, tb] = tween.toColor;
-		light.diffuse.set(fr + (tr - fr) * t, fg + (tg - fg) * t, fb + (tb - fb) * t);
-	}
-}
-
-// ── Fire-alarm flicker state ────────────────────────────────────────────────
-
-// Drives the 4Hz red flicker on level lights while the alarm is active. The
-// tick loop reads these and modulates `light.intensity` per frame; on level
-// transition `clearFireAlarmFlicker` resets the bookkeeping. Klaxon loop is
-// owned by AudioBus and disposes with the scene.
-let fireAlarmActive = false;
-let fireAlarmStartedMs = 0;
-const fireAlarmBaseIntensity = new Map<string, number>();
-const FIRE_ALARM_FLICKER_HZ = 4;
-
-function tickFireAlarm(nowMs: number): void {
-	if (!fireAlarmActive || !levelHandles) return;
-	// Square wave at FIRE_ALARM_FLICKER_HZ — half-period bright, half-period
-	// dim. The dim phase reads as "red strobe" because authored level lights
-	// fall back to ambient red when their intensity drops; the spec calls for
-	// 4Hz red flicker, which a 50% duty square at 4Hz delivers.
-	const phaseMs = ((nowMs - fireAlarmStartedMs) * FIRE_ALARM_FLICKER_HZ) / 500;
-	const dim = Math.floor(phaseMs) % 2 === 0;
-	for (const [id, light] of levelHandles.lights) {
-		// Cue-driven lighting tweens win over the alarm flicker. Without
-		// this guard, a `lighting` cue authored to fade or colour-shift a
-		// light during the alarm window would be silently clobbered every
-		// frame — `tickLightTweens` runs first and writes the interpolated
-		// value, then `tickFireAlarm` overwrites it.
-		if (lightTweens.has(id)) continue;
-		const base = fireAlarmBaseIntensity.get(id) ?? light.intensity;
-		light.intensity = dim ? base * 0.15 : base;
-	}
-}
-
-function clearFireAlarmFlicker(): void {
-	if (!fireAlarmActive) return;
-	if (levelHandles) {
-		for (const [id, light] of levelHandles.lights) {
-			const base = fireAlarmBaseIntensity.get(id);
-			if (base != null) light.intensity = base;
-		}
-	}
-	fireAlarmActive = false;
-	fireAlarmBaseIntensity.clear();
-}
-
-// ── Camera shake ─────────────────────────────────────────────────────────────
-
-interface CameraShake {
-	readonly intensity: number;
-	readonly startMs: number;
-	readonly endMs: number;
-}
-let cameraShake: CameraShake | null = null;
-let lastShakeDx = 0;
-let lastShakeDy = 0;
-
-function beginCameraShake(intensity: number, durationMs: number): void {
-	const startMs = now();
-	cameraShake = { intensity, startMs, endMs: startMs + durationMs };
-}
-
-function applyCameraShake(camera: FreeCamera): void {
-	camera.position.x -= lastShakeDx;
-	camera.position.y -= lastShakeDy;
-	lastShakeDx = 0;
-	lastShakeDy = 0;
-	if (!cameraShake) return;
-	const t0 = now();
-	if (t0 >= cameraShake.endMs) {
-		cameraShake = null;
-		return;
-	}
-	const totalMs = cameraShake.endMs - cameraShake.startMs;
-	const remainingMs = cameraShake.endMs - t0;
-	const t = totalMs > 0 ? remainingMs / totalMs : 0;
-	const amp = cameraShake.intensity * t;
-	lastShakeDx = (rand() - 0.5) * 2 * amp;
-	lastShakeDy = (rand() - 0.5) * 2 * amp;
-	camera.position.x += lastShakeDx;
-	camera.position.y += lastShakeDy;
+	openDoorsByImpl(levelHandles, currentLevel, (door) => door.family === 'lift');
 }
 
 function disposeEnemy(enemyId: string): void {
@@ -1064,161 +681,6 @@ function disposeEnemy(enemyId: string): void {
 	mesh?.dispose();
 	enemyMeshes.delete(enemyId);
 	enemySpawnHp.delete(enemyId);
-}
-
-// ── Prop animations ──────────────────────────────────────────────────────────
-
-interface ActivePropAnim {
-	readonly mesh: AbstractMesh;
-	readonly startMs: number;
-	readonly durationMs: number;
-	readonly animId: 'drop' | 'roll-in';
-	readonly fromX: number;
-	readonly fromY: number;
-	readonly fromZ: number;
-	readonly toX: number;
-	readonly toY: number;
-	readonly toZ: number;
-	readonly fromRotZ: number;
-	readonly toRotZ: number;
-}
-
-const activePropAnims = new Map<string, ActivePropAnim>();
-
-function handlePropAnimCue(propId: string, animId: string): void {
-	const mesh = levelHandles?.props.get(propId);
-	if (!mesh || mesh.isDisposed()) return;
-	if (activePropAnims.has(propId)) return;
-	if (animId === 'shatter') {
-		mesh.dispose();
-		levelHandles?.props.delete(propId);
-		return;
-	}
-	if (animId === 'drop') {
-		activePropAnims.set(propId, {
-			mesh,
-			startMs: now(),
-			durationMs: 600,
-			animId: 'drop',
-			fromX: mesh.position.x,
-			fromY: mesh.position.y,
-			fromZ: mesh.position.z,
-			toX: mesh.position.x,
-			toY: 0,
-			toZ: mesh.position.z,
-			fromRotZ: mesh.rotation.z,
-			toRotZ: mesh.rotation.z + Math.PI / 6,
-		});
-		return;
-	}
-	if (animId === 'roll-in') {
-		const yaw = mesh.rotation.y;
-		const rollDist = 3;
-		const destX = mesh.position.x;
-		const destZ = mesh.position.z;
-		activePropAnims.set(propId, {
-			mesh,
-			startMs: now(),
-			durationMs: 800,
-			animId: 'roll-in',
-			fromX: destX - Math.sin(yaw) * rollDist,
-			fromY: mesh.position.y,
-			fromZ: destZ - Math.cos(yaw) * rollDist,
-			toX: destX,
-			toY: mesh.position.y,
-			toZ: destZ,
-			fromRotZ: mesh.rotation.z,
-			toRotZ: mesh.rotation.z,
-		});
-		mesh.position.x = destX - Math.sin(yaw) * rollDist;
-		mesh.position.z = destZ - Math.cos(yaw) * rollDist;
-		return;
-	}
-	console.warn(`[cue] unknown prop-anim animId '${animId}' for prop '${propId}'`);
-}
-
-function tickPropAnims(): void {
-	const t0 = now();
-	for (const [id, anim] of activePropAnims) {
-		const elapsed = t0 - anim.startMs;
-		const t = Math.min(1, elapsed / anim.durationMs);
-		const eased = anim.animId === 'drop' ? t * t : 1 - (1 - t) * (1 - t);
-		anim.mesh.position.x = anim.fromX + (anim.toX - anim.fromX) * eased;
-		anim.mesh.position.y = anim.fromY + (anim.toY - anim.fromY) * eased;
-		anim.mesh.position.z = anim.fromZ + (anim.toZ - anim.fromZ) * eased;
-		anim.mesh.rotation.z = anim.fromRotZ + (anim.toRotZ - anim.fromRotZ) * eased;
-		if (t >= 1) activePropAnims.delete(id);
-	}
-}
-
-// ── Civilians ────────────────────────────────────────────────────────────────
-
-interface ActiveCivilian {
-	readonly id: string;
-	readonly path: readonly Vector3[];
-	readonly speed: number;
-	readonly mesh: AbstractMesh;
-	t: number;
-}
-
-const activeCivilians = new Map<string, ActiveCivilian>();
-let civilianSeq = 0;
-
-function spawnCivilian(railId: string): void {
-	if (!scene || !currentLevel) return;
-	const rail = currentLevel.civilianRails.find((r) => r.id === railId);
-	const head = rail?.path[0];
-	if (!rail || !head || rail.path.length < 2) return;
-	const id = `civ-${++civilianSeq}`;
-	const mesh = MeshBuilder.CreateCapsule(
-		`civilian-${id}`,
-		{ radius: CAPSULE_RADIUS, height: CAPSULE_HEIGHT },
-		scene,
-	);
-	mesh.position.copyFrom(head);
-	mesh.position.y += CAPSULE_HALF_HEIGHT;
-	// Civilian-blue placeholder so they read as non-threats. Reticle gradient
-	// (pickAt → reticleColorFor) already returns 'blue' for the enemyId-less
-	// pick; this matches the HUD signal.
-	const mat = new StandardMaterial(`mat-civ-${id}`, scene);
-	mat.diffuseColor = new Color3(0.25, 0.55, 0.95);
-	mat.emissiveColor = new Color3(0.0, 0.05, 0.12);
-	mat.specularColor = new Color3(0.05, 0.05, 0.05);
-	mesh.material = mat;
-	mesh.metadata = { civilianId: id };
-	activeCivilians.set(id, { id, path: rail.path, speed: rail.speed, mesh, t: 0 });
-}
-
-function tickCivilians(dtMs: number): void {
-	const dtS = dtMs / 1000;
-	for (const civ of activeCivilians.values()) {
-		civ.t += civ.speed * dtS;
-		const { position, finished } = sampleCivilianPath(civ);
-		civ.mesh.position.copyFrom(position);
-		civ.mesh.position.y += CAPSULE_HALF_HEIGHT;
-		if (finished) {
-			civ.mesh.dispose();
-			activeCivilians.delete(civ.id);
-		}
-	}
-}
-
-function sampleCivilianPath(civ: ActiveCivilian): { position: Vector3; finished: boolean } {
-	let remaining = civ.t;
-	let last: Vector3 | undefined;
-	for (let i = 0; i < civ.path.length - 1; i++) {
-		const a = civ.path[i];
-		const b = civ.path[i + 1];
-		if (!a || !b) break;
-		last = b;
-		const seg = Vector3.Distance(a, b);
-		if (remaining <= seg) {
-			const u = seg > 0 ? remaining / seg : 0;
-			return { position: Vector3.Lerp(a, b, u), finished: false };
-		}
-		remaining -= seg;
-	}
-	return { position: last ?? civ.path[0] ?? Vector3.Zero(), finished: true };
 }
 
 // ── Main loop ────────────────────────────────────────────────────────────────
@@ -1231,12 +693,12 @@ function tick(): void {
 	const state = game.getState();
 	if (state.phase === 'playing') {
 		if (director && !director.isFinished) director.tick(dtMs);
-		tickCivilians(dtMs);
-		tickPropAnims();
-		tickLightTweens(tickT);
-		tickFireAlarm(tickT);
+		runtime.civilians.tick(dtMs, CAPSULE_HEIGHT);
+		runtime.propAnims.tick();
+		runtime.lightTweens.tick(levelHandles, tickT);
+		runtime.fireAlarm.tick(levelHandles, tickT, (id) => runtime.lightTweens.isActive(id));
 		game.tickReload(now());
-		if (currentCamera) applyCameraShake(currentCamera);
+		if (currentCamera) runtime.cameraShake.apply(currentCamera);
 	}
 
 	// Render-side guard: a gameplay scene built mid-tick (e.g. a level jump
@@ -1261,49 +723,12 @@ function tick(): void {
 
 // ── Hit-test: reticle hover + fire ───────────────────────────────────────────
 
-interface PickResult {
-	readonly kind: 'enemy' | 'civilian' | 'health-kit' | 'air';
-	readonly enemyId?: string;
-	readonly civilianId?: string;
-	readonly healthKitId?: string;
-	readonly target?: 'head' | 'body';
-}
-
 function pickAt(xPx: number, yPx: number): PickResult {
-	if (!scene) return { kind: 'air' };
-	const pick = scene.pick(xPx, yPx);
-	if (!pick?.hit || !pick.pickedMesh) return { kind: 'air' };
-	const meta = pick.pickedMesh.metadata as
-		| { enemyId?: string; civilianId?: string; healthKitId?: string }
-		| null
-		| undefined;
-	if (meta?.enemyId) {
-		const meshY = pick.pickedMesh.position.y;
-		const hitY = pick.pickedPoint?.y ?? meshY;
-		const fromTop = meshY + CAPSULE_HALF_HEIGHT - hitY;
-		const target: 'head' | 'body' = fromTop < CAPSULE_HALF_HEIGHT * 0.5 ? 'head' : 'body';
-		return { kind: 'enemy', enemyId: meta.enemyId, target };
-	}
-	if (meta?.civilianId) {
-		return { kind: 'civilian', civilianId: meta.civilianId };
-	}
-	if (meta?.healthKitId) {
-		return { kind: 'health-kit', healthKitId: meta.healthKitId };
-	}
-	return { kind: 'air' };
+	return pickAtImpl(scene, xPx, yPx, CAPSULE_HALF_HEIGHT);
 }
 
 function reticleColorFor(pick: PickResult): 'green' | 'orange' | 'red' | 'blue' {
-	if (pick.kind === 'civilian') return 'blue';
-	if (pick.kind === 'health-kit') return 'green';
-	if (pick.kind !== 'enemy' || !pick.enemyId || !director) return 'green';
-	const enemy = director.getEnemy(pick.enemyId);
-	const spawn = enemySpawnHp.get(pick.enemyId);
-	if (!enemy || !spawn || spawn <= 0) return 'green';
-	const frac = enemy.hp / spawn;
-	if (frac > 0.66) return 'red';
-	if (frac > 0.33) return 'orange';
-	return 'green';
+	return reticleColorForImpl(pick, director, enemySpawnHp);
 }
 
 // Start.
@@ -1339,9 +764,9 @@ canvas.addEventListener('pointerdown', (e) => {
 		director.hitEnemy(pick.enemyId, pick.target);
 	} else if (pick.kind === 'civilian' && pick.civilianId) {
 		game.hitCivilian();
-		const civ = activeCivilians.get(pick.civilianId);
+		const civ = runtime.civilians.getById(pick.civilianId);
 		civ?.mesh.dispose();
-		activeCivilians.delete(pick.civilianId);
+		runtime.civilians.deleteById(pick.civilianId);
 	} else if (pick.kind === 'health-kit' && pick.healthKitId) {
 		const kit = healthKitMeshes.get(pick.healthKitId);
 		if (kit) {
