@@ -25,6 +25,7 @@ import {
 	GameOverOverlay,
 	HudOverlay,
 	InsertCoinOverlay,
+	NarratorOverlay,
 	Overlay,
 	Reticle,
 	SettingsOverlay,
@@ -63,6 +64,7 @@ const CAPSULE_HALF_HEIGHT = CAPSULE_HEIGHT / 2;
 
 const engine = new Engine(canvas, true, { stencil: true, preserveDrawingBuffer: false });
 let scene: Scene | null = null;
+let currentCamera: FreeCamera | null = null;
 let director: EncounterDirector | null = null;
 let currentLevel: Level | null = null;
 let levelHandles: LevelHandles | null = null;
@@ -81,6 +83,7 @@ const reticle = new Reticle(overlay);
 
 let activeOverlayDispose: (() => void) | null = null;
 let hud: HudOverlay | null = null;
+let narrator: NarratorOverlay | null = null;
 // Bumped on every routeOverlay call so stale async overlay constructors no-op.
 let overlayRouteToken = 0;
 let lastTickMs = performance.now();
@@ -111,9 +114,12 @@ function routeOverlay(state: GameState): void {
 	const wantsHud = state.phase === 'playing' || state.phase === 'continue-prompt';
 	if (wantsHud && !hud) {
 		hud = new HudOverlay(overlay);
+		narrator = new NarratorOverlay(overlay);
 	} else if (!wantsHud && hud) {
 		hud.dispose();
 		hud = null;
+		narrator?.dispose();
+		narrator = null;
 	}
 	hud?.render(state);
 	switch (state.phase) {
@@ -204,6 +210,8 @@ function constructLevel(levelId: LevelId): void {
 	if (scene) {
 		scene.dispose();
 		scene = null;
+		currentCamera = null;
+		cameraShake = null;
 		levelHandles = null;
 		audioBus = null;
 		enemySpawnHp.clear();
@@ -223,6 +231,7 @@ function constructLevel(levelId: LevelId): void {
 	camera.minZ = 0.05;
 	camera.fov = 1.2; // ~70°
 	scene.activeCamera = camera;
+	currentCamera = camera;
 
 	const builtScene = scene;
 	const builtLevel = currentLevel;
@@ -324,11 +333,51 @@ function handleCueAction(action: CueAction): void {
 			audioBus?.fadeAmbience(action.layerId, action.toVolume, action.durationMs);
 			return;
 		}
-		// narrator / prop-anim / boss-spawn
+		case 'narrator': {
+			narrator?.show(action.text, action.durationMs);
+			return;
+		}
+		case 'camera-shake': {
+			beginCameraShake(action.intensity, action.durationMs);
+			return;
+		}
+		// prop-anim / boss-spawn / boss-phase / enemy-spawn / shutter / level-event
 		// are handled by their respective subsystems in subsequent commits.
 		default:
 			return;
 	}
+}
+
+// ── Camera shake ─────────────────────────────────────────────────────────────
+// Decaying random per-axis offset added to the camera's authored rail position
+// each tick. Owned by main.ts so cues from any director can drive it.
+
+interface CameraShake {
+	readonly intensity: number;
+	readonly startMs: number;
+	readonly endMs: number;
+}
+let cameraShake: CameraShake | null = null;
+
+function beginCameraShake(intensity: number, durationMs: number): void {
+	const startMs = performance.now();
+	cameraShake = { intensity, startMs, endMs: startMs + durationMs };
+}
+
+function applyCameraShake(camera: FreeCamera): void {
+	if (!cameraShake) return;
+	const now = performance.now();
+	if (now >= cameraShake.endMs) {
+		cameraShake = null;
+		return;
+	}
+	// Linear falloff: full amplitude at start, zero at end.
+	const totalMs = cameraShake.endMs - cameraShake.startMs;
+	const remainingMs = cameraShake.endMs - now;
+	const t = totalMs > 0 ? remainingMs / totalMs : 0;
+	const amp = cameraShake.intensity * t;
+	camera.position.x += (Math.random() - 0.5) * 2 * amp;
+	camera.position.y += (Math.random() - 0.5) * 2 * amp;
 }
 
 function disposeEnemy(enemyId: string): void {
@@ -413,6 +462,7 @@ function tick(): void {
 	if (state.phase === 'playing') {
 		if (director && !director.isFinished) director.tick(dtMs);
 		tickCivilians(dtMs);
+		if (currentCamera) applyCameraShake(currentCamera);
 	}
 
 	scene?.render();
