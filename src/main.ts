@@ -3,7 +3,7 @@ import { Engine } from '@babylonjs/core/Engines/engine';
 import { ImportMeshAsync } from '@babylonjs/core/Loading/sceneLoader';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
-import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { GetEnvironmentBRDFTexture } from '@babylonjs/core/Misc/brdfTextureTools';
@@ -207,6 +207,38 @@ if (IS_DEV) {
 		// `performance.now()` and `now()` will diverge, and any test
 		// passing real time to `game.insertCoin` would break.
 		now,
+		// Returns the screen-space center of every active enemy capsule,
+		// in CSS pixels relative to the page (so a Playwright
+		// `dispatchEvent(pointerdown, {clientX, clientY})` lands on the
+		// reticle pickray). Used by the e2e fire→kill test to drive the
+		// real shooting pipeline (pickAt → director.hitEnemy → onEnemyKill)
+		// without faking enemy positions or bypassing pointer wiring.
+		enemySnapshots: (): Array<{ id: string; clientX: number; clientY: number; hp: number }> => {
+			if (!scene?.activeCamera || !director) return [];
+			const cam = scene.activeCamera;
+			const rect = canvas.getBoundingClientRect();
+			const rw = engine.getRenderWidth();
+			const rh = engine.getRenderHeight();
+			const viewport = cam.viewport.toGlobal(rw, rh);
+			const transform = scene.getTransformMatrix();
+			// `Vector3.Project(local, world, viewProj, viewport)` applies world×viewProj
+			// internally. Passing `absolutePosition` AS the local vector requires
+			// the world matrix to be `Identity` — otherwise the world transform is
+			// applied twice and the projected coords land somewhere off-screen.
+			const identity = Matrix.IdentityReadOnly;
+			const out: Array<{ id: string; clientX: number; clientY: number; hp: number }> = [];
+			for (const [id, mesh] of enemyMeshes) {
+				const enemy = director.getEnemy(id);
+				if (!enemy) continue;
+				const projected = Vector3.Project(mesh.absolutePosition, identity, transform, viewport);
+				// Project returns render-target pixels (engine size). Convert to
+				// CSS pixels by scaling against the canvas's bounding rect.
+				const clientX = rect.left + (projected.x / rw) * rect.width;
+				const clientY = rect.top + (projected.y / rh) * rect.height;
+				out.push({ id, clientX, clientY, hp: enemy.hp });
+			}
+			return out;
+		},
 	};
 	// God-mode toggle for the visual-audit harness. When true, takeDamage
 	// is short-circuited so the audit can fast-forward through firing
