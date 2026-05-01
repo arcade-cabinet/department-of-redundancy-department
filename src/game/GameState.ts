@@ -100,6 +100,48 @@ export function comboMultiplier(combo: number): number {
 	return 1.0 + COMBO_STEP * Math.min(Math.max(0, combo), COMBO_CAP);
 }
 
+/**
+ * Per-difficulty score multiplier per docs/spec/03-difficulty-and-modifiers.md
+ * § Difficulty selector. Three-lives row × Permadeath row.
+ *
+ *   easy:      0.5×  / 1.0×
+ *   normal:    1.0×  / 2.0×
+ *   hard:      1.5×  / 3.0×
+ *   nightmare: 2.5×  / 5.0×
+ *   un:        4.0×  / 8.0×
+ *
+ * The Permadeath toggle doubles the matched 3-lives score multiplier — that
+ * relationship is preserved so the Daily Challenge's `forcePermadeath`
+ * modifier (which converts a 3-lives daily-pick into 1-life mid-stream)
+ * cleanly inherits the correct multiplier.
+ */
+const DIFFICULTY_SCORE_MULT_3LIVES: Readonly<Record<Difficulty, number>> = {
+	easy: 0.5,
+	normal: 1.0,
+	hard: 1.5,
+	nightmare: 2.5,
+	un: 4.0,
+};
+
+export function difficultyScoreMultiplier(difficulty: Difficulty, lives: Lives): number {
+	const base = DIFFICULTY_SCORE_MULT_3LIVES[difficulty];
+	return lives === 'permadeath' ? base * 2 : base;
+}
+
+/**
+ * Daily-challenge modifier-bonus multiplier per spec § Score multiplier
+ * interactions:
+ *   - non-daily run:   1.0×
+ *   - daily, baseline: 1.5×  (+0.5×)
+ *   - daily, "hard" modifier (No HUD or Iron Man): 2.0×  (+1.0×)
+ */
+export function modifierBonusMultiplier(state: GameState): number {
+	if (!state.run || state.run.mode !== 'daily-challenge') return 1.0;
+	const flags = activeModifierFlags(state);
+	if (flags.hideHud || flags.ironMan) return 2.0;
+	return 1.5;
+}
+
 export function startRun(
 	difficulty: Difficulty,
 	lives: Lives,
@@ -320,7 +362,15 @@ export function recordKill(state: GameState, target: 'head' | 'body' | 'justice'
 					? 200
 					: 100;
 	const combo = state.run.comboCount + 1;
-	const earned = Math.round(baseScore * comboMultiplier(combo));
+	// Spec § Score multiplier interactions:
+	// final = base × combo × difficulty × modifier
+	// Applied per-kill so combo + per-kill effects (justice-only zero) stack
+	// correctly — and so the Permadeath toggle's "score 1.5×" (or 2× of the
+	// matched 3-lives row) shows up in the running score during the run, not
+	// only at end-of-run summary.
+	const diffMult = difficultyScoreMultiplier(state.run.difficulty, state.run.lives);
+	const modMult = modifierBonusMultiplier(state);
+	const earned = Math.round(baseScore * comboMultiplier(combo) * diffMult * modMult);
 	return {
 		...state,
 		run: {

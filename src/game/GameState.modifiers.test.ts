@@ -173,12 +173,13 @@ describe('recordKill under justiceOnly', () => {
 		expect(after.run?.score).toBe(0);
 	});
 
-	it('justice kills still score normally — exactly 210 at combo 1', () => {
+	it('justice kills still score normally — exact spec-formula value', () => {
 		const state = startRun('normal', 'three-lives', 'daily-challenge', T0, 'justice-only');
 		const after = recordKill(state, 'justice');
-		// 200 base × 1.05 combo multiplier (combo of 1) = 210. Pinned exactly
-		// so a future change to the score model or combo step gets caught.
-		expect(after.run?.score).toBe(210);
+		// final = base × combo × difficulty × modifier
+		//       = 200  × 1.05  × 1.0        × 1.5  (daily baseline)
+		//       = 315
+		expect(after.run?.score).toBe(315);
 	});
 });
 
@@ -206,5 +207,90 @@ describe('startRun under glassCannon', () => {
 	it('non-modifier run uses base 100 HP', () => {
 		const s = startRun('normal', 'three-lives', 'standard', T0);
 		expect(s.run?.maxPlayerHp).toBe(100);
+	});
+});
+
+import { difficultyScoreMultiplier, modifierBonusMultiplier } from './GameState';
+
+describe('difficultyScoreMultiplier — spec § Difficulty selector grid', () => {
+	it('three-lives row: easy 0.5, normal 1.0, hard 1.5, nightmare 2.5, un 4.0', () => {
+		expect(difficultyScoreMultiplier('easy', 'three-lives')).toBe(0.5);
+		expect(difficultyScoreMultiplier('normal', 'three-lives')).toBe(1.0);
+		expect(difficultyScoreMultiplier('hard', 'three-lives')).toBe(1.5);
+		expect(difficultyScoreMultiplier('nightmare', 'three-lives')).toBe(2.5);
+		expect(difficultyScoreMultiplier('un', 'three-lives')).toBe(4.0);
+	});
+
+	it('permadeath row: doubles the matched 3-lives row', () => {
+		expect(difficultyScoreMultiplier('easy', 'permadeath')).toBe(1.0);
+		expect(difficultyScoreMultiplier('normal', 'permadeath')).toBe(2.0);
+		expect(difficultyScoreMultiplier('hard', 'permadeath')).toBe(3.0);
+		expect(difficultyScoreMultiplier('nightmare', 'permadeath')).toBe(5.0);
+		expect(difficultyScoreMultiplier('un', 'permadeath')).toBe(8.0);
+	});
+});
+
+describe('modifierBonusMultiplier — spec § Score multiplier interactions', () => {
+	it('non-daily run: 1.0× (no bonus)', () => {
+		const s = startRun('normal', 'three-lives', 'standard', T0);
+		expect(modifierBonusMultiplier(s)).toBe(1.0);
+	});
+
+	it('daily baseline modifier: 1.5×', () => {
+		const s = startRun('normal', 'three-lives', 'daily-challenge', T0, 'pistol-only');
+		expect(modifierBonusMultiplier(s)).toBe(1.5);
+	});
+
+	it('daily No HUD: 2.0× (hard modifier surcharge)', () => {
+		const s = startRun('normal', 'three-lives', 'daily-challenge', T0, 'no-hud');
+		expect(modifierBonusMultiplier(s)).toBe(2.0);
+	});
+
+	it('daily Iron Man: 2.0× (hard modifier surcharge)', () => {
+		const s = startRun('normal', 'three-lives', 'daily-challenge', T0, 'iron-man');
+		expect(modifierBonusMultiplier(s)).toBe(2.0);
+	});
+});
+
+describe('recordKill applies the full multiplier chain', () => {
+	it('Normal-3 standard run: base × combo only', () => {
+		const s = startRun('normal', 'three-lives', 'standard', T0);
+		const after = recordKill(s, 'body');
+		// 100 × 1.05 × 1.0 × 1.0 = 105
+		expect(after.run?.score).toBe(105);
+	});
+
+	it('UN-1 standard run: base × combo × 8.0', () => {
+		const s = startRun('un', 'permadeath', 'standard', T0);
+		const after = recordKill(s, 'body');
+		// 100 × 1.05 × 8.0 × 1.0 = 840
+		expect(after.run?.score).toBe(840);
+	});
+
+	it('Permadeath modifier (forces 1-life on Normal-3 daily) gets the 2× row + 1.5× daily', () => {
+		const s = startRun('normal', 'three-lives', 'daily-challenge', T0, 'permadeath');
+		// forcePermadeath converts to permadeath internally — effectiveLives===permadeath.
+		expect(s.run?.lives).toBe('permadeath');
+		const after = recordKill(s, 'body');
+		// 100 × 1.05 × 2.0 (Normal permadeath) × 1.5 (daily baseline) = 315
+		expect(after.run?.score).toBe(315);
+	});
+
+	it('Iron Man on Normal-3 daily: base × combo × 1.0 × 2.0 (hard surcharge)', () => {
+		const s = startRun('normal', 'three-lives', 'daily-challenge', T0, 'iron-man');
+		const after = recordKill(s, 'body');
+		// 100 × 1.05 × 1.0 × 2.0 = 210
+		expect(after.run?.score).toBe(210);
+	});
+
+	it('UN-1 daily Iron Man: top-tier scoring — spec example 1,500,000 from 50,000 base', () => {
+		// Spec line 138: 50,000 × 2.5 × 8.0 × 1.5 = 1,500,000 (uses 1.5 not 2.0;
+		// spec example uses the baseline daily multiplier even with iron-man,
+		// which conflicts with our hard-modifier surcharge. Pinning our actual
+		// behavior so divergence from the spec example is intentional + visible.)
+		const s = startRun('un', 'permadeath', 'daily-challenge', T0, 'iron-man');
+		const after = recordKill(s, 'body');
+		// 100 × 1.05 × 8.0 × 2.0 = 1680
+		expect(after.run?.score).toBe(1680);
 	});
 });
