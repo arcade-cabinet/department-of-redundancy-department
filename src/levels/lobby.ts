@@ -68,7 +68,16 @@ const cues: readonly Cue[] = [
 		action: { verb: 'door', doorId: 'door-revolving', to: 'open' },
 	},
 
-	// Position 1
+	// Position 1 — opener fires the alarm per docs/spec/levels/01-lobby.md
+	// + 05-screenplay-language.md ("Klaxon audio loops, all ceiling
+	// fluorescents flicker red at 4Hz, every door with a spawnRailId
+	// simultaneously animates open"). Authored before the spawns so the
+	// audio bed and door-open animation cover the spawn-pop.
+	{
+		id: 'p1-fire-alarm',
+		trigger: { kind: 'on-arrive', railNodeId: 'pos-1' },
+		action: { verb: 'level-event', event: 'fire-alarm' },
+	},
 	{
 		id: 'p1-tut-aim',
 		trigger: { kind: 'on-arrive', railNodeId: 'pos-1' },

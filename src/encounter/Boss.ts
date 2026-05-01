@@ -27,6 +27,21 @@ export interface BossDefinition {
 	readonly hpMultiplier: number;
 	readonly railIdConvention: string;
 	readonly fireProgramByPhase: Readonly<Record<number, FirePatternId>>;
+	// Optional per-phase HP refresh on `boss-phase` transition. Reaper's spec
+	// (docs/spec/02-encounter-vocabulary.md) demands a real escalation:
+	// 1500 → 1800 → 2200 across phases 1/2/3, not a single hpMultiplier×base.
+	// When this map omits a phase, `setBossPhase` does NOT touch HP — the
+	// fire program swaps in place. When it has a phase, the boss's current
+	// HP is set to the spec'd value on transition. Spawn HP at phase 1 is
+	// also taken from this map when present, otherwise falls back to
+	// `archetype.hp * hpMultiplier * difficulty.enemyHpMultiplier`.
+	readonly hpByPhase?: Readonly<Record<number, number>>;
+	// HP-fraction thresholds at which the director auto-emits `boss-phase`
+	// to advance to the next phase (e.g. `{ 2: 0.5 }` means transition to
+	// phase 2 when HP first drops below 50% of the phase-1 max). Levels no
+	// longer need to author `boss-phase` cues for HP-driven mini-bosses;
+	// the director owns that emission (see EncounterDirector.hitEnemy).
+	readonly phaseTriggerByHpFraction?: Readonly<Record<number, number>>;
 	// [min, max] inclusive — see docs/spec/06-economy.md.
 	// Mini-bosses drop 1–2 quarters on phase clear. The Reaper drops 5.
 	// Resolved via quarters.rollBossDrop(range) on enemy-kill.
@@ -40,7 +55,12 @@ export const BOSSES: Readonly<Record<BossId, BossDefinition>> = {
 		railIdConvention: 'rail-spawn-elevator-garrison',
 		fireProgramByPhase: {
 			1: 'garrison-burst',
+			2: 'garrison-enraged',
 		},
+		// Mini-bosses are spec'd as 2-phase fights (regular → enraged) per
+		// docs/spec/00-overview.md. Threshold at 50% HP per the lobby cue
+		// list comment. Director auto-emits `boss-phase` when crossed.
+		phaseTriggerByHpFraction: { 2: 0.5 },
 		quarterDrop: [1, 2],
 	},
 	whitcomb: {
@@ -49,7 +69,9 @@ export const BOSSES: Readonly<Record<BossId, BossDefinition>> = {
 		railIdConvention: 'rail-spawn-whitcomb',
 		fireProgramByPhase: {
 			1: 'whitcomb-throw',
+			2: 'whitcomb-volley',
 		},
+		phaseTriggerByHpFraction: { 2: 0.5 },
 		quarterDrop: [1, 2],
 	},
 	phelps: {
@@ -60,6 +82,7 @@ export const BOSSES: Readonly<Record<BossId, BossDefinition>> = {
 			1: 'phelps-aim',
 			2: 'phelps-snipe',
 		},
+		phaseTriggerByHpFraction: { 2: 0.5 },
 		quarterDrop: [1, 2],
 	},
 	crawford: {
@@ -70,6 +93,7 @@ export const BOSSES: Readonly<Record<BossId, BossDefinition>> = {
 			1: 'crawford-suppress',
 			2: 'crawford-charge',
 		},
+		phaseTriggerByHpFraction: { 2: 0.5 },
 		quarterDrop: [1, 2],
 	},
 	reaper: {
@@ -81,6 +105,14 @@ export const BOSSES: Readonly<Record<BossId, BossDefinition>> = {
 			2: 'reaper-volley',
 			3: 'reaper-rush',
 		},
+		// Reaper escalates HP per phase per docs/spec/02-encounter-vocabulary.md
+		// — this is the final boss and the spec demands a real second/third wind.
+		// Without `hpByPhase` the previous code ran phase 1 HP through all three
+		// programs, so the climax died ~67% faster than spec'd.
+		hpByPhase: { 1: 1500, 2: 1800, 3: 2200 },
+		// Reaper phase transitions are authored as level cues triggered by
+		// `boss-phase` actions in the boardroom screenplay (HP threshold +
+		// scripted choreography). No auto-trigger — leave the cue to the level.
 		quarterDrop: [5, 5],
 	},
 };

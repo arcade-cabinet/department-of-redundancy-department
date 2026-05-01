@@ -28,7 +28,9 @@ export type FirePatternId =
 	| 'idle'
 	// Bespoke boss fire programs (one per phase fired in level data).
 	| 'garrison-burst'
+	| 'garrison-enraged'
 	| 'whitcomb-throw'
+	| 'whitcomb-volley'
 	| 'phelps-aim'
 	| 'phelps-snipe'
 	| 'crawford-suppress'

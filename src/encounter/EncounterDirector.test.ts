@@ -118,3 +118,76 @@ describe('EncounterDirector — dwell early-resume gate', () => {
 		expect(director.cameraPosition.z).toBeGreaterThan(5);
 	});
 });
+
+describe('EncounterDirector — boss phase HP escalation', () => {
+	function bossSetup() {
+		const cueFires: Array<{ id: string; verb: string; phase?: number }> = [];
+		const listener: EncounterListener = {
+			...noopListener,
+			onCueFire: (cue, action) => {
+				if (action.verb === 'boss-phase') {
+					cueFires.push({ id: cue.id, verb: action.verb, phase: action.phase });
+				} else {
+					cueFires.push({ id: cue.id, verb: action.verb });
+				}
+			},
+		};
+		const cues: Cue[] = [
+			{
+				id: 'spawn-garrison',
+				trigger: { kind: 'on-arrive', railNodeId: 'pos-1' },
+				action: { verb: 'boss-spawn', bossId: 'garrison', phase: 1 },
+			},
+		];
+		const director = new EncounterDirector({
+			cameraRail: railWithDwell,
+			cues,
+			spawnRails: [
+				{
+					id: 'rail-spawn-elevator-garrison',
+					path: [new Vector3(0, 0, 7), new Vector3(0, 0, 8)],
+					speed: 2,
+					loop: false,
+				},
+			],
+			difficulty: 'normal',
+			listener,
+		});
+		return { director, cueFires };
+	}
+
+	it('auto-emits boss-phase cue when mini-boss HP drops below 50% threshold', () => {
+		const { director, cueFires } = bossSetup();
+		// Tick into pos-1 — the on-arrive cue spawns Garrison at phase 1.
+		director.tick(2000);
+		const boss = director.getEnemy('boss-garrison');
+		if (!boss) throw new Error('expected boss-garrison alive after tick');
+		// security-guard headDamage. Hammer the boss until just past 50% HP
+		// — the auto-emitter must fire EXACTLY ONCE for phase 2.
+		const startHp = boss.hp;
+		const halfHp = startHp * 0.5;
+		while ((director.getEnemy('boss-garrison')?.hp ?? 0) > halfHp) {
+			director.hitEnemy('boss-garrison', 'head');
+		}
+		const phaseFires = cueFires.filter((f) => f.verb === 'boss-phase');
+		expect(phaseFires.length).toBe(1);
+		expect(phaseFires[0]?.phase).toBe(2);
+	});
+
+	it('does not re-emit boss-phase on subsequent below-threshold hits', () => {
+		const { director, cueFires } = bossSetup();
+		director.tick(2000);
+		const boss = director.getEnemy('boss-garrison');
+		if (!boss) throw new Error('expected boss-garrison alive');
+		const halfHp = boss.hp * 0.5;
+		while ((director.getEnemy('boss-garrison')?.hp ?? 0) > halfHp) {
+			director.hitEnemy('boss-garrison', 'head');
+		}
+		// Five more hits past the threshold — emitter must not re-fire.
+		for (let i = 0; i < 5; i++) {
+			if (!director.getEnemy('boss-garrison')) break;
+			director.hitEnemy('boss-garrison', 'head');
+		}
+		expect(cueFires.filter((f) => f.verb === 'boss-phase').length).toBe(1);
+	});
+});
