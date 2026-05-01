@@ -105,6 +105,11 @@ const overlay = new Overlay('dord-ui');
 const reticle = new Reticle(overlay);
 
 let activeOverlayDispose: (() => void) | null = null;
+// Bumped every time routeOverlay disposes the prior overlay. Async overlay
+// constructors (e.g. high-scores' loadHighScores) capture this token at
+// dispatch time and bail when it has changed by resolution time, so they
+// cannot install a stale overlay over a newer phase.
+let overlayGeneration = 0;
 let hud: HudOverlay | null = null;
 let narrator: NarratorOverlay | null = null;
 let lastTickMs = performance.now();
@@ -136,6 +141,7 @@ function routeOverlay(state: GameState): void {
 		activeOverlayDispose();
 		activeOverlayDispose = null;
 	}
+	overlayGeneration++;
 	const wantsHud = state.phase === 'playing' || state.phase === 'continue-prompt';
 	if (wantsHud && !hud) {
 		hud = new HudOverlay(overlay);
@@ -159,7 +165,12 @@ function routeOverlay(state: GameState): void {
 			break;
 		}
 		case 'high-scores': {
+			const generation = overlayGeneration;
 			void loadHighScores().then((scores) => {
+				// Bail if the user navigated away (or back-and-forth) while
+				// the load was in flight — installing this overlay now would
+				// orphan whatever has replaced it.
+				if (generation !== overlayGeneration) return;
 				if (game.getState().phase !== 'high-scores') return;
 				const panel = new HighScoresOverlay(overlay, scores, () => game.closeHighScores());
 				activeOverlayDispose = () => panel.dispose();
