@@ -267,6 +267,93 @@ const primitives: Primitive[] = [
 		direction: new Vector3(0, -0.3, -1),
 		conicalAngle: 0.7,
 	},
+	{
+		// Without this, the corridor renders pitch-black between the two
+		// flicker point-lights, hiding the filing-cabinet rows that line
+		// the side walls.
+		id: 'light-fill',
+		kind: 'light',
+		origin: new Vector3(0, 3, 14),
+		yaw: 0,
+		light: 'hemispheric',
+		color: [1.0, 1.0, 0.95],
+		intensity: 0.55,
+	},
+
+	// Filing-cabinet rows along both side walls — the corridor's signature
+	// dressing per docs/spec/levels/05-hr-corridor.md §"Props & lights".
+	// Four cabinet-1 along the east wall, four cabinet-2 along the west.
+	{
+		id: 'prop-cabinet-east-1',
+		kind: 'prop',
+		origin: new Vector3(2.5, 0, 6),
+		yaw: -Math.PI / 2,
+		glb: 'props/cabinet-1.glb',
+	},
+	{
+		id: 'prop-cabinet-east-2',
+		kind: 'prop',
+		origin: new Vector3(2.5, 0, 11),
+		yaw: -Math.PI / 2,
+		glb: 'props/cabinet-1.glb',
+	},
+	{
+		id: 'prop-cabinet-east-3',
+		kind: 'prop',
+		origin: new Vector3(2.5, 0, 16),
+		yaw: -Math.PI / 2,
+		glb: 'props/cabinet-1.glb',
+	},
+	{
+		id: 'prop-cabinet-east-4',
+		kind: 'prop',
+		origin: new Vector3(2.5, 0, 20),
+		yaw: -Math.PI / 2,
+		glb: 'props/cabinet-1.glb',
+	},
+	{
+		id: 'prop-cabinet-west-1',
+		kind: 'prop',
+		origin: new Vector3(-2.5, 0, 6),
+		yaw: Math.PI / 2,
+		glb: 'props/cabinet-2.glb',
+	},
+	{
+		id: 'prop-cabinet-west-2',
+		kind: 'prop',
+		origin: new Vector3(-2.5, 0, 11),
+		yaw: Math.PI / 2,
+		glb: 'props/cabinet-2.glb',
+	},
+	{
+		id: 'prop-cabinet-west-3',
+		kind: 'prop',
+		origin: new Vector3(-2.5, 0, 16),
+		yaw: Math.PI / 2,
+		glb: 'props/cabinet-2.glb',
+	},
+	{
+		id: 'prop-cabinet-west-4',
+		kind: 'prop',
+		origin: new Vector3(-2.5, 0, 20),
+		yaw: Math.PI / 2,
+		glb: 'props/cabinet-2.glb',
+	},
+	// Phelps's desk + cover cabinet at the corridor terminus.
+	{
+		id: 'prop-phelps-desk',
+		kind: 'prop',
+		origin: new Vector3(0, 0, 23.5),
+		yaw: 0,
+		glb: 'props/desk.glb',
+	},
+	{
+		id: 'prop-phelps-cover',
+		kind: 'prop',
+		origin: new Vector3(0, 0, 22),
+		yaw: 0,
+		glb: 'props/cabinet-3.glb',
+	},
 ];
 
 const cues: Cue[] = [
