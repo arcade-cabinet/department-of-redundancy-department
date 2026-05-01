@@ -713,6 +713,11 @@ canvas.addEventListener(
 	'keydown',
 	(e) => {
 		if (game.getState().phase !== 'playing') return;
+		// Ignore key-repeat: held keys should not spam reload or oscillate weapons.
+		if (e.repeat) {
+			if (e.key === 'Tab') e.preventDefault();
+			return;
+		}
 		if (e.key === 'r' || e.key === 'R') {
 			game.reload(now());
 			e.preventDefault();

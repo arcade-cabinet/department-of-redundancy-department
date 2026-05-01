@@ -125,34 +125,45 @@ function withAmmo(weapon: WeaponState, ammo: number): WeaponState {
 		: { ...weapon, rifleAmmo: ammo };
 }
 
+export type FireOutcome =
+	| { readonly kind: 'shot'; readonly state: GameState }
+	| { readonly kind: 'dry-pull'; readonly state: GameState }
+	| { readonly kind: 'misfire' };
+
 /**
- * Decrement active-weapon ammo by 1. If reloading, returns null (caller
- * should treat as a misfire — no shot leaves the barrel).
+ * Trigger pull. Returns:
+ *  - 'shot'      → ammo decremented, bullet leaves barrel
+ *  - 'dry-pull'  → empty mag; auto-reload queued, no bullet
+ *  - 'misfire'   → currently reloading; nothing happens
+ *
+ * Note: while `reloadEndsAtMs !== null`, `consumeAmmo` always returns
+ * 'misfire' regardless of whether nowMs has passed reloadEndsAtMs. Only
+ * `tickReload` clears the reloading state — this prevents a rapid-click
+ * reload-loop at the tail of a reload window.
  */
-export function consumeAmmo(state: GameState, nowMs: number): GameState | null {
-	if (!state.run || state.phase !== 'playing') return null;
+export function tryConsumeAmmo(state: GameState, nowMs: number): FireOutcome {
+	if (!state.run || state.phase !== 'playing') return { kind: 'misfire' };
 	const weapon = state.run.weapon;
-	if (weapon.reloadEndsAtMs !== null && nowMs < weapon.reloadEndsAtMs) return null;
+	if (weapon.reloadEndsAtMs !== null) return { kind: 'misfire' };
 	const ammo = ammoOf(weapon);
 	if (ammo <= 0) {
-		// Auto-reload on dry trigger pull.
 		const def = WEAPONS[weapon.active];
+		const reloading: WeaponState = { ...weapon, reloadEndsAtMs: nowMs + def.reloadDurationMs };
 		return {
-			...state,
-			run: {
-				...state.run,
-				weapon: { ...weapon, reloadEndsAtMs: nowMs + def.reloadDurationMs },
-			},
+			kind: 'dry-pull',
+			state: { ...state, run: { ...state.run, weapon: reloading } },
 		};
 	}
 	const newAmmo = ammo - 1;
 	const next: WeaponState = withAmmo(weapon, newAmmo);
-	// If we just emptied the mag, queue an auto-reload.
 	const finalWeapon: WeaponState =
 		newAmmo === 0
 			? { ...next, reloadEndsAtMs: nowMs + WEAPONS[weapon.active].reloadDurationMs }
 			: next;
-	return { ...state, run: { ...state.run, weapon: finalWeapon } };
+	return {
+		kind: 'shot',
+		state: { ...state, run: { ...state.run, weapon: finalWeapon } },
+	};
 }
 
 export function startReload(state: GameState, nowMs: number): GameState {
