@@ -67,8 +67,8 @@ export const ARCHETYPES: Readonly<Record<ArchetypeId, Archetype>> = {
 		hp: 1500,
 		weakpoint: 'scythe-jewel',
 		justiceShotTarget: 'scythe-shaft',
-		bodyDamage: 0, // varies per phase — boss controller overrides
-		headDamage: 0,
+		bodyDamage: 100,
+		headDamage: 250,
 	},
 };
 

@@ -218,18 +218,8 @@ const CUE_CHECKERS: Readonly<Partial<Record<CueAction['verb'], CheckerEntry>>> =
 	},
 	'boss-spawn': (cue, a, index, log) => {
 		if (a.verb !== 'boss-spawn') return;
-		const def = BOSSES[a.bossId];
-		if (!def) {
-			log.err('CUE_UNKNOWN_BOSS', `cue '${cue.id}' uses unknown bossId '${a.bossId}'`);
-			return;
-		}
-		if (!def.fireProgramByPhase[a.phase]) {
-			log.err(
-				'CUE_BOSS_PHASE_UNDEFINED',
-				`cue '${cue.id}' boss '${a.bossId}' has no phase ${a.phase} fire program`,
-			);
-		}
-		if (!index.spawnRailIds.has(def.railIdConvention)) {
+		const def = checkBossIdAndPhase(cue, a.bossId, a.phase, log);
+		if (def && !index.spawnRailIds.has(def.railIdConvention)) {
 			log.err(
 				'CUE_BOSS_RAIL_MISSING',
 				`cue '${cue.id}' boss '${a.bossId}' requires spawnRail '${def.railIdConvention}'`,
@@ -238,17 +228,7 @@ const CUE_CHECKERS: Readonly<Partial<Record<CueAction['verb'], CheckerEntry>>> =
 	},
 	'boss-phase': (cue, a, _index, log) => {
 		if (a.verb !== 'boss-phase') return;
-		const def = BOSSES[a.bossId];
-		if (!def) {
-			log.err('CUE_UNKNOWN_BOSS', `cue '${cue.id}' uses unknown bossId '${a.bossId}'`);
-			return;
-		}
-		if (!def.fireProgramByPhase[a.phase]) {
-			log.err(
-				'CUE_BOSS_PHASE_UNDEFINED',
-				`cue '${cue.id}' boss '${a.bossId}' has no phase ${a.phase} fire program`,
-			);
-		}
+		checkBossIdAndPhase(cue, a.bossId, a.phase, log);
 	},
 	transition: (cue, a, _index, log) => {
 		if (a.verb !== 'transition') return;
@@ -263,6 +243,26 @@ const CUE_CHECKERS: Readonly<Partial<Record<CueAction['verb'], CheckerEntry>>> =
 function checkCueAction(cue: Cue, a: CueAction, index: LevelIndex, log: IssueLog): void {
 	const checker = CUE_CHECKERS[a.verb];
 	if (checker) checker(cue, a, index, log);
+}
+
+function checkBossIdAndPhase(
+	cue: Cue,
+	bossId: string,
+	phase: number,
+	log: IssueLog,
+): (typeof BOSSES)[keyof typeof BOSSES] | undefined {
+	const def = BOSSES[bossId as keyof typeof BOSSES];
+	if (!def) {
+		log.err('CUE_UNKNOWN_BOSS', `cue '${cue.id}' uses unknown bossId '${bossId}'`);
+		return undefined;
+	}
+	if (!def.fireProgramByPhase[phase]) {
+		log.err(
+			'CUE_BOSS_PHASE_UNDEFINED',
+			`cue '${cue.id}' boss '${bossId}' has no phase ${phase} fire program`,
+		);
+	}
+	return def;
 }
 
 function checkEnemySpawn(
