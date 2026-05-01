@@ -33,7 +33,7 @@ import {
 } from './gui';
 import { getLevel, type Level } from './levels';
 import { applyDoorOpen, applyShutterState, buildLevel, type LevelHandles } from './levels/build';
-import type { Door, LevelId, Shutter } from './levels/types';
+import type { Door, LevelId, Light, Shutter } from './levels/types';
 import {
 	loadHighScore,
 	loadSettings,
@@ -341,7 +341,10 @@ function handleCueAction(action: CueAction): void {
 		case 'shutter':
 			handleShutterCue(action.shutterId, action.to);
 			return;
-		// prop-anim / boss-spawn / boss-phase / enemy-spawn / level-event
+		case 'level-event':
+			handleLevelEvent(action.event);
+			return;
+		// prop-anim / boss-spawn / boss-phase / enemy-spawn
 		// are handled by their respective subsystems in subsequent commits.
 		default:
 			return;
@@ -364,6 +367,27 @@ function handleShutterCue(shutterId: string, to: 'down' | 'up' | 'half'): void {
 		(p): p is Shutter => p.kind === 'shutter' && p.id === shutterId,
 	);
 	if (shutterPrim) applyShutterState(mesh, shutterPrim, to);
+}
+
+function handleLevelEvent(
+	event: 'fire-alarm' | 'power-out' | 'lights-restored' | 'elevator-ding',
+): void {
+	if (!levelHandles || !currentLevel) return;
+	if (event === 'power-out') {
+		for (const light of levelHandles.lights.values()) light.intensity = 0;
+		return;
+	}
+	if (event === 'lights-restored') {
+		for (const prim of currentLevel.primitives) {
+			if (prim.kind !== 'light') continue;
+			const lightPrim = prim as Light;
+			const bl = levelHandles.lights.get(lightPrim.id);
+			if (bl) bl.intensity = lightPrim.intensity;
+		}
+		return;
+	}
+	// fire-alarm + elevator-ding are pure audio cues — emitted via separate
+	// audio-stinger cues in the level data. No render side-effect here.
 }
 
 // ── Camera shake ─────────────────────────────────────────────────────────────
