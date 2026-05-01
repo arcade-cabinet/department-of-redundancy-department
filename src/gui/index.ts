@@ -1,6 +1,7 @@
 export { ContinueOverlay } from './ContinueOverlay';
 export { FriendModalOverlay } from './FriendModalOverlay';
 export { GameOverOverlay, type GameOverSummary } from './GameOverOverlay';
+export { HighScoresOverlay } from './HighScoresOverlay';
 export { HudOverlay } from './HudOverlay';
 export { InsertCoinOverlay } from './InsertCoinOverlay';
 export { NarratorOverlay } from './NarratorOverlay';

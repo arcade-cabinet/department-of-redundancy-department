@@ -108,6 +108,16 @@ export class Game {
 		this.update(setPhase(this.state, restoredPhase));
 	}
 
+	openHighScores(): void {
+		this.update(setPhase(this.state, 'high-scores'));
+	}
+
+	closeHighScores(): void {
+		// Always returns to title; the high-scores screen is only reachable
+		// from the InsertCoinOverlay today.
+		this.update(setPhase(this.state, 'insert-coin'));
+	}
+
 	private update(next: GameState): void {
 		if (next === this.state) return;
 		this.state = next;
