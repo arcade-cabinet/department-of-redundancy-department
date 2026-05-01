@@ -1,4 +1,5 @@
 import { lobbyLevel } from './lobby';
+import { openPlanLevel } from './open-plan';
 import { stairwayALevel } from './stairway-A';
 import type { Level, LevelId } from './types';
 
@@ -14,6 +15,7 @@ export type { AmbienceLayer, CivilianRail, Level, LevelId, Primitive, SpawnRail 
 export const LEVELS: Readonly<Partial<Record<LevelId, Level>>> = {
 	lobby: lobbyLevel,
 	'stairway-A': stairwayALevel,
+	'open-plan': openPlanLevel,
 };
 
 export function getLevel(id: LevelId): Level {
