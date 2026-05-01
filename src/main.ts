@@ -521,6 +521,7 @@ function handlePropAnimCue(propId: string, animId: string): void {
 		mesh.position.z = destZ - Math.cos(yaw) * rollDist;
 		return;
 	}
+	console.warn(`[cue] unknown prop-anim animId '${animId}' for prop '${propId}'`);
 }
 
 function tickPropAnims(): void {
