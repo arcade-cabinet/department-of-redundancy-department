@@ -216,10 +216,8 @@ export class EncounterDirector {
 		if (!enemy) return;
 		const archetype = ARCHETYPES[enemy.archetypeId];
 		const baseDamage = target === 'head' ? archetype.headDamage : archetype.bodyDamage;
-		const damage =
-			target === 'justice'
-				? archetype.bodyDamage // justice-shot disarms; HP not really the metric, but for now treat as body
-				: baseDamage * this.difficultyParams.enemyHpMultiplier;
+		// justice-shot disarms; HP not really the metric, but for now treat as body
+		const damage = target === 'justice' ? archetype.bodyDamage : baseDamage;
 		const newHp = enemy.hp - damage;
 		this.listener.onEnemyHit(enemyId, target, damage);
 		if (newHp <= 0) {
@@ -336,6 +334,11 @@ export class EncounterDirector {
 			console.warn(`[director] boss-spawn unknown bossId '${bossId}'`);
 			return;
 		}
+		const id = bossEnemyId(bossId);
+		if (this.state.enemies.has(id)) {
+			console.warn(`[director] boss-spawn '${bossId}' already alive — refusing duplicate spawn`);
+			return;
+		}
 		const fireProgram = def.fireProgramByPhase[phase];
 		if (!fireProgram) {
 			console.warn(`[director] boss-spawn '${bossId}' has no phase ${phase} fire program`);
@@ -348,7 +351,6 @@ export class EncounterDirector {
 		}
 		const archetype = ARCHETYPES[def.archetype];
 		const railState = createSpawnRailState(railGraph);
-		const id = bossEnemyId(bossId);
 		const enemy: Enemy = {
 			id,
 			archetypeId: def.archetype,
@@ -356,7 +358,7 @@ export class EncounterDirector {
 			rail: railState,
 			elapsedMs: 0,
 			nextFireEventIdx: 0,
-			hp: archetype.hp * this.difficultyParams.enemyHpMultiplier,
+			hp: archetype.hp * def.hpMultiplier * this.difficultyParams.enemyHpMultiplier,
 			state: 'sliding',
 			position: spawnRailPosition(railState),
 			ceaseAfterMs: null,
