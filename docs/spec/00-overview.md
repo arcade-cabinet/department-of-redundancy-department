@@ -5,6 +5,8 @@ status: current
 domain: product
 ---
 
+> **Pivot 2026-04-30:** The difficulty selector and the daily-challenge picker have been removed. DORD ships as a **single canonical run** with a quarter-based continue economy. The director's per-difficulty parameter table is retained as engine-internal authoring (see `03-difficulty-and-modifiers.md`) — it is not surfaced to the player.
+
 # Arcade Rail Shooter — Overview
 
 This folder is the working canon for DORD as a **mobile-first arcade rail shooter** in the Time Crisis / House of the Dead / Virtua Cop lineage. **The arcade-cabinet experience in your pocket.**
@@ -23,7 +25,7 @@ Every run is the same nine levels in the same order. Difficulty changes the dang
 Lobby → Stairway A → Open Plan → Stairway B → HR Corridor → Stairway C → Executive Suites → Boardroom (Reaper)
 ```
 
-Target run length is **~9 minutes Normal**, achievable across difficulties from ~7 minutes Easy to ~10 minutes Ultra Nightmare. Run length is not a player choice — the game is the game. Difficulty IS the choice.
+Target run length is **~9 minutes**. Run length is not a player choice — the game is the game. There is no difficulty selector and no daily-challenge picker. The designer authored one canonical experience; the player rides it.
 
 ## Tone arc
 
@@ -49,16 +51,30 @@ The stairways between floors enforce the tonal beat. Stairway A is breezy. Stair
 
 Mini-boss patterns are bespoke fire-program tapes defined per-level (`02-encounter-vocabulary.md` says "see level doc"). The Reaper is the climax — three phase machine, full boardroom traversal, the only boss whose `boss-phase-3` runs the screenplay's `transition` cue (out to the credits-scroll level).
 
-## Difficulty grid (10 entries)
+## Lives, continues, and the quarter economy
 
-| Lives | Easy | Normal | Hard | Nightmare | Ultra Nightmare |
-|---|---|---|---|---|---|
-| 3 lives | 0.5× score | 1.0× score | 1.5× score | 2.5× score | 4.0× score |
-| Permadeath | 1.0× score | 2.0× score | 3.0× score | 5.0× score | 8.0× score |
+The arcade-cabinet metaphor is load-bearing. The player has:
 
-Permadeath is a toggle on the difficulty selector — same enemy danger as the corresponding 3-lives row, but one run at one life with a doubled multiplier. UN-1 (Ultra Nightmare permadeath) at 8.0× is the leaderboard tier; clearing it is a flex.
+- **3 lives per run.** Lose all three and the run ends.
+- **Continues funded by quarters.** 1 quarter = 1 continue. Continues resume the current run on the floor where the player died with a fresh 3 lives.
+- **A persistent quarter balance** stored via `Capacitor.Preferences` across sessions. Fresh install starts the player with **8 quarters ($2.00)**.
+- **INSERT COIN is always free.** Starting a run costs nothing. Quarters are spent only on continues.
 
-See `03-difficulty-and-modifiers.md` for full mechanical impact.
+Quarters are earned by killing bosses:
+
+| Boss | Drop |
+|---|---|
+| Security Chief Garrison | 1–2 quarters |
+| Senior Manager Whitcomb | 1–2 quarters |
+| HR Director Phelps | 1–2 quarters |
+| Director-of-Ops Crawford | 1–2 quarters |
+| **HR Reaper (final)** | 5 quarters |
+
+When the balance hits 0 mid-run and the player declines a continue (or has no quarters to spend), the run wipes back to the title screen with the score banked into the high-score table. The persistent balance is preserved.
+
+When the balance is 0 and the player taps INSERT COIN, the **friend modal** fires: "Your friend spots you a couple bucks." +8 quarters, the cabinet powers back up, the player runs again. This is a storytelling/immersion mechanic, not a scarcity gate — there is no rate limit and no daily lockout. The arcade is always open.
+
+See `03-difficulty-and-modifiers.md` for the authored director parameter table (used by the screenplay engine; not exposed as a player toggle) and `06-economy.md` for the full quarter system.
 
 ## Verbs (5)
 
@@ -81,9 +97,10 @@ docs/spec/
 ├── 00-overview.md                  ← you are here
 ├── 01-pacing-and-time-math.md      ← per-level seconds, attack rates, position budgets
 ├── 02-encounter-vocabulary.md      ← archetypes + fire programs + cease conditions
-├── 03-difficulty-and-modifiers.md  ← 2×5 grid + daily-challenge modifiers
+├── 03-difficulty-and-modifiers.md  ← authored director parameter table (engine-internal)
 ├── 04-construction-primitives.md   ← Wall/Floor/Door/Window/Shutter/etc. schemas
 ├── 05-screenplay-language.md       ← cue triggers + cue-action verb reference
+├── 06-economy.md                   ← quarter system, boss drops, friend modal, persistence
 ├── playtest-2026-04-30.md          ← paper-playtest of the full run; friction report
 └── levels/
     ├── 01-lobby.md                 ← Mini-boss: Security Chief Garrison
@@ -127,6 +144,6 @@ Authored content TODOs (gaps to fill before content-lock):
 
 ## What this is not
 
-This is not a maze game. There is no exploration. There is no movement. There is no procedural level generation. There is no multiplayer. There is no co-op. There is no inventory management beyond active-weapon ammo. There is no narrative branching. There are no skill trees. There is no XP. There is no character customization. There are no pickups, mineable cabinets, ammo crates, or health packs — ammo is auto-replenished on reload, lives are tracked by the game state, the game is the game.
+This is not a maze game. There is no exploration. There is no movement. There is no procedural level generation. There is no multiplayer. There is no co-op. There is no inventory management beyond active-weapon ammo. There is no narrative branching. There are no skill trees. There is no XP. There is no character customization. There is no difficulty selector. There is no daily-challenge picker. There are no modifier toggles. There are no ammo crates — ammo is auto-replenished on reload. The only authored pickup is the wall-mounted **health kit** (see `04-construction-primitives.md`), placed by the level designer at specific pacing beats; it is rail-compatible (shoot to collect as the camera passes).
 
 This is an arcade cabinet. You insert a coin, you ascend the tower, you score, you die or you win, you tap "ANOTHER COIN."
