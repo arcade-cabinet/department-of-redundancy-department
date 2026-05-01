@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { DAILY_MODIFIERS, dayOfYearUtc, selectDailyModifier } from './dailyChallenge';
+import {
+	DAILY_FLAGS_INERT,
+	DAILY_MODIFIERS,
+	dailyModifierFlags,
+	dayOfYearUtc,
+	selectDailyModifier,
+} from './dailyChallenge';
 
 describe('dayOfYearUtc', () => {
 	it('returns 1 for Jan 1', () => {
@@ -103,5 +109,73 @@ describe('DAILY_MODIFIERS pool', () => {
 			'pistol-only',
 			'rifle-only',
 		]);
+	});
+});
+
+describe('dailyModifierFlags', () => {
+	it('returns inert flags for null', () => {
+		expect(dailyModifierFlags(null)).toEqual(DAILY_FLAGS_INERT);
+	});
+
+	it('no-hud sets hideHud only', () => {
+		expect(dailyModifierFlags('no-hud')).toEqual({ ...DAILY_FLAGS_INERT, hideHud: true });
+	});
+
+	it('headshots-only sets headshotsOnly only', () => {
+		expect(dailyModifierFlags('headshots-only')).toEqual({
+			...DAILY_FLAGS_INERT,
+			headshotsOnly: true,
+		});
+	});
+
+	it('pistol-only implies noReload', () => {
+		const flags = dailyModifierFlags('pistol-only');
+		expect(flags.pistolOnly).toBe(true);
+		expect(flags.noReload).toBe(true);
+		expect(flags.rifleOnly).toBe(false);
+	});
+
+	it('rifle-only implies noReload', () => {
+		const flags = dailyModifierFlags('rifle-only');
+		expect(flags.rifleOnly).toBe(true);
+		expect(flags.noReload).toBe(true);
+		expect(flags.pistolOnly).toBe(false);
+	});
+
+	it('no-reload sets noReload without locking weapon', () => {
+		const flags = dailyModifierFlags('no-reload');
+		expect(flags.noReload).toBe(true);
+		expect(flags.pistolOnly).toBe(false);
+		expect(flags.rifleOnly).toBe(false);
+	});
+
+	it('every modifier id is exhaustively handled (no missing branch)', () => {
+		// If any modifier returns undefined, the destructuring would throw.
+		for (const m of DAILY_MODIFIERS) {
+			const flags = dailyModifierFlags(m.id);
+			expect(typeof flags.hideHud).toBe('boolean');
+		}
+	});
+
+	it('content-system modifiers ship as inert flags in v1', () => {
+		// Documented in the directive — these need level-router or content
+		// changes that don't reduce to a per-tick boolean. Pinning the
+		// inert-flag invariant so a partial implementation can't ship by
+		// accident.
+		const inertIds = [
+			'speed-run',
+			'civilian-rush',
+			'spray-and-pray',
+			'reaper-friends',
+			'sticky-aim',
+			'mass-pop-madness',
+			'boss-rush',
+			'backwards',
+			'charge-week',
+			'permadeath',
+		] as const;
+		for (const id of inertIds) {
+			expect(dailyModifierFlags(id)).toEqual(DAILY_FLAGS_INERT);
+		}
 	});
 });

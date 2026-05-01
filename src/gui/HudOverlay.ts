@@ -2,7 +2,13 @@ import { Control } from '@babylonjs/gui/2D/controls/control';
 import { Rectangle } from '@babylonjs/gui/2D/controls/rectangle';
 import { TextBlock } from '@babylonjs/gui/2D/controls/textBlock';
 import { getDailyModifier } from '../game/dailyChallenge';
-import { comboMultiplier, type GameState, WEAPONS } from '../game/GameState';
+import {
+	activeModifierFlags,
+	comboMultiplier,
+	type GameState,
+	WEAPONS,
+	type WeaponState,
+} from '../game/GameState';
 import {
 	COLOR_HP_HIGH,
 	COLOR_HP_LOW,
@@ -149,6 +155,15 @@ export class HudOverlay {
 	render(state: GameState): void {
 		const run = state.run;
 		if (!run) return;
+		// No-HUD modifier hides every HUD control. The reticle (rendered by
+		// Reticle, not this overlay) stays visible — that's the only readout
+		// the player gets per spec § Daily Challenge.
+		const flags = activeModifierFlags(state);
+		if (flags.hideHud) {
+			for (const c of this.controls) c.isVisible = false;
+			return;
+		}
+		for (const c of this.controls) c.isVisible = true;
 		const hpFrac = Math.max(0, Math.min(1, run.playerHp / run.maxPlayerHp));
 		this.hpFill.width = `${Math.round(HP_FILL_MAX_WIDTH * hpFrac)}px`;
 		this.hpFill.background = hpColorFor(hpFrac);
@@ -165,14 +180,7 @@ export class HudOverlay {
 
 		this.livesLabel.text = '♥ '.repeat(Math.max(0, run.remainingLives)).trimEnd();
 
-		const w = run.weapon;
-		const ammo = w.active === 'pistol' ? w.pistolAmmo : w.rifleAmmo;
-		const mag = WEAPONS[w.active].magSize;
-		const reloading = w.reloadEndsAtMs !== null;
-		this.ammoLabel.text = reloading
-			? `${w.active.toUpperCase()}  reloading…`
-			: `${w.active.toUpperCase()}  ${ammo} / ${mag}`;
-		this.ammoLabel.color = ammo === 0 && !reloading ? COLOR_HP_LOW : COLOR_PAPER;
+		this.renderAmmoLabel(run.weapon, flags.noReload);
 
 		if (run.mode === 'daily-challenge' && run.dailyModifier) {
 			this.dailyBadge.text = `★ DAILY: ${getDailyModifier(run.dailyModifier).title}`;
@@ -180,6 +188,21 @@ export class HudOverlay {
 		} else {
 			this.dailyBadge.isVisible = false;
 		}
+	}
+
+	private renderAmmoLabel(weapon: WeaponState, noReload: boolean): void {
+		if (noReload) {
+			this.ammoLabel.text = `${weapon.active.toUpperCase()}  ∞`;
+			this.ammoLabel.color = COLOR_PAPER;
+			return;
+		}
+		const ammo = weapon.active === 'pistol' ? weapon.pistolAmmo : weapon.rifleAmmo;
+		const mag = WEAPONS[weapon.active].magSize;
+		const reloading = weapon.reloadEndsAtMs !== null;
+		this.ammoLabel.text = reloading
+			? `${weapon.active.toUpperCase()}  reloading…`
+			: `${weapon.active.toUpperCase()}  ${ammo} / ${mag}`;
+		this.ammoLabel.color = ammo === 0 && !reloading ? COLOR_HP_LOW : COLOR_PAPER;
 	}
 
 	dispose(): void {

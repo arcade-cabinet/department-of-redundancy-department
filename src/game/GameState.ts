@@ -1,7 +1,17 @@
 import type { Difficulty } from '../encounter';
 import type { LevelId } from '../levels/types';
 import type { Lives } from '../preferences';
-import type { DailyModifierId } from './dailyChallenge';
+import {
+	DAILY_FLAGS_INERT,
+	type DailyModifierFlags,
+	type DailyModifierId,
+	dailyModifierFlags,
+} from './dailyChallenge';
+
+export function activeModifierFlags(state: GameState): DailyModifierFlags {
+	if (!state.run || state.run.mode !== 'daily-challenge') return DAILY_FLAGS_INERT;
+	return dailyModifierFlags(state.run.dailyModifier);
+}
 
 /**
  * Top-level game state machine — drives which screen is shown and what the
@@ -97,7 +107,19 @@ export function startRun(
 	nowMs: number,
 	dailyModifier: DailyModifierId | null = null,
 ): GameState {
+	const flags = mode === 'daily-challenge' ? dailyModifierFlags(dailyModifier) : DAILY_FLAGS_INERT;
 	const livesCount = lives === 'permadeath' ? 1 : 3;
+	// Lock active weapon explicitly per modifier — don't rely on
+	// INITIAL_WEAPON_STATE.active being pistol by coincidence.
+	const lockedActive: WeaponKind | null = flags.rifleOnly
+		? 'rifle'
+		: flags.pistolOnly
+			? 'pistol'
+			: null;
+	const initialWeapon: WeaponState =
+		lockedActive !== null
+			? { ...INITIAL_WEAPON_STATE, active: lockedActive }
+			: INITIAL_WEAPON_STATE;
 	return {
 		phase: 'playing',
 		run: {
@@ -116,7 +138,7 @@ export function startRun(
 			headshots: 0,
 			justiceShots: 0,
 			startedAtMs: nowMs,
-			weapon: INITIAL_WEAPON_STATE,
+			weapon: initialWeapon,
 		},
 	};
 }
@@ -151,8 +173,22 @@ export function tryConsumeAmmo(state: GameState, nowMs: number): FireOutcome {
 	if (!state.run || state.phase !== 'playing') return { kind: 'misfire' };
 	const weapon = state.run.weapon;
 	if (weapon.reloadEndsAtMs !== null) return { kind: 'misfire' };
+	const flags = activeModifierFlags(state);
+	// Pistol-only / Rifle-only / No-reload share unlimited-ammo semantics: a
+	// trigger pull always fires exactly one shot, no reload window. Mag display
+	// rolls magSize → magSize-1 → ... → 1 → magSize → ... and never visits 0
+	// (the would-have-emptied frame refills atomically + still fires).
+	const unlimited = flags.noReload;
 	const ammo = ammoOf(weapon);
 	if (ammo <= 0) {
+		if (unlimited) {
+			const def = WEAPONS[weapon.active];
+			const refilled: WeaponState = withAmmo(weapon, def.magSize - 1);
+			return {
+				kind: 'shot',
+				state: { ...state, run: { ...state.run, weapon: refilled } },
+			};
+		}
 		const def = WEAPONS[weapon.active];
 		const reloading: WeaponState = { ...weapon, reloadEndsAtMs: nowMs + def.reloadDurationMs };
 		return {
@@ -161,11 +197,19 @@ export function tryConsumeAmmo(state: GameState, nowMs: number): FireOutcome {
 		};
 	}
 	const newAmmo = ammo - 1;
-	const next: WeaponState = withAmmo(weapon, newAmmo);
+	// Under unlimited, when this pull empties the mag, refill atomically so
+	// the next pull starts fresh from magSize - 1 (no zero-ammo frame, no
+	// reload queued). Without this, the next pull's `ammo <= 0` branch would
+	// fire-and-refill — net result was 9 shots per 8-round cycle.
 	const finalWeapon: WeaponState =
 		newAmmo === 0
-			? { ...next, reloadEndsAtMs: nowMs + WEAPONS[weapon.active].reloadDurationMs }
-			: next;
+			? unlimited
+				? withAmmo(weapon, WEAPONS[weapon.active].magSize)
+				: {
+						...withAmmo(weapon, 0),
+						reloadEndsAtMs: nowMs + WEAPONS[weapon.active].reloadDurationMs,
+					}
+			: withAmmo(weapon, newAmmo);
 	return {
 		kind: 'shot',
 		state: { ...state, run: { ...state.run, weapon: finalWeapon } },
@@ -174,6 +218,10 @@ export function tryConsumeAmmo(state: GameState, nowMs: number): FireOutcome {
 
 export function startReload(state: GameState, nowMs: number): GameState {
 	if (!state.run || state.phase !== 'playing') return state;
+	// noReload (set by no-reload, pistol-only, rifle-only modifiers) refills
+	// atomically on dry pull instead of through a manual reload window — the
+	// reload key becomes a no-op.
+	if (activeModifierFlags(state).noReload) return state;
 	const weapon = state.run.weapon;
 	if (weapon.reloadEndsAtMs !== null) return state;
 	const def = WEAPONS[weapon.active];
@@ -201,6 +249,9 @@ export function tickReload(state: GameState, nowMs: number): GameState {
 
 export function swapWeapon(state: GameState): GameState {
 	if (!state.run || state.phase !== 'playing') return state;
+	// pistol-only / rifle-only modifiers lock the player on one weapon.
+	const flags = activeModifierFlags(state);
+	if (flags.pistolOnly || flags.rifleOnly) return state;
 	const weapon = state.run.weapon;
 	// Swap is instant; cancels any in-flight reload (player chose to switch
 	// weapons rather than wait for reload).

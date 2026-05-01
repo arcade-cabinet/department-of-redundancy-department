@@ -20,7 +20,7 @@ import {
 import { now } from './engine/clock';
 import { rand } from './engine/rng';
 import { Game } from './game/Game';
-import type { GameState } from './game/GameState';
+import { activeModifierFlags, type GameState } from './game/GameState';
 import {
 	ContinueOverlay,
 	DifficultySelectOverlay,
@@ -714,7 +714,13 @@ canvas.addEventListener('pointerdown', (e) => {
 	if (!fired) return; // reloading or dry-pulled (auto-reload triggered)
 	const pick = pickAt(e.clientX, e.clientY);
 	if (pick.kind === 'enemy' && pick.enemyId && pick.target) {
-		director.hitEnemy(pick.enemyId, pick.target);
+		const flags = activeModifierFlags(game.getState());
+		// Headshots-only: bullets at the body register a hit visually (the
+		// trigger pulls, the round leaves the barrel) but do no damage and
+		// don't count toward score. Headshots and justice-shots still land.
+		if (!(flags.headshotsOnly && pick.target === 'body')) {
+			director.hitEnemy(pick.enemyId, pick.target);
+		}
 	} else if (pick.kind === 'civilian' && pick.civilianId) {
 		game.hitCivilian();
 		const civ = activeCivilians.get(pick.civilianId);
