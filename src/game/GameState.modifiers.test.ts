@@ -116,3 +116,83 @@ describe('startRun weapon initialisation', () => {
 		expect(s.run?.weapon.active).toBe('pistol');
 	});
 });
+
+import { damagePlayer, recordKill } from './GameState';
+
+describe('damagePlayer under glassCannon', () => {
+	it('triples incoming damage', () => {
+		// Glass cannon halves max HP at start (50) then triples damage.
+		const state = startRun('normal', 'three-lives', 'daily-challenge', T0, 'glass-cannon');
+		expect(state.run?.playerHp).toBe(50);
+		expect(state.run?.maxPlayerHp).toBe(50);
+		const after = damagePlayer(state, 10);
+		expect(after.run?.playerHp).toBe(20); // 50 - 30
+	});
+});
+
+describe('damagePlayer under ironMan', () => {
+	it('skips continue-prompt — first death is final', () => {
+		const state = startRun('normal', 'three-lives', 'daily-challenge', T0, 'iron-man');
+		expect(state.run?.remainingLives).toBe(3);
+		const dead = damagePlayer(state, 999);
+		expect(dead.phase).toBe('game-over');
+		expect(dead.run?.remainingLives).toBe(0);
+	});
+
+	it('standard run goes to continue-prompt instead', () => {
+		const state = startRun('normal', 'three-lives', 'standard', T0);
+		const dead = damagePlayer(state, 999);
+		expect(dead.phase).toBe('continue-prompt');
+		expect(dead.run?.remainingLives).toBe(2);
+	});
+});
+
+describe('recordKill under justiceOnly', () => {
+	it('body kills score 0 but still increment combo + kill counters', () => {
+		const state = startRun('normal', 'three-lives', 'daily-challenge', T0, 'justice-only');
+		const after = recordKill(state, 'body');
+		expect(after.run?.score).toBe(0);
+		expect(after.run?.comboCount).toBe(1);
+		expect(after.run?.enemiesKilled).toBe(1);
+	});
+
+	it('head kills score 0 under justice-only', () => {
+		const state = startRun('normal', 'three-lives', 'daily-challenge', T0, 'justice-only');
+		const after = recordKill(state, 'head');
+		expect(after.run?.score).toBe(0);
+	});
+
+	it('justice kills still score normally', () => {
+		const state = startRun('normal', 'three-lives', 'daily-challenge', T0, 'justice-only');
+		const after = recordKill(state, 'justice');
+		// 200 base × 1.05 (combo of 1) = 210
+		expect(after.run?.score).toBeGreaterThan(0);
+	});
+});
+
+describe('startRun under forcePermadeath', () => {
+	it('overrides three-lives picker choice with permadeath', () => {
+		const s = startRun('normal', 'three-lives', 'daily-challenge', T0, 'permadeath');
+		expect(s.run?.lives).toBe('permadeath');
+		expect(s.run?.remainingLives).toBe(1);
+	});
+
+	it('non-modifier run respects picker choice', () => {
+		const s = startRun('normal', 'three-lives', 'standard', T0);
+		expect(s.run?.lives).toBe('three-lives');
+		expect(s.run?.remainingLives).toBe(3);
+	});
+});
+
+describe('startRun under glassCannon', () => {
+	it('halves max HP', () => {
+		const s = startRun('normal', 'three-lives', 'daily-challenge', T0, 'glass-cannon');
+		expect(s.run?.maxPlayerHp).toBe(50);
+		expect(s.run?.playerHp).toBe(50);
+	});
+
+	it('non-modifier run uses base 100 HP', () => {
+		const s = startRun('normal', 'three-lives', 'standard', T0);
+		expect(s.run?.maxPlayerHp).toBe(100);
+	});
+});

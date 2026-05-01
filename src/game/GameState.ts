@@ -108,7 +108,11 @@ export function startRun(
 	dailyModifier: DailyModifierId | null = null,
 ): GameState {
 	const flags = mode === 'daily-challenge' ? dailyModifierFlags(dailyModifier) : DAILY_FLAGS_INERT;
-	const livesCount = lives === 'permadeath' ? 1 : 3;
+	// forcePermadeath modifier overrides the picker's lives choice (the daily
+	// picker always passes 'three-lives'). Glass-cannon halves the HP budget.
+	const effectiveLives: Lives = flags.forcePermadeath ? 'permadeath' : lives;
+	const livesCount = effectiveLives === 'permadeath' ? 1 : 3;
+	const maxHp = flags.glassCannon ? Math.round(PLAYER_BASE_HP / 2) : PLAYER_BASE_HP;
 	// Lock active weapon explicitly per modifier — don't rely on
 	// INITIAL_WEAPON_STATE.active being pistol by coincidence.
 	const lockedActive: WeaponKind | null = flags.rifleOnly
@@ -124,12 +128,12 @@ export function startRun(
 		phase: 'playing',
 		run: {
 			difficulty,
-			lives,
+			lives: effectiveLives,
 			mode,
 			dailyModifier,
 			currentLevelId: 'lobby',
-			playerHp: PLAYER_BASE_HP,
-			maxPlayerHp: PLAYER_BASE_HP,
+			playerHp: maxHp,
+			maxPlayerHp: maxHp,
 			remainingLives: livesCount,
 			score: 0,
 			comboCount: 0,
@@ -265,12 +269,18 @@ export function swapWeapon(state: GameState): GameState {
 
 export function damagePlayer(state: GameState, damage: number): GameState {
 	if (!state.run || state.phase !== 'playing') return state;
-	const newHp = state.run.playerHp - damage;
+	const flags = activeModifierFlags(state);
+	// Glass cannon: damage taken is tripled (in addition to halved max HP at
+	// run start — net "you die in ~6× fewer hits").
+	const effectiveDamage = flags.glassCannon ? damage * 3 : damage;
+	const newHp = state.run.playerHp - effectiveDamage;
 	if (newHp > 0) {
 		return { ...state, run: { ...state.run, playerHp: newHp, comboCount: 0 } };
 	}
 	const remaining = state.run.remainingLives - 1;
-	if (remaining <= 0) {
+	// Iron man: no continues. The first time HP hits zero ends the run, even
+	// if remainingLives > 0. Bypasses the continue-prompt phase entirely.
+	if (remaining <= 0 || flags.ironMan) {
 		return { ...state, phase: 'game-over', run: { ...state.run, playerHp: 0, remainingLives: 0 } };
 	}
 	return {
@@ -291,7 +301,17 @@ export function resumeFromContinue(state: GameState): GameState {
 
 export function recordKill(state: GameState, target: 'head' | 'body' | 'justice'): GameState {
 	if (!state.run || state.phase !== 'playing') return state;
-	const baseScore = target === 'head' ? 250 : target === 'justice' ? 200 : 100;
+	const flags = activeModifierFlags(state);
+	// Justice-only: head and body kills still register (combo counter, kill
+	// counter) but contribute zero score. Only justice-shots score.
+	const baseScore =
+		flags.justiceOnly && target !== 'justice'
+			? 0
+			: target === 'head'
+				? 250
+				: target === 'justice'
+					? 200
+					: 100;
 	const combo = state.run.comboCount + 1;
 	const earned = Math.round(baseScore * comboMultiplier(combo));
 	return {

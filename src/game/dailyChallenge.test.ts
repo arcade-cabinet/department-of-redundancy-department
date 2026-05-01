@@ -172,7 +172,6 @@ describe('dailyModifierFlags', () => {
 			'boss-rush',
 			'backwards',
 			'charge-week',
-			'permadeath',
 		] as const;
 		for (const id of inertIds) {
 			expect(dailyModifierFlags(id)).toEqual(DAILY_FLAGS_INERT);
