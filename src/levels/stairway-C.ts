@@ -42,7 +42,10 @@ const cameraRail: RailGraph = {
 			kind: 'combat',
 			position: new Vector3(0, 8, 11),
 			lookAt: new Vector3(0, 6, 10),
-			dwellMs: 35000,
+			// Extended dwell so the wall-clock-anchored ad-rush cues (95s, 105s)
+			// land while the camera is still parked at the chandelier landing.
+			// 22 (pos-1) + 28 (pos-2) + 70 (pos-3) ≈ level budget of 120s.
+			dwellMs: 70000,
 		},
 		{
 			id: 'exit',
@@ -189,7 +192,10 @@ const primitives: Primitive[] = [
 		width: 1.4,
 		height: 1.6,
 		family: 'wood',
-		texture: 'T_Window_Wood_005.png',
+		// Painting facade sits in the doors folder; the runtime loader expects
+		// door textures under /textures/retro/doors/. We pick a wood-grain door
+		// that visually reads as a portrait frame at this level's lighting.
+		texture: 'T_Door_Wood_005.png',
 		swing: 'outward',
 		state: 'closed',
 		spawnRailId: 'rail-spawn-painting-hidden',
@@ -204,7 +210,7 @@ const primitives: Primitive[] = [
 		width: 1,
 		height: 2.2,
 		family: 'wood',
-		texture: 'T_Door_Wood_018.png',
+		texture: 'T_Door_Wood_009.png',
 		swing: 'inward',
 		state: 'closed',
 		spawnRailId: 'rail-spawn-mid-1-L',
@@ -217,7 +223,7 @@ const primitives: Primitive[] = [
 		width: 1,
 		height: 2.2,
 		family: 'wood',
-		texture: 'T_Door_Wood_022.png',
+		texture: 'T_Door_Wood_012.png',
 		swing: 'inward',
 		state: 'closed',
 		spawnRailId: 'rail-spawn-mid-2-L-A',
@@ -230,7 +236,7 @@ const primitives: Primitive[] = [
 		width: 1,
 		height: 2.2,
 		family: 'wood',
-		texture: 'T_Door_Wood_024.png',
+		texture: 'T_Door_Wood_015.png',
 		swing: 'inward',
 		state: 'closed',
 		spawnRailId: 'rail-spawn-mid-2-R',
@@ -525,9 +531,11 @@ const cues: Cue[] = [
 		trigger: { kind: 'on-clear', railNodeId: 'pos-3-ad-rush' },
 		action: { verb: 'level-event', event: 'lights-restored' },
 	},
+	// Transition fires when the ad-rush position clears so longer fights on
+	// higher difficulties don't get cut off mid-combat.
 	{
 		id: 'transition',
-		trigger: { kind: 'wall-clock', atMs: 120000 },
+		trigger: { kind: 'on-clear', railNodeId: 'pos-3-ad-rush' },
 		action: { verb: 'transition', toLevelId: 'executive' },
 	},
 ];
