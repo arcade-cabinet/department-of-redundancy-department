@@ -143,9 +143,9 @@ function routeOverlay(state: GameState): void {
 					unlocked,
 					(difficulty, lives, mode, dailyMod) => {
 						game.chooseDifficulty(difficulty, lives, mode, now(), dailyMod?.id ?? null);
-						if (mode === 'daily-challenge' && dailyMod) {
-							pendingDailyAnnounce = dailyMod;
-						}
+						// Always rewrite — never leak a stale daily modifier from a
+						// prior abandoned daily-challenge selection into a standard run.
+						pendingDailyAnnounce = mode === 'daily-challenge' ? dailyMod : null;
 					},
 				);
 				activeOverlayDispose = () => picker.dispose();

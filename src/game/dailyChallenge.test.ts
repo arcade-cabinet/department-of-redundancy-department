@@ -6,6 +6,14 @@ describe('dayOfYearUtc', () => {
 		expect(dayOfYearUtc(new Date('2026-01-01T00:00:00Z'))).toBe(1);
 	});
 
+	it('returns 1 for Jan 1 at noon (sub-day stays on day 1)', () => {
+		expect(dayOfYearUtc(new Date('2026-01-01T12:00:00Z'))).toBe(1);
+	});
+
+	it('returns 1 for Jan 1 at 23:59:59 (last second of day 1)', () => {
+		expect(dayOfYearUtc(new Date('2026-01-01T23:59:59Z'))).toBe(1);
+	});
+
 	it('returns 32 for Feb 1 (non-leap year)', () => {
 		expect(dayOfYearUtc(new Date('2026-02-01T00:00:00Z'))).toBe(32);
 	});
@@ -67,5 +75,33 @@ describe('DAILY_MODIFIERS pool', () => {
 			expect(m.title.length).toBeGreaterThan(0);
 			expect(m.tagline.length).toBeGreaterThan(0);
 		}
+	});
+
+	// Order is the source of truth for the leaderboard contract: the same
+	// dayOfYear must select the same modifier across all clients today and
+	// forever after launch. A mid-array insertion silently passes uniqueness
+	// + count tests while breaking that contract globally. This snapshot is
+	// the only guard that catches an accidental reorder at review time.
+	it('id order is stable — append-only post-launch (do not reorder)', () => {
+		expect(DAILY_MODIFIERS.map((m) => m.id)).toEqual([
+			'no-reload',
+			'headshots-only',
+			'speed-run',
+			'permadeath',
+			'no-hud',
+			'civilian-rush',
+			'spray-and-pray',
+			'iron-man',
+			'reaper-friends',
+			'justice-only',
+			'sticky-aim',
+			'mass-pop-madness',
+			'boss-rush',
+			'backwards',
+			'charge-week',
+			'glass-cannon',
+			'pistol-only',
+			'rifle-only',
+		]);
 	});
 });
