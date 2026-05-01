@@ -105,3 +105,68 @@ export function getDailyModifier(id: DailyModifierId): DailyModifierDef {
 	if (!def) throw new Error(`Unknown daily modifier: ${id}`);
 	return def;
 }
+
+/**
+ * Active gameplay flags derived from the current daily modifier (or none).
+ * Centralised so every consumer reads the same struct — keeps the modifier
+ * effect surface auditable and prevents the per-frame conditional sprawl the
+ * spec warns against. Most fields are no-ops (`false` / `null`) until their
+ * modifier is the active one.
+ */
+export interface DailyModifierFlags {
+	readonly hideHud: boolean;
+	readonly headshotsOnly: boolean;
+	readonly pistolOnly: boolean;
+	readonly rifleOnly: boolean;
+	readonly noReload: boolean;
+	readonly glassCannon: boolean;
+	readonly ironMan: boolean;
+	readonly justiceOnly: boolean;
+}
+
+export const DAILY_FLAGS_INERT: DailyModifierFlags = {
+	hideHud: false,
+	headshotsOnly: false,
+	pistolOnly: false,
+	rifleOnly: false,
+	noReload: false,
+	glassCannon: false,
+	ironMan: false,
+	justiceOnly: false,
+};
+
+export function dailyModifierFlags(id: DailyModifierId | null): DailyModifierFlags {
+	if (id === null) return DAILY_FLAGS_INERT;
+	switch (id) {
+		case 'no-hud':
+			return { ...DAILY_FLAGS_INERT, hideHud: true };
+		case 'headshots-only':
+			return { ...DAILY_FLAGS_INERT, headshotsOnly: true };
+		case 'pistol-only':
+			return { ...DAILY_FLAGS_INERT, pistolOnly: true, noReload: true };
+		case 'rifle-only':
+			return { ...DAILY_FLAGS_INERT, rifleOnly: true, noReload: true };
+		case 'no-reload':
+			return { ...DAILY_FLAGS_INERT, noReload: true };
+		case 'glass-cannon':
+			return { ...DAILY_FLAGS_INERT, glassCannon: true };
+		case 'iron-man':
+			return { ...DAILY_FLAGS_INERT, ironMan: true };
+		case 'justice-only':
+			return { ...DAILY_FLAGS_INERT, justiceOnly: true };
+		// Modifiers below ship in v1 as no-ops at the flag layer — they need
+		// content-system changes (level routing, density tables, score model)
+		// that don't reduce to a per-tick boolean. Tracked in the directive.
+		case 'speed-run':
+		case 'permadeath':
+		case 'civilian-rush':
+		case 'spray-and-pray':
+		case 'reaper-friends':
+		case 'sticky-aim':
+		case 'mass-pop-madness':
+		case 'boss-rush':
+		case 'backwards':
+		case 'charge-week':
+			return DAILY_FLAGS_INERT;
+	}
+}
