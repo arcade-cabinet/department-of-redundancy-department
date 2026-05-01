@@ -19,6 +19,7 @@ import { Game } from './game/Game';
 import type { GameState } from './game/GameState';
 import {
 	ContinueOverlay,
+	DifficultySelectOverlay,
 	GameOverOverlay,
 	HudOverlay,
 	InsertCoinOverlay,
@@ -32,6 +33,7 @@ import type { Door, LevelId } from './levels/types';
 import {
 	loadHighScore,
 	loadSettings,
+	loadUnlockedDifficulties,
 	type Settings,
 	saveHighScoreIfBetter,
 	saveSettings,
@@ -69,6 +71,8 @@ const reticle = new Reticle(overlay);
 
 let activeOverlayDispose: (() => void) | null = null;
 let hud: HudOverlay | null = null;
+// Bumped on every routeOverlay call so stale async overlay constructors no-op.
+let overlayRouteToken = 0;
 let lastTickMs = performance.now();
 
 const settings: Settings = await loadSettings();
@@ -89,6 +93,7 @@ document.addEventListener('visibilitychange', () => {
 game.subscribe((state) => routeOverlay(state));
 
 function routeOverlay(state: GameState): void {
+	const token = ++overlayRouteToken;
 	if (activeOverlayDispose) {
 		activeOverlayDispose();
 		activeOverlayDispose = null;
@@ -108,8 +113,14 @@ function routeOverlay(state: GameState): void {
 			break;
 		}
 		case 'difficulty-select': {
-			// Default: jump straight to N-3 if no UI built yet.
-			game.chooseDifficulty('normal', 'three-lives');
+			void loadUnlockedDifficulties().then((unlocked) => {
+				if (token !== overlayRouteToken) return;
+				if (game.getState().phase !== 'difficulty-select') return;
+				const picker = new DifficultySelectOverlay(overlay, unlocked, (difficulty, lives) => {
+					game.chooseDifficulty(difficulty, lives);
+				});
+				activeOverlayDispose = () => picker.dispose();
+			});
 			break;
 		}
 		case 'playing': {
