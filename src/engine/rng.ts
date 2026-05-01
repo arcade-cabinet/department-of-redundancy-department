@@ -22,16 +22,11 @@ function readQueryParams(): URLSearchParams {
 }
 
 const params = readQueryParams();
-const seedParam = TEST_HOOKS_ENABLED ? params.get('seed') : null;
+const seedParam = params.get('seed');
 
 const seededPrng: (() => number) | null = seedParam !== null ? seedrandom(seedParam) : null;
 
 export function rand(): number {
 	if (seededPrng) return seededPrng();
 	return Math.random();
-}
-
-/** True when a `?seed=N` URL param is driving the RNG. Read-only. */
-export function isSeeded(): boolean {
-	return seededPrng !== null;
 }
