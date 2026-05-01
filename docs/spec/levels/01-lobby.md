@@ -176,7 +176,7 @@ The center elevator dings. Doors open. Out walks **Security Chief Garrison** —
 
 ### Garrison's spec
 
-A security-chief reskin of the policeman archetype: same GLB, swapped material to navy-blue uniform with brass buttons, badge on chest, peaked cap. Clipboard prop in left hand initially; he drops it as a visual cue at fight start.
+A security-chief reskin of the office security guard archetype: same GLB, swapped material to navy-blue uniform with brass buttons, badge on chest, peaked cap. Clipboard prop in left hand initially; he drops it as a visual cue at fight start.
 
 | Difficulty | HP | Phase 1 attack | Phase 2 attack |
 |---|---|---|---|
@@ -281,7 +281,7 @@ The Lobby has two memorable set pieces:
 | Elevator GLB | New: simple double-door with sliding animation |
 | Filing cabinet | Existing: `cabinet-1.glb` from `public/assets/models/props/` |
 | Manager enemy | Existing: `middle-manager.glb` |
-| Security Chief reskin | Existing `policeman.glb` + new material LUT |
+| Security Chief reskin | Existing `security-guard.glb` + new material LUT |
 | Civilian (intern) | New: 1 GLB with material variants for archetype |
 
 ## Authoring notes for implementation

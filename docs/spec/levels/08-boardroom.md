@@ -55,7 +55,7 @@ The rail is **stationary** for the entire fight. The player's position is the bo
 
 ## The Reaper's spec
 
-The final boss. Custom GLB — the only mesh in the game NOT reused from the worker / manager / policeman / hitman / executive lineage.
+The final boss. Custom GLB — the only mesh in the game NOT reused from the worker / manager / office security guard / hitman / executive lineage.
 
 - **Mesh**: Hooded robe, no visible face (just shadow under the hood with two faint red dots). Bony hands clutching a scythe. Scale: 1.4× standard worker.
 - **Material**: Pure black robe with subtle volumetric texture, red dots emissive at 5.0 intensity in the hood-shadow.
@@ -92,7 +92,7 @@ The Reaper sits at the table. The iPad screen glows red. The Reaper says: "Let's
 
 The Reaper stands periodically and **points the iPad at the player** — a 3-second wind-up that fires a long horizontal redaction bar that crosses the entire HUD on commit. Player must shoot the iPad mid-wind-up (mineable) OR break LOS (impossible — rail is stationary) OR just survive.
 
-Ads: TWO **policemen** spawn from the rear-of-room ceiling vents at t=4s and t=12s.
+Ads: TWO **office security guards** spawn from the rear-of-room ceiling vents at t=4s and t=12s.
 
 ### Encounter flow
 
@@ -120,7 +120,7 @@ sequenceDiagram
     iPad->>HUD: (if not shot) Full-HUD bar 2s
 
     Note over Vents: t=4s
-    Vents->>Player: Policeman ad-spawn (ceiling)
+    Vents->>Player: Office Security Guard ad-spawn (ceiling)
     Player-->>Vents: Headshot
 
     Note over Reaper: t=6s — burst fire
@@ -132,7 +132,7 @@ sequenceDiagram
     Player-->>iPad: Shoot OR survive
 
     Note over Vents: t=12s
-    Vents->>Player: Policeman ad-spawn (ceiling)
+    Vents->>Player: Office Security Guard ad-spawn (ceiling)
 
     Note over Reaper: HP 66% — PHASE TRANSITION
     Note over Reaper: 1.5s stun cinematic<br/>Reaper recoils
@@ -144,10 +144,10 @@ sequenceDiagram
 |---|---|---|---|
 | 0-18s | passive HUD obstruction | Redaction bars sweep | ~2s each, intermittent |
 | 3.0s | iPad raise | 3s wind-up + full-HUD bar | Mineable mid-wind-up |
-| 4.0s | ad-spawn (ceiling vent) | Policeman | Standard ad |
+| 4.0s | ad-spawn (ceiling vent) | Office Security Guard | Standard ad |
 | 6.0s | three-round burst | Sidearm fire | From under robe |
 | 10.0s | iPad raise | 3s wind-up + full-HUD bar | Mineable |
-| 12.0s | ad-spawn (ceiling vent) | Policeman | Standard ad |
+| 12.0s | ad-spawn (ceiling vent) | Office Security Guard | Standard ad |
 | Continuous | hood-eye fire | Reaper aims and fires through phase | Auto-reset bursts |
 
 ## Phase 2 — TELEPORT
@@ -158,7 +158,7 @@ The Reaper says: "Let's *transition* this discussion." The room dims slightly. T
 
 Teleport pattern: 4 positions × cycling visit ~3 seconds each. Player must lead the Reaper's teleports to keep the reticle on him.
 
-Ads: ONE **hitman** + ONE **policeman** spawn at ceiling vents at t=6s and t=14s respectively.
+Ads: ONE **hitman** + ONE **office security guard** spawn at ceiling vents at t=6s and t=14s respectively.
 
 ### Encounter flow
 
@@ -191,7 +191,7 @@ sequenceDiagram
     Player-->>Reaper: Track headshot
 
     Note over Vents: t=14s
-    Vents->>Player: Policeman ad-spawn (ceiling)
+    Vents->>Player: Office Security Guard ad-spawn (ceiling)
 
     Note over Reaper: t=15s — second close teleport
     Reaper->>Player: SCYTHE SLASH
@@ -208,7 +208,7 @@ sequenceDiagram
 | 3.0s | scythe-slash (close) | foot-end | 5s wind-up, requires focus fire |
 | 6.0s | ad-spawn | ceiling vent | Hitman |
 | 10.0s | far burst | head | Long-range three-round |
-| 14.0s | ad-spawn | ceiling vent | Policeman |
+| 14.0s | ad-spawn | ceiling vent | Office Security Guard |
 | 15.0s | scythe-slash (close) | foot-end | 5s wind-up |
 
 ## Phase 3 — SUBPOENA
@@ -243,9 +243,9 @@ sequenceDiagram
 
     Note over Vents,FloorTrap: t=4s — first mass-pop
     par Ceiling Vents
-        Vents->>Player: Policeman + Hitman
+        Vents->>Player: Office Security Guard + Hitman
     and Floor Trap
-        FloorTrap->>Player: Hitman + Policeman
+        FloorTrap->>Player: Hitman + Office Security Guard
     end
 
     Note over Player: 4 ads + Reaper + ongoing subpoena lobs
@@ -258,7 +258,7 @@ sequenceDiagram
     par Ceiling Vents
         Vents->>Player: Hitman + Hitman
     and Floor Trap
-        FloorTrap->>Player: Policeman + Policeman
+        FloorTrap->>Player: Office Security Guard + Office Security Guard
     end
 
     Note over Reaper: HP 0% — DEATH
@@ -315,7 +315,7 @@ These are not pickups. They are tactical primitives that the player chooses to e
 
 ## Memory budget
 
-Persistent from Executive Suites: hands, staple-rifle, manager + policeman + hitman GLBs (used for ads), shotgun prop. Loaded for Boardroom: Reaper GLB (NEW — only loaded for this level), Reaper material LUT (red emissive eyes), boardroom-table GLB (single instance, large), boardroom-walls + clerestory-windows + city-skyline backdrop, scythe prop, subpoena projectile prop, iPad prop, ceiling-vent (different geometry from Executive Suites), floor-trap GLB.
+Persistent from Executive Suites: hands, staple-rifle, manager + office security guard + hitman GLBs (used for ads), shotgun prop. Loaded for Boardroom: Reaper GLB (NEW — only loaded for this level), Reaper material LUT (red emissive eyes), boardroom-table GLB (single instance, large), boardroom-walls + clerestory-windows + city-skyline backdrop, scythe prop, subpoena projectile prop, iPad prop, ceiling-vent (different geometry from Executive Suites), floor-trap GLB.
 
 Total VRAM during Boardroom: ~38 MB (peak of any level — the Reaper + scythe + boardroom uniqueness costs roughly 4 MB net add).
 

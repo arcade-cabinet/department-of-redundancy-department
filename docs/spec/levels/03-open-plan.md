@@ -72,7 +72,7 @@ sequenceDiagram
     Note over Rail: Rail stops, camera dips behind first divider
 
     Note over LeftCubicle: t=2s
-    LeftCubicle->>Player: door-burst<br/>Policeman (security uniform)
+    LeftCubicle->>Player: door-burst<br/>Office Security Guard (security uniform)
     Player-->>LeftCubicle: Headshot
 
     Note over FarDepth: t=6s — distant target
@@ -85,7 +85,7 @@ sequenceDiagram
     Player-->>RightCubicle: Mid-air headshot
 
     Note over LeftCubicle: t=14s
-    LeftCubicle->>Player: cover-pop<br/>Policeman from divider edge
+    LeftCubicle->>Player: cover-pop<br/>Office Security Guard from divider edge
     Player-->>LeftCubicle: Time peek
 
     Note over Rail: t=18s — Position cleared
@@ -95,12 +95,12 @@ sequenceDiagram
 
 | t | Beat | Enemy | Notes |
 |---|---|---|---|
-| 2.0s | door-burst | policeman | Left cubicle |
+| 2.0s | door-burst | office security guard | Left cubicle |
 | 6.0s | background-shamble | manager | Far down the aisle |
 | 10.0s | vault-drop | manager | Right side, from row behind |
-| 14.0s | cover-pop | policeman | Left cubicle divider |
+| 14.0s | cover-pop | office security guard | Left cubicle divider |
 
-Four enemies. Mix of manager + policeman. Establishes Open Plan's vault-drop tempo.
+Four enemies. Mix of manager + office security guard. Establishes Open Plan's vault-drop tempo.
 
 ## Combat Position 2 — Printer Alley
 
@@ -108,7 +108,7 @@ Four enemies. Mix of manager + policeman. Establishes Open Plan's vault-drop tem
 
 A cluster of office printers on the right side of the aisle (large, beige, paper trays). On the left, a "BREAK ROOM" door. Cubicles continue in three rows behind the printers. A water cooler stands at the divider between this position and the next.
 
-The printers are visual cover for cover-pop beats AND mineable (crate-pop). One printer rolls forward as part of the vehicle-entry beat (dolly with two policemen on it).
+The printers are visual cover for cover-pop beats AND mineable (crate-pop). One printer rolls forward as part of the vehicle-entry beat (dolly with two office security guards on it).
 
 ### Encounter flow
 
@@ -129,7 +129,7 @@ sequenceDiagram
     Note over Player: HOLD FIRE
 
     Note over Printer: t=6s
-    Printer->>Player: vehicle-entry<br/>Printer-dolly with 2 policemen
+    Printer->>Player: vehicle-entry<br/>Printer-dolly with 2 office security guards
     Note over Player: Multi-target swivel
     Player-->>Printer: Sweep-fire across both
 
@@ -149,7 +149,7 @@ sequenceDiagram
 | t | Beat | Enemy / Type | Notes |
 |---|---|---|---|
 | 2.0s | civilian | consultant | DO NOT SHOOT |
-| 6.0s | vehicle-entry | policeman + policeman | Printer-dolly |
+| 6.0s | vehicle-entry | office security guard + office security guard | Printer-dolly |
 | 12.0s | door-burst | manager | Break Room door |
 | 15.0s | cover-pop + justice-opportunity | manager | Glint on weapon-hand |
 
@@ -238,11 +238,11 @@ sequenceDiagram
 
 ## Memory budget
 
-Persistent: hands, staple-rifle, manager + policeman GLBs. Loaded for Open Plan: cubicle-divider GLB (instanced 12-15 times), printer GLB (instanced 4 times), fluorescent-tube ceiling, water-cooler GLB (instanced 2 times), break-room door, glass-corner-office GLB, Whitcomb material LUT.
+Persistent: hands, staple-rifle, manager + office security guard GLBs. Loaded for Open Plan: cubicle-divider GLB (instanced 12-15 times), printer GLB (instanced 4 times), fluorescent-tube ceiling, water-cooler GLB (instanced 2 times), break-room door, glass-corner-office GLB, Whitcomb material LUT.
 
 Total VRAM during Open Plan: ~32 MB.
 
-Disposal: when entering Stairway B, dispose all Open Plan-exclusive geometry (printers, cubicle dividers, fluorescent tubes, water coolers, corner office). Keep manager + policeman GLBs loaded (reused in HR Corridor).
+Disposal: when entering Stairway B, dispose all Open Plan-exclusive geometry (printers, cubicle dividers, fluorescent tubes, water coolers, corner office). Keep manager + office security guard GLBs loaded (reused in HR Corridor).
 
 ## Authoring notes
 
@@ -311,8 +311,8 @@ Cell-aligned cubicle field, 6 cells × 4 cells. Rail traverses the centre aisle.
 | `rail-spawn-R1-vault` | (5, 2.6, 7) → (5, 0, 7) → (5, 0, 6) | 5.0 m/s | false |
 | `rail-spawn-L2-justice` | (-5, 0, 15) → (-4, 0, 15) → (-3, 0, 14.5) | 2.5 m/s | false |
 | `rail-spawn-printer-dolly` | (12, 0.5, 12) → (5, 0.5, 12) | 2.5 m/s | false |
-| `rail-spawn-printer-policeman-A` | (4, 0, 12) → (3, 0, 11) | 1.5 m/s | false |
-| `rail-spawn-printer-policeman-B` | (4, 0, 12) → (3, 0, 13) | 1.5 m/s | false |
+| `rail-spawn-printer-guard-A` | (4, 0, 12) → (3, 0, 11) | 1.5 m/s | false |
+| `rail-spawn-printer-guard-B` | (4, 0, 12) → (3, 0, 13) | 1.5 m/s | false |
 | `rail-spawn-break-room` | (-5, 0, 13) → (-4, 0, 13) → (-3, 0, 12.5) | 2.5 m/s | false |
 | `rail-spawn-whitcomb` | (0, 0, 25) → (0, 0, 23.5) | 2.0 m/s | false |
 | `rail-civ-consultant` | (-12, 0, 12.5) → (12, 0, 12.5) | 0.7 m/s | false |
@@ -345,8 +345,8 @@ const openPlanCues: Cue[] = [
   // Position 2 — printer alley
   { id: 'p2-civ',          trigger: { kind: 'on-arrive', railNodeId: 'pos-2' }, action: { verb: 'civilian-spawn', railId: 'rail-civ-consultant' } },
   { id: 'p2-printer-anim', trigger: { kind: 'on-arrive', railNodeId: 'pos-2' }, action: { verb: 'prop-anim', propId: 'prop-printer-dolly', animId: 'roll-in' } },
-  { id: 'p2-spawn-pol-A',  trigger: { kind: 'on-arrive', railNodeId: 'pos-2' }, action: { verb: 'enemy-spawn', railId: 'rail-spawn-printer-policeman-A', archetype: 'security-guard', fireProgram: 'vehicle-dismount-burst' } },
-  { id: 'p2-spawn-pol-B',  trigger: { kind: 'on-arrive', railNodeId: 'pos-2' }, action: { verb: 'enemy-spawn', railId: 'rail-spawn-printer-policeman-B', archetype: 'security-guard', fireProgram: 'vehicle-dismount-burst' } },
+  { id: 'p2-spawn-pol-A',  trigger: { kind: 'on-arrive', railNodeId: 'pos-2' }, action: { verb: 'enemy-spawn', railId: 'rail-spawn-printer-guard-A', archetype: 'security-guard', fireProgram: 'vehicle-dismount-burst' } },
+  { id: 'p2-spawn-pol-B',  trigger: { kind: 'on-arrive', railNodeId: 'pos-2' }, action: { verb: 'enemy-spawn', railId: 'rail-spawn-printer-guard-B', archetype: 'security-guard', fireProgram: 'vehicle-dismount-burst' } },
   { id: 'p2-door-break',   trigger: { kind: 'on-arrive', railNodeId: 'pos-2' }, action: { verb: 'door', doorId: 'door-break-room', to: 'open' } },
   { id: 'p2-spawn-break',  trigger: { kind: 'on-arrive', railNodeId: 'pos-2' }, action: { verb: 'enemy-spawn', railId: 'rail-spawn-break-room', archetype: 'middle-manager', fireProgram: 'pistol-pop-aim' } },
   { id: 'p2-door-justice', trigger: { kind: 'on-arrive', railNodeId: 'pos-2' }, action: { verb: 'door', doorId: 'door-cubicle-L2', to: 'open' } },

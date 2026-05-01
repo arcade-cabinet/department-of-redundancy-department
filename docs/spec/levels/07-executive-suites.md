@@ -81,8 +81,8 @@ sequenceDiagram
     Player-->>DeskCover: Time peek
 
     Note over LoungeDoor: t=10s
-    LoungeDoor->>Player: charge<br/>Policeman (with billy club, no firearm)
-    Note over Player: New variant: melee-only policeman<br/>Reticle is RED faster (priority)
+    LoungeDoor->>Player: charge<br/>Office Security Guard (with billy club, no firearm)
+    Note over Player: New variant: melee-only office security guard<br/>Reticle is RED faster (priority)
     Player-->>LoungeDoor: Sustained fire — close range threat
 
     Note over DeskDoor: t=14s
@@ -98,10 +98,10 @@ sequenceDiagram
 |---|---|---|---|
 | 2.0s | door-burst | hitman | Behind reception desk |
 | 6.0s | cover-pop | hitman | Reception desk top-edge |
-| 10.0s | charge | policeman (billy-club) | Melee-only variant |
+| 10.0s | charge | office security guard (billy-club) | Melee-only variant |
 | 14.0s | door-burst | manager | Behind reception desk |
 
-Four enemies. The melee-only policeman is a new beat variant — same archetype reskin, different reticle behavior (faster commit, can't be justice-shot since no firearm).
+Four enemies. The melee-only office security guard is a new beat variant — same archetype reskin, different reticle behavior (faster commit, can't be justice-shot since no firearm).
 
 ## Combat Position 2 — Executive Lounge
 
@@ -138,9 +138,9 @@ sequenceDiagram
 
     Note over SideDoor1,SideDoor2: t=6s — DELAYED MASS-POP
     par Side Door 1
-        SideDoor1->>Player: door-burst (×2)<br/>Policeman + Hitman
+        SideDoor1->>Player: door-burst (×2)<br/>Office Security Guard + Hitman
     and Side Door 2
-        SideDoor2->>Player: door-burst (×2)<br/>Manager + Policeman
+        SideDoor2->>Player: door-burst (×2)<br/>Manager + Office Security Guard
     end
 
     Note over Player: 4 simultaneous orange reticles<br/>Sweep + cover
@@ -158,7 +158,7 @@ sequenceDiagram
 | t | Beat | Enemy | Notes |
 |---|---|---|---|
 | 0-2.0s | passive-pre-aggro | bar hitman + booth hitman | Telegraphed slow draw on alert |
-| 6.0s | delayed mass-pop ×4 | policeman + hitman + manager + policeman | Two side doors |
+| 6.0s | delayed mass-pop ×4 | office security guard + hitman + manager + office security guard | Two side doors |
 | 14.0s | vault-drop (ceiling) | hitman | First ceiling-vent spawn |
 
 Seven enemies total. The lounge is the largest single-position kill count in any non-boss level. Ceiling vents are a new spawn vocabulary unique to Executive Suites and Boardroom.
@@ -259,7 +259,7 @@ No civilians on the executive floor. The building has actively evacuated them. T
 
 ## Memory budget
 
-Persistent from Stairway C: hands, staple-rifle, manager + policeman + hitman GLBs. Loaded for Executive Suites: mahogany-wall material LUT, executive-desk GLB (instanced 2-3 times), wet-bar GLB, leather-booth GLB, panic-alarm-light material (animated), Crawford material LUT, **shotgun prop GLB (NEW — first weapon variant beyond sidearm; reused in Boardroom by some Reaper ads)**, ceiling-vent GLB, billy-club prop.
+Persistent from Stairway C: hands, staple-rifle, manager + office security guard + hitman GLBs. Loaded for Executive Suites: mahogany-wall material LUT, executive-desk GLB (instanced 2-3 times), wet-bar GLB, leather-booth GLB, panic-alarm-light material (animated), Crawford material LUT, **shotgun prop GLB (NEW — first weapon variant beyond sidearm; reused in Boardroom by some Reaper ads)**, ceiling-vent GLB, billy-club prop.
 
 Total VRAM during Executive Suites: ~36 MB (3 MB net add — mahogany + shotgun amortized; offset by disposed Stairway C oil paintings + chandelier).
 

@@ -82,7 +82,7 @@ sequenceDiagram
     Note over Player: HOLD FIRE — frosted-glass discipline test
 
     Note over Door3: t=10s
-    Door3->>Player: door-burst<br/>Policeman
+    Door3->>Player: door-burst<br/>Office Security Guard
     Player-->>Door3: Headshot
 
     Note over Door1: t=14s — silhouette turns
@@ -98,7 +98,7 @@ sequenceDiagram
 |---|---|---|---|
 | 2.0s | door-burst | hitman | Standing silhouette pre-cue |
 | 7.0s | civilian-stayed | (none) | Seated silhouette — DO NOT SHOOT THROUGH |
-| 10.0s | door-burst | policeman | Standing silhouette pre-cue |
+| 10.0s | door-burst | office security guard | Standing silhouette pre-cue |
 | 14.0s | cover-pop | hitman | Justice-shot glint |
 
 Three enemies + 1 silhouette-civilian (passive). The silhouette mechanic is HR Corridor's signature — it asks the player to read motion behind frosted glass before the door opens.
@@ -107,9 +107,9 @@ Three enemies + 1 silhouette-civilian (passive). The silhouette mechanic is HR C
 
 ### Setup
 
-A side-room visible through a half-glass partition (open to the corridor). Inside: an HR conference table, four chairs. **Three civilians are seated at the table, hands behind their heads.** Two policemen with sidearms stand behind them. This is the **first hostage beat** of the run.
+A side-room visible through a half-glass partition (open to the corridor). Inside: an HR conference table, four chairs. **Three civilians are seated at the table, hands behind their heads.** Two office security guards with sidearms stand behind them. This is the **first hostage beat** of the run.
 
-The player MUST kill the policemen without hitting the civilians. Any civilian shot here is a -500 score penalty AND triggers a Director Phelps audio sting that he heard it.
+The player MUST kill the office security guards without hitting the civilians. Any civilian shot here is a -500 score penalty AND triggers a Director Phelps audio sting that he heard it.
 
 ### Encounter flow
 
@@ -125,15 +125,15 @@ sequenceDiagram
     Note over Rail: Rail stops at half-glass partition<br/>HOSTAGE SCENE visible
 
     Note over Hostage: t=2s — TITLE CARD: "HOSTAGES"
-    Hostage->>Player: Two policemen behind 3 civilians<br/>Civilians have hands raised
+    Hostage->>Player: Two office security guards behind 3 civilians<br/>Civilians have hands raised
     Note over Player: 2 ORANGE reticles + 3 BLUE (civilian)<br/>Surgical fire only
 
     Note over Hostage: t=4s
-    Hostage->>Player: hostage beat<br/>Left policeman fires (deliberate miss)
-    Player-->>Hostage: Headshot left policeman
+    Hostage->>Player: hostage beat<br/>Left office security guard fires (deliberate miss)
+    Player-->>Hostage: Headshot left office security guard
 
     Note over Hostage: t=8s
-    Hostage->>Player: hostage beat<br/>Right policeman repositions
+    Hostage->>Player: hostage beat<br/>Right office security guard repositions
     Note over Player: Civilian #2 in line of fire
     Player-->>Hostage: Wait for clear angle, headshot
 
@@ -153,9 +153,9 @@ sequenceDiagram
 
 | t | Beat | Enemy / Type | Notes |
 |---|---|---|---|
-| 2.0s | hostage-setup | 2 policemen behind 3 civilians | Title card |
-| 4.0s | hostage-beat | policeman (left) | Surgical headshot |
-| 8.0s | hostage-beat | policeman (right) | Wait for clear angle |
+| 2.0s | hostage-setup | 2 office security guards behind 3 civilians | Title card |
+| 4.0s | hostage-beat | office security guard (left) | Surgical headshot |
+| 8.0s | hostage-beat | office security guard (right) | Wait for clear angle |
 | 14.0s | door-burst | manager | Side door |
 | 18.0s | charge | hitman | From corridor end |
 
@@ -252,11 +252,11 @@ sequenceDiagram
 
 ## Memory budget
 
-Persistent from Stairway B: hands, staple-rifle, manager + policeman + hitman GLBs. Loaded for HR Corridor: HR-corridor-tile floor, frosted-glass-door GLB (instanced 5 times), HR poster prop variants (instanced 3-4 times), filing-cabinet GLB (instanced 1× as Phelps cover, others reused from Workbench prop pool), Phelps cardigan material LUT, hostage chair-set GLB, **executive-tier voice line bank** (shared with future Crawford + Reaper).
+Persistent from Stairway B: hands, staple-rifle, manager + office security guard + hitman GLBs. Loaded for HR Corridor: HR-corridor-tile floor, frosted-glass-door GLB (instanced 5 times), HR poster prop variants (instanced 3-4 times), filing-cabinet GLB (instanced 1× as Phelps cover, others reused from Workbench prop pool), Phelps cardigan material LUT, hostage chair-set GLB, **executive-tier voice line bank** (shared with future Crawford + Reaper).
 
 Total VRAM during HR Corridor: ~30 MB.
 
-Disposal: when entering Stairway C, dispose all HR-exclusive geometry (frosted doors, posters, hostage chairs, Phelps's cabinet, Phelps's GLB). Keep manager + policeman + hitman GLBs loaded (reused in Executive Suites).
+Disposal: when entering Stairway C, dispose all HR-exclusive geometry (frosted doors, posters, hostage chairs, Phelps's cabinet, Phelps's GLB). Keep manager + office security guard + hitman GLBs loaded (reused in Executive Suites).
 
 ## Authoring notes
 

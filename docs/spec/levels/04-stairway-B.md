@@ -7,7 +7,7 @@ domain: product
 
 # Level 04 — Stairway B
 
-> Whitcomb's body is barely cold and the building has noticed. The auditor leaves the cubicle floor through Stairway B and the resistance is no longer accidental. Doors are propped open in advance. Policemen waiting in the well. Someone radioed up. The climb is longer this time and the camera knows it.
+> Whitcomb's body is barely cold and the building has noticed. The auditor leaves the cubicle floor through Stairway B and the resistance is no longer accidental. Doors are propped open in advance. Office Security Guards waiting in the well. Someone radioed up. The climb is longer this time and the camera knows it.
 
 ## Theme
 
@@ -29,7 +29,7 @@ The visual identity is **vertical with intent.** Stairway A was unaware; Stairwa
 | Top exit + ambience swap | 6 |
 | **Total** | **90s** |
 
-50% longer than Stairway A. Difficulty rises with both density and beat complexity — this is where the policeman tier becomes the dominant archetype and the first hitman appears.
+50% longer than Stairway A. Difficulty rises with both density and beat complexity — this is where the office security guard tier becomes the dominant archetype and the first hitman appears.
 
 ## Rail topology
 
@@ -71,21 +71,21 @@ sequenceDiagram
     Note over Rail: Rail stops mid-stair, camera at 25° tilt
 
     Note over PropDoor: t=2s
-    PropDoor->>Player: door-burst<br/>Policeman (already in motion)
+    PropDoor->>Player: door-burst<br/>Office Security Guard (already in motion)
     Note over Player: Door is OPEN — enemy is faster
     Player-->>PropDoor: Quick draw, headshot
 
     Note over LowerWell: t=6s
-    LowerWell->>Player: crawler ×2<br/>Policeman + Manager
+    LowerWell->>Player: crawler ×2<br/>Office Security Guard + Manager
     Note over Player: Two threats from below
-    Player-->>LowerWell: Sweep — prioritize policeman
+    Player-->>LowerWell: Sweep — prioritize office security guard
 
     Note over UpperDoor: t=12s
     UpperDoor->>Player: door-burst<br/>Manager (sidearm)
     Player-->>UpperDoor: Headshot
 
     Note over PropDoor: t=16s — second wave
-    PropDoor->>Player: cover-pop<br/>Policeman (uses doorframe)
+    PropDoor->>Player: cover-pop<br/>Office Security Guard (uses doorframe)
     Player-->>PropDoor: Time peek
 
     Note over Rail: t=20s — Optional crate-pop
@@ -99,10 +99,10 @@ sequenceDiagram
 
 | t | Beat | Enemy | Notes |
 |---|---|---|---|
-| 2.0s | door-burst | policeman | Propped door — shorter wind-up (door already open) |
-| 6.0s | crawler ×2 | policeman + manager | Synchronized from lower well |
+| 2.0s | door-burst | office security guard | Propped door — shorter wind-up (door already open) |
+| 6.0s | crawler ×2 | office security guard + manager | Synchronized from lower well |
 | 12.0s | door-burst | manager | Upper landing door |
-| 16.0s | cover-pop | policeman | Propped door cycles |
+| 16.0s | cover-pop | office security guard | Propped door cycles |
 | 20.0s | crate-pop | fire extinguisher (optional) | Ammo |
 
 Five enemies + 1 optional crate. The synchronized double-crawler is new — Stairway A had a single crawler; Stairway B doubles the threat from below.
@@ -133,10 +133,10 @@ sequenceDiagram
     Note over LeftDoor,RightDoor: t=3s — MASS-POP wind-up<br/>(both doors creak in sync)
 
     par Left Door Wave
-        LeftDoor->>Player: door-burst<br/>Policeman
+        LeftDoor->>Player: door-burst<br/>Office Security Guard
         LeftDoor->>Player: door-burst<br/>Manager
     and Right Door Wave
-        RightDoor->>Player: door-burst<br/>Policeman
+        RightDoor->>Player: door-burst<br/>Office Security Guard
         RightDoor->>Player: door-burst<br/>Manager
     end
 
@@ -148,7 +148,7 @@ sequenceDiagram
     Player-->>Shadow: Headshot — reticle commit fast
 
     Note over ServiceDoor: t=18s
-    ServiceDoor->>Player: vault-drop<br/>Policeman from balcony above service door
+    ServiceDoor->>Player: vault-drop<br/>Office Security Guard from balcony above service door
     Player-->>ServiceDoor: Mid-air shot
 
     Note over LeftDoor: t=24s
@@ -162,9 +162,9 @@ sequenceDiagram
 
 | t | Beat | Enemy | Notes |
 |---|---|---|---|
-| 3.0s | mass-pop (×4) | policeman + manager + policeman + manager | Synchronized left + right doors |
+| 3.0s | mass-pop (×4) | office security guard + manager + office security guard + manager | Synchronized left + right doors |
 | 12.0s | cover-pop | hitman | FIRST HITMAN of the run |
-| 18.0s | vault-drop | policeman | From above service door |
+| 18.0s | vault-drop | office security guard | From above service door |
 | 24.0s | cover-pop | hitman | Justice-shot glint |
 
 Seven enemies. The mass-pop is the climax of Stairway B. Hitman introduction is the structural moment — the new archetype must read clearly.
@@ -177,7 +177,7 @@ Seven enemies. The mass-pop is the climax of Stairway B. Hitman introduction is 
 
 3. **The smashed fluorescent + glass shower (Pos 2 entry).** The shadow it creates is functional — it hides the hitman. The glass shower is the visual cue that something worse waits in the dark.
 
-4. **The hitman reveal (Pos 2, t=12s).** First appearance of the third enemy archetype. Title card mid-fight, reticle wind-up shorter than policeman, justice-shot disarms one of the dual sidearms (theatrical glint).
+4. **The hitman reveal (Pos 2, t=12s).** First appearance of the third enemy archetype. Title card mid-fight, reticle wind-up shorter than office security guard, justice-shot disarms one of the dual sidearms (theatrical glint).
 
 ## Civilians
 
@@ -193,7 +193,7 @@ None. Stairways remain civilian-free service corridors.
 
 ## Memory budget
 
-Persistent from Open Plan: hands, staple-rifle, manager + policeman GLBs. Loaded for Stairway B: metal-stairs GLB (reused from Stairway A), industrial-pipes prop (reused), 1 propped-door variant, fire-extinguisher prop, **hitman GLB (first time loaded — use this stairway as the hitman pre-load slot for HR Corridor)**.
+Persistent from Open Plan: hands, staple-rifle, manager + office security guard GLBs. Loaded for Stairway B: metal-stairs GLB (reused from Stairway A), industrial-pipes prop (reused), 1 propped-door variant, fire-extinguisher prop, **hitman GLB (first time loaded — use this stairway as the hitman pre-load slot for HR Corridor)**.
 
 Total VRAM during Stairway B: ~28 MB (3 MB net add over Stairway A; +3 MB for hitman GLB + dual-sidearm prop, fire-extinguisher amortized).
 
@@ -203,7 +203,7 @@ Disposal: Open Plan exclusives (printers, cubicle dividers, water coolers, Whitc
 
 - The propped door is a `<group>` with a fire-extinguisher prop blocking the closing animation; the door uses the open-state pose, no animation. Cheap.
 - The smashed fluorescent uses a darker emissive value on its tube material (50% of normal fluorescent) and casts a shorter cone of light. Adjacent fluorescents stay normal.
-- The hitman's dual-sidearm appearance: same right-hand sidearm prop as policeman + a mirrored left-hand instance. No new prop authoring required for v1.
+- The hitman's dual-sidearm appearance: same right-hand sidearm prop as office security guard + a mirrored left-hand instance. No new prop authoring required for v1.
 - The chalk-arrow graffiti is a flat decal mesh with a 256×256 texture. Place it on the wall halfway up the second flight, slightly offset so it's visible during climb but not blocking.
 - Mass-pop sync: BOTH doors' wind-up timers start from the same `t0` reference. Use a single setTimeout chain, not parallel ones.
 
@@ -302,4 +302,4 @@ const stairwayBCues: Cue[] = [
 - Average Stairway B clear time on Normal: 80-95s
 - Mass-pop clear rate (player kills all 4 in window): >70% on Normal — if lower, widen the wind-up window by 200ms
 - Hitman archetype recognition on first appearance: subjective playtest, but the title card + reveal sting must register. Slow the reveal animation if playtests miss it.
-- Policeman dominance check: at this point, policeman should be the most-killed archetype across the run so far. Manager kills should be plateau-ing.
+- Office Security Guard dominance check: at this point, office security guard should be the most-killed archetype across the run so far. Manager kills should be plateau-ing.

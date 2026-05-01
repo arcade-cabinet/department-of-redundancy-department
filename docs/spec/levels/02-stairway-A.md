@@ -130,7 +130,7 @@ sequenceDiagram
 
     Note over Rail: t=10s — second wave
     LeftDoor->>Player: cover-pop (manager)
-    RightDoor->>Player: cover-pop (policeman) — first cop seen!
+    RightDoor->>Player: cover-pop (office security guard) — first cop seen!
     Note over Player: Cop wears Lobby-style security uniform<br/>(reskin: navy blue + brass)
 
     Note over Rail: t=18s — Position cleared, exit door above
@@ -143,9 +143,9 @@ sequenceDiagram
 | 2.0s | door-burst (×2) | manager + manager | Left landing door |
 | 2.0s | door-burst (×2) | manager + manager | Right landing door (synchronized) |
 | 10.0s | cover-pop | manager | Left door cycle |
-| 10.0s | cover-pop | policeman | Right door cycle — FIRST POLICEMAN of the run |
+| 10.0s | cover-pop | office security guard | Right door cycle — FIRST OFFICE SECURITY GUARD of the run |
 
-Six enemies; the synchronized 4-pop is the climax of Stairway A. Introduces the policeman archetype.
+Six enemies; the synchronized 4-pop is the climax of Stairway A. Introduces the office security guard archetype.
 
 ## Set pieces
 
@@ -169,16 +169,16 @@ None. Stairways are service corridors — no office workers walk through. This i
 
 ## Memory budget
 
-Persistent from Lobby: hands, staple-rifle, manager GLB, manager material LUT entries. Loaded for Stairway A: metal-stairs GLB (existing `staircase-1.glb`), industrial-pipes prop, fluorescent-tube prop, 2 stairwell-door textures (from retro doors pool), policeman GLB (first time loaded — use this stairway as the policeman pre-load slot for Open Plan).
+Persistent from Lobby: hands, staple-rifle, manager GLB, manager material LUT entries. Loaded for Stairway A: metal-stairs GLB (existing `staircase-1.glb`), industrial-pipes prop, fluorescent-tube prop, 2 stairwell-door textures (from retro doors pool), office security guard GLB (first time loaded — use this stairway as the office security guard pre-load slot for Open Plan).
 
-Total VRAM during Stairway A: ~25 MB (5 MB net add over Lobby; -10 MB Lobby-exclusive disposed during stair entrance, +15 MB for staircase + policeman load).
+Total VRAM during Stairway A: ~25 MB (5 MB net add over Lobby; -10 MB Lobby-exclusive disposed during stair entrance, +15 MB for staircase + office security guard load).
 
 ## Authoring notes for implementation
 
 - Camera tilt MUST be smooth, not stepped. Use a `useFrame` lerp over 1.0 second.
 - The crawler enemy's climb animation needs to read clearly — use `walk` state on the existing manager but pitch the model -45° forward as a hack until proper crawl animations land.
 - The synchronized wave needs both door wind-ups to start within 50ms of each other — humans perceive ≥80ms gap as "not synchronized." Use a single timer to gate both.
-- The policeman first appearance is a structural moment — don't hide it. Make sure the policeman is the LAST enemy to die in the wave so the player gets a clean look at the new archetype.
+- The office security guard first appearance is a structural moment — don't hide it. Make sure the office security guard is the LAST enemy to die in the wave so the player gets a clean look at the new archetype.
 
 ## Construction primitives
 
@@ -260,7 +260,7 @@ const stairwayACues: Cue[] = [
   { id: 'p2-spawn-L1',    trigger: { kind: 'on-arrive', railNodeId: 'pos-landing-wave' }, action: { verb: 'enemy-spawn', railId: 'rail-spawn-top-left', archetype: 'middle-manager', fireProgram: 'pistol-pop-aim' } },
   { id: 'p2-spawn-L2',    trigger: { kind: 'on-arrive', railNodeId: 'pos-landing-wave' }, action: { verb: 'enemy-spawn', railId: 'rail-spawn-top-left', archetype: 'middle-manager', fireProgram: 'pistol-pop-aim' } },
   { id: 'p2-spawn-R1',    trigger: { kind: 'on-arrive', railNodeId: 'pos-landing-wave' }, action: { verb: 'enemy-spawn', railId: 'rail-spawn-top-right', archetype: 'middle-manager', fireProgram: 'pistol-pop-aim' } },
-  { id: 'p2-spawn-R2',    trigger: { kind: 'on-arrive', railNodeId: 'pos-landing-wave' }, action: { verb: 'enemy-spawn', railId: 'rail-spawn-top-right', archetype: 'security-guard', fireProgram: 'pistol-pop-aim' } }, // FIRST policeman
+  { id: 'p2-spawn-R2',    trigger: { kind: 'on-arrive', railNodeId: 'pos-landing-wave' }, action: { verb: 'enemy-spawn', railId: 'rail-spawn-top-right', archetype: 'security-guard', fireProgram: 'pistol-pop-aim' } }, // FIRST office security guard
   // Mid-position second wave is wall-clock-relative (10s into dwell)
   { id: 'p2-cover-L',     trigger: { kind: 'on-clear', railNodeId: 'pos-landing-wave' }, action: { verb: 'lighting', lightId: 'light-emergency-strip', tween: { kind: 'snap', intensity: 1.0 } } },
 
@@ -273,4 +273,4 @@ const stairwayACues: Cue[] = [
 
 - Average Stairway A clear time on Normal: 55-65s
 - Crawler beat success rate (player kills before lunge): >85% on Normal (this is a tutorial beat)
-- Policeman archetype recognition on first appearance: subjective playtest, but should NOT be missed. If playtests show players don't notice, slow the policeman's spawn animation.
+- Office Security Guard archetype recognition on first appearance: subjective playtest, but should NOT be missed. If playtests show players don't notice, slow the office security guard's spawn animation.
