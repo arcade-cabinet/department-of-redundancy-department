@@ -2,17 +2,19 @@ import { Control } from '@babylonjs/gui/2D/controls/control';
 import { Rectangle } from '@babylonjs/gui/2D/controls/rectangle';
 import { TextBlock } from '@babylonjs/gui/2D/controls/textBlock';
 import { comboMultiplier, type GameState } from '../game/GameState';
+import {
+	COLOR_HP_HIGH,
+	COLOR_HP_LOW,
+	COLOR_HP_MID,
+	COLOR_PAPER,
+	FONT_BODY,
+	FONT_DISPLAY,
+} from './brand';
 import type { Overlay } from './Overlay';
 
 const HP_BAR_WIDTH = 320;
 const HP_BAR_THICKNESS = 2;
 const HP_FILL_MAX_WIDTH = HP_BAR_WIDTH - HP_BAR_THICKNESS * 2;
-
-// Brand fonts — self-hosted under public/assets/fonts and registered via
-// @font-face in index.html. Departure Mono is the arcade-cabinet display face;
-// Inter carries body/numeric copy where readability beats character.
-const FONT_DISPLAY = 'Departure Mono';
-const FONT_BODY = 'Inter';
 
 /**
  * Heads-up display: top strip carrying HP bar (left), score + combo (center),
@@ -36,7 +38,7 @@ export class HudOverlay {
 		this.hpBar.width = `${HP_BAR_WIDTH}px`;
 		this.hpBar.height = '24px';
 		this.hpBar.thickness = HP_BAR_THICKNESS;
-		this.hpBar.color = '#F4F1EA';
+		this.hpBar.color = COLOR_PAPER;
 		this.hpBar.background = 'rgba(21, 24, 28, 0.6)';
 		this.hpBar.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
 		this.hpBar.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
@@ -45,7 +47,7 @@ export class HudOverlay {
 
 		this.hpFill = new Rectangle('hud-hp-fill');
 		this.hpFill.thickness = 0;
-		this.hpFill.background = '#3FFF7F';
+		this.hpFill.background = COLOR_HP_HIGH;
 		this.hpFill.height = '20px';
 		this.hpFill.width = `${HP_FILL_MAX_WIDTH}px`;
 		this.hpFill.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
@@ -53,7 +55,7 @@ export class HudOverlay {
 		this.hpBar.addControl(this.hpFill);
 
 		this.hpLabel = new TextBlock('hud-hp-label', 'HP 100');
-		this.hpLabel.color = '#F4F1EA';
+		this.hpLabel.color = COLOR_PAPER;
 		this.hpLabel.fontSize = 14;
 		this.hpLabel.fontFamily = FONT_BODY;
 		this.hpLabel.fontWeight = 'bold';
@@ -64,7 +66,7 @@ export class HudOverlay {
 		this.hpBar.addControl(this.hpLabel);
 
 		this.scoreLabel = new TextBlock('hud-score', '0');
-		this.scoreLabel.color = '#F4F1EA';
+		this.scoreLabel.color = COLOR_PAPER;
 		this.scoreLabel.fontSize = 36;
 		this.scoreLabel.fontFamily = FONT_DISPLAY;
 		this.scoreLabel.fontWeight = 'bold';
@@ -75,7 +77,7 @@ export class HudOverlay {
 		this.scoreLabel.top = '20px';
 
 		this.comboLabel = new TextBlock('hud-combo', '');
-		this.comboLabel.color = '#FFA040';
+		this.comboLabel.color = COLOR_HP_MID;
 		this.comboLabel.fontSize = 18;
 		this.comboLabel.fontFamily = FONT_BODY;
 		this.comboLabel.fontWeight = 'bold';
@@ -86,7 +88,7 @@ export class HudOverlay {
 		this.comboLabel.top = '60px';
 
 		this.livesLabel = new TextBlock('hud-lives', '♥ ♥ ♥');
-		this.livesLabel.color = '#FF3030';
+		this.livesLabel.color = COLOR_HP_LOW;
 		this.livesLabel.fontSize = 28;
 		this.livesLabel.fontFamily = FONT_DISPLAY;
 		this.livesLabel.height = '40px';
@@ -127,7 +129,7 @@ export class HudOverlay {
 }
 
 function hpColorFor(frac: number): string {
-	if (frac > 0.66) return '#3FFF7F';
-	if (frac > 0.33) return '#FFA040';
-	return '#FF3030';
+	if (frac > 0.66) return COLOR_HP_HIGH;
+	if (frac > 0.33) return COLOR_HP_MID;
+	return COLOR_HP_LOW;
 }
