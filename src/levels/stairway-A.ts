@@ -102,6 +102,9 @@ const primitives: Primitive[] = [
 		width: 12,
 		height: 9,
 		pbr: 'drywall',
+		// Shaft mid-climb beat — rewards the player who survived Lobby
+		// without continuing. Positioned at eye level on the east shaft wall.
+		healthKit: { id: 'kit-stairway-A-shaft', hp: 35, offset: [0, 1.5] },
 	},
 
 	// Doors — metal stairwell doors.
