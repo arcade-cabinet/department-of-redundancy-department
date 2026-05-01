@@ -11,8 +11,12 @@ import {
 	recordKill,
 	resumeFromContinue,
 	setPhase,
+	startReload,
 	startRun,
+	swapWeapon,
+	tickReload,
 	transitionLevel,
+	tryConsumeAmmo,
 } from './GameState';
 
 type Listener = (state: GameState) => void;
@@ -41,8 +45,13 @@ export class Game {
 		this.update(setPhase(this.state, 'difficulty-select'));
 	}
 
-	chooseDifficulty(difficulty: Difficulty, lives: Lives, mode: GameMode = 'standard'): void {
-		this.update(startRun(difficulty, lives, mode));
+	chooseDifficulty(
+		difficulty: Difficulty,
+		lives: Lives,
+		mode: GameMode = 'standard',
+		nowMs: number,
+	): void {
+		this.update(startRun(difficulty, lives, mode, nowMs));
 	}
 
 	hit(target: 'head' | 'body' | 'justice'): void {
@@ -67,6 +76,27 @@ export class Game {
 
 	transitionLevel(toLevelId: LevelId): void {
 		this.update(transitionLevel(this.state, toLevelId));
+	}
+
+	// Returns true if a bullet left the barrel (ammo decremented), false on
+	// misfire (reloading) or dry-pull-into-auto-reload (no shot fired).
+	tryFire(nowMs: number): boolean {
+		const outcome = tryConsumeAmmo(this.state, nowMs);
+		if (outcome.kind === 'misfire') return false;
+		this.update(outcome.state);
+		return outcome.kind === 'shot';
+	}
+
+	reload(nowMs: number): void {
+		this.update(startReload(this.state, nowMs));
+	}
+
+	tickReload(nowMs: number): void {
+		this.update(tickReload(this.state, nowMs));
+	}
+
+	swapWeapon(): void {
+		this.update(swapWeapon(this.state));
 	}
 
 	openSettings(): void {

@@ -135,7 +135,7 @@ function routeOverlay(state: GameState): void {
 				if (token !== overlayRouteToken) return;
 				if (game.getState().phase !== 'difficulty-select') return;
 				const picker = new DifficultySelectOverlay(overlay, unlocked, (difficulty, lives) => {
-					game.chooseDifficulty(difficulty, lives);
+					game.chooseDifficulty(difficulty, lives, 'standard', now());
 				});
 				activeOverlayDispose = () => picker.dispose();
 			});
@@ -196,7 +196,7 @@ async function emitGameOver(state: GameState, score: number, cleared: boolean): 
 		headshots: run.headshots,
 		justiceShots: run.justiceShots,
 		civilianHits: run.civilianHits,
-		elapsedMs: performance.now() - run.startedAtMs,
+		elapsedMs: now() - run.startedAtMs,
 		clearedRun: cleared,
 	};
 	const overlayInstance = new GameOverOverlay(overlay, summary, () => {
@@ -606,15 +606,16 @@ function sampleCivilianPath(civ: ActiveCivilian): { position: Vector3; finished:
 // ── Main loop ────────────────────────────────────────────────────────────────
 
 function tick(): void {
-	const now = performance.now();
-	const dtMs = Math.min(64, now - lastTickMs); // cap at 64ms (16fps floor) to avoid huge dt
-	lastTickMs = now;
+	const tickT = performance.now();
+	const dtMs = Math.min(64, tickT - lastTickMs); // cap at 64ms (16fps floor) to avoid huge dt
+	lastTickMs = tickT;
 
 	const state = game.getState();
 	if (state.phase === 'playing') {
 		if (director && !director.isFinished) director.tick(dtMs);
 		tickCivilians(dtMs);
 		tickPropAnims();
+		game.tickReload(now());
 		if (currentCamera) applyCameraShake(currentCamera);
 	}
 
@@ -688,6 +689,9 @@ canvas.addEventListener('pointermove', (e) => {
 });
 canvas.addEventListener('pointerdown', (e) => {
 	if (game.getState().phase !== 'playing' || !director) return;
+	// Pull the trigger first — gates target resolution on having a real shot.
+	const fired = game.tryFire(now());
+	if (!fired) return; // reloading or dry-pulled (auto-reload triggered)
 	const pick = pickAt(e.clientX, e.clientY);
 	if (pick.kind === 'enemy' && pick.enemyId && pick.target) {
 		director.hitEnemy(pick.enemyId, pick.target);
@@ -698,8 +702,35 @@ canvas.addEventListener('pointerdown', (e) => {
 		activeCivilians.delete(pick.civilianId);
 	}
 	// Any actual shot — at an enemy or a civilian — wakes pre-aggro enemies.
-	// Air shots are no-ops and don't alert (no ammo cost either; reload slice).
 	if (pick.kind !== 'air') director.emitAlert();
 });
+
+// Canvas needs tabindex to receive focus + keydown directly. Capture-phase
+// listener so e.preventDefault() suppresses Tab focus-cycling before the
+// browser processes it (window-level handlers are too late on Firefox).
+canvas.setAttribute('tabindex', '0');
+canvas.addEventListener(
+	'keydown',
+	(e) => {
+		if (game.getState().phase !== 'playing') return;
+		// Ignore key-repeat: held keys should not spam reload or oscillate weapons.
+		if (e.repeat) {
+			if (e.key === 'Tab') e.preventDefault();
+			return;
+		}
+		if (e.key === 'r' || e.key === 'R') {
+			game.reload(now());
+			e.preventDefault();
+			return;
+		}
+		if (e.key === 'Tab') {
+			game.swapWeapon();
+			e.preventDefault();
+		}
+	},
+	{ capture: true },
+);
+// Focus the canvas on first pointer interaction so keys reach it.
+canvas.addEventListener('pointerdown', () => canvas.focus(), { passive: true });
 
 engine.runRenderLoop(tick);
