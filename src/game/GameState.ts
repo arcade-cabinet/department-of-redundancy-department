@@ -9,6 +9,37 @@ import type { Lives } from '../preferences';
 
 export type GameMode = 'standard' | 'daily-challenge';
 
+// Two-weapon loadout per docs/spec/00-overview.md. Pistol is the default;
+// rifle is swap-tab. Reload is 1.0s per spec.
+export type WeaponKind = 'pistol' | 'rifle';
+
+export interface WeaponDef {
+	readonly kind: WeaponKind;
+	readonly magSize: number;
+	readonly reloadDurationMs: number;
+}
+
+export const WEAPONS: Readonly<Record<WeaponKind, WeaponDef>> = {
+	pistol: { kind: 'pistol', magSize: 8, reloadDurationMs: 1000 },
+	rifle: { kind: 'rifle', magSize: 30, reloadDurationMs: 1000 },
+};
+
+export interface WeaponState {
+	readonly active: WeaponKind;
+	readonly pistolAmmo: number;
+	readonly rifleAmmo: number;
+	// Wall-clock ms (engine clock) at which the in-flight reload completes.
+	// null when not reloading.
+	readonly reloadEndsAtMs: number | null;
+}
+
+export const INITIAL_WEAPON_STATE: WeaponState = {
+	active: 'pistol',
+	pistolAmmo: WEAPONS.pistol.magSize,
+	rifleAmmo: WEAPONS.rifle.magSize,
+	reloadEndsAtMs: null,
+};
+
 export type GamePhase =
 	| 'insert-coin'
 	| 'difficulty-select'
@@ -34,6 +65,7 @@ export interface RunState {
 	readonly headshots: number;
 	readonly justiceShots: number;
 	readonly startedAtMs: number;
+	readonly weapon: WeaponState;
 }
 
 export interface GameState {
@@ -73,8 +105,89 @@ export function startRun(difficulty: Difficulty, lives: Lives, mode: GameMode): 
 			headshots: 0,
 			justiceShots: 0,
 			startedAtMs: performance.now(),
+			weapon: INITIAL_WEAPON_STATE,
 		},
 	};
+}
+
+function ammoOf(weapon: WeaponState): number {
+	return weapon.active === 'pistol' ? weapon.pistolAmmo : weapon.rifleAmmo;
+}
+
+function withAmmo(weapon: WeaponState, ammo: number): WeaponState {
+	return weapon.active === 'pistol'
+		? { ...weapon, pistolAmmo: ammo }
+		: { ...weapon, rifleAmmo: ammo };
+}
+
+/**
+ * Decrement active-weapon ammo by 1. If reloading, returns null (caller
+ * should treat as a misfire — no shot leaves the barrel).
+ */
+export function consumeAmmo(state: GameState, nowMs: number): GameState | null {
+	if (!state.run || state.phase !== 'playing') return null;
+	const weapon = state.run.weapon;
+	if (weapon.reloadEndsAtMs !== null && nowMs < weapon.reloadEndsAtMs) return null;
+	const ammo = ammoOf(weapon);
+	if (ammo <= 0) {
+		// Auto-reload on dry trigger pull.
+		const def = WEAPONS[weapon.active];
+		return {
+			...state,
+			run: {
+				...state.run,
+				weapon: { ...weapon, reloadEndsAtMs: nowMs + def.reloadDurationMs },
+			},
+		};
+	}
+	const newAmmo = ammo - 1;
+	const next: WeaponState = withAmmo(weapon, newAmmo);
+	// If we just emptied the mag, queue an auto-reload.
+	const finalWeapon: WeaponState =
+		newAmmo === 0
+			? { ...next, reloadEndsAtMs: nowMs + WEAPONS[weapon.active].reloadDurationMs }
+			: next;
+	return { ...state, run: { ...state.run, weapon: finalWeapon } };
+}
+
+export function startReload(state: GameState, nowMs: number): GameState {
+	if (!state.run || state.phase !== 'playing') return state;
+	const weapon = state.run.weapon;
+	if (weapon.reloadEndsAtMs !== null) return state;
+	const def = WEAPONS[weapon.active];
+	if (ammoOf(weapon) >= def.magSize) return state;
+	return {
+		...state,
+		run: {
+			...state.run,
+			weapon: { ...weapon, reloadEndsAtMs: nowMs + def.reloadDurationMs },
+		},
+	};
+}
+
+export function tickReload(state: GameState, nowMs: number): GameState {
+	if (!state.run || state.phase !== 'playing') return state;
+	const weapon = state.run.weapon;
+	if (weapon.reloadEndsAtMs === null || nowMs < weapon.reloadEndsAtMs) return state;
+	const def = WEAPONS[weapon.active];
+	const refilled: WeaponState = {
+		...withAmmo(weapon, def.magSize),
+		reloadEndsAtMs: null,
+	};
+	return { ...state, run: { ...state.run, weapon: refilled } };
+}
+
+export function swapWeapon(state: GameState): GameState {
+	if (!state.run || state.phase !== 'playing') return state;
+	const weapon = state.run.weapon;
+	// Swap is instant; cancels any in-flight reload (player chose to switch
+	// weapons rather than wait for reload).
+	const next: WeaponState = {
+		...weapon,
+		active: weapon.active === 'pistol' ? 'rifle' : 'pistol',
+		reloadEndsAtMs: null,
+	};
+	return { ...state, run: { ...state.run, weapon: next } };
 }
 
 export function damagePlayer(state: GameState, damage: number): GameState {

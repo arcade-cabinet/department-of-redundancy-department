@@ -1,7 +1,7 @@
 import { Control } from '@babylonjs/gui/2D/controls/control';
 import { Rectangle } from '@babylonjs/gui/2D/controls/rectangle';
 import { TextBlock } from '@babylonjs/gui/2D/controls/textBlock';
-import { comboMultiplier, type GameState } from '../game/GameState';
+import { comboMultiplier, type GameState, WEAPONS } from '../game/GameState';
 import {
 	COLOR_HP_HIGH,
 	COLOR_HP_LOW,
@@ -31,6 +31,7 @@ export class HudOverlay {
 	private readonly scoreLabel: TextBlock;
 	private readonly comboLabel: TextBlock;
 	private readonly livesLabel: TextBlock;
+	private readonly ammoLabel: TextBlock;
 	private readonly controls: readonly Control[];
 
 	constructor(private readonly overlay: Overlay) {
@@ -99,7 +100,24 @@ export class HudOverlay {
 		this.livesLabel.left = '-24px';
 		this.livesLabel.top = '24px';
 
-		this.controls = [this.hpBar, this.scoreLabel, this.comboLabel, this.livesLabel];
+		this.ammoLabel = new TextBlock('hud-ammo', 'PISTOL  8 / 8');
+		this.ammoLabel.color = COLOR_PAPER;
+		this.ammoLabel.fontSize = 22;
+		this.ammoLabel.fontFamily = FONT_DISPLAY;
+		this.ammoLabel.fontWeight = 'bold';
+		this.ammoLabel.height = '32px';
+		this.ammoLabel.width = '240px';
+		this.ammoLabel.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+		this.ammoLabel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+		this.ammoLabel.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+		this.ammoLabel.left = '-24px';
+		this.ammoLabel.top = '70px';
+		this.ammoLabel.shadowColor = 'rgba(0, 0, 0, 0.95)';
+		this.ammoLabel.shadowBlur = 0;
+		this.ammoLabel.shadowOffsetX = 1;
+		this.ammoLabel.shadowOffsetY = 1;
+
+		this.controls = [this.hpBar, this.scoreLabel, this.comboLabel, this.livesLabel, this.ammoLabel];
 		for (const c of this.controls) overlay.add(c);
 	}
 
@@ -121,6 +139,15 @@ export class HudOverlay {
 		}
 
 		this.livesLabel.text = '♥ '.repeat(Math.max(0, run.remainingLives)).trimEnd();
+
+		const w = run.weapon;
+		const ammo = w.active === 'pistol' ? w.pistolAmmo : w.rifleAmmo;
+		const mag = WEAPONS[w.active].magSize;
+		const reloading = w.reloadEndsAtMs !== null;
+		this.ammoLabel.text = reloading
+			? `${w.active.toUpperCase()}  reloading…`
+			: `${w.active.toUpperCase()}  ${ammo} / ${mag}`;
+		this.ammoLabel.color = ammo === 0 && !reloading ? COLOR_HP_LOW : COLOR_PAPER;
 	}
 
 	dispose(): void {

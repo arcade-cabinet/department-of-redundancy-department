@@ -2,6 +2,7 @@ import type { Difficulty } from '../encounter';
 import type { LevelId } from '../levels/types';
 import type { Lives } from '../preferences';
 import {
+	consumeAmmo,
 	damagePlayer,
 	type GameMode,
 	type GamePhase,
@@ -11,7 +12,10 @@ import {
 	recordKill,
 	resumeFromContinue,
 	setPhase,
+	startReload,
 	startRun,
+	swapWeapon,
+	tickReload,
 	transitionLevel,
 } from './GameState';
 
@@ -67,6 +71,37 @@ export class Game {
 
 	transitionLevel(toLevelId: LevelId): void {
 		this.update(transitionLevel(this.state, toLevelId));
+	}
+
+	// Returns true if the shot was consumed (ammo decremented), false if the
+	// trigger pull was a misfire (reloading, or dry-pull triggered a reload).
+	tryFire(nowMs: number): boolean {
+		const next = consumeAmmo(this.state, nowMs);
+		if (next === null) return false;
+		// If the new state's reloadEndsAtMs is set and ammo is unchanged from
+		// the previous state, the call was a dry-pull → auto-reload (no shot
+		// leaves the barrel). The wrapped pure function set both atomically.
+		const wasDryPull =
+			this.state.run?.weapon &&
+			next.run?.weapon &&
+			this.state.run.weapon.reloadEndsAtMs === null &&
+			next.run.weapon.reloadEndsAtMs !== null &&
+			this.state.run.weapon.pistolAmmo === next.run.weapon.pistolAmmo &&
+			this.state.run.weapon.rifleAmmo === next.run.weapon.rifleAmmo;
+		this.update(next);
+		return !wasDryPull;
+	}
+
+	reload(nowMs: number): void {
+		this.update(startReload(this.state, nowMs));
+	}
+
+	tickReload(nowMs: number): void {
+		this.update(tickReload(this.state, nowMs));
+	}
+
+	swapWeapon(): void {
+		this.update(swapWeapon(this.state));
 	}
 
 	openSettings(): void {
