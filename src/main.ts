@@ -23,11 +23,9 @@ import {
 	type EncounterListener,
 	type Enemy,
 	type FireEvent,
-	type LightingTween,
 } from './encounter';
 import { drainPendingCues, isHandlesDependent } from './encounter/pendingCueQueue';
 import { installTestHooks, now } from './engine/clock';
-import { rand } from './engine/rng';
 import { Game } from './game/Game';
 import type { GameState } from './game/GameState';
 import {
@@ -64,6 +62,12 @@ import {
 	type Settings,
 	saveSettings,
 } from './preferences';
+import { createRuntimeContext } from './runtime/context';
+import {
+	type PickResult,
+	pickAt as pickAtImpl,
+	reticleColorFor as reticleColorForImpl,
+} from './runtime/picking';
 
 /**
  * src/main.ts — runtime boot.
@@ -146,6 +150,8 @@ function buildTitleScene(): Scene {
 	s.activeCamera = titleCam;
 	return s;
 }
+
+const runtime = createRuntimeContext();
 
 let scene: Scene | null = buildTitleScene();
 let currentCamera: FreeCamera | null = null;
@@ -323,18 +329,15 @@ function routeOverlay(state: GameState): void {
 				scene.dispose();
 				scene = buildTitleScene();
 				currentCamera = null;
-				cameraShake = null;
-				lastShakeDx = 0;
-				lastShakeDy = 0;
+				runtime.cameraShake.reset();
 				levelHandles = null;
 				currentLevel = null;
 				enemySpawnHp.clear();
 				enemyLastHitTarget.clear();
 				enemyMeshes.clear();
 				healthKitMeshes.clear();
-				activeCivilians.clear();
-				civilianSeq = 0;
-				activePropAnims.clear();
+				runtime.civilians.clear();
+				runtime.propAnims.clear();
 				pendingCueActions.length = 0;
 			}
 			const coin = new InsertCoinOverlay(
@@ -559,20 +562,17 @@ function constructLevel(levelId: LevelId): void {
 		scene.dispose();
 		scene = null;
 		currentCamera = null;
-		cameraShake = null;
-		lastShakeDx = 0;
-		lastShakeDy = 0;
+		runtime.cameraShake.reset();
 		levelHandles = null;
 		audioBus = null;
-		clearFireAlarmFlicker();
-		lightTweens.clear();
+		runtime.fireAlarm.clear(levelHandles);
+		runtime.lightTweens.clear();
 		enemySpawnHp.clear();
 		enemyLastHitTarget.clear();
 		enemyMeshes.clear();
 		healthKitMeshes.clear();
-		activeCivilians.clear();
-		civilianSeq = 0;
-		activePropAnims.clear();
+		runtime.civilians.clear();
+		runtime.propAnims.clear();
 		// Discard — the level is gone, queued cues for it are obsolete.
 		// Distinct from the drain in `buildLevel(...).then`, which captures
 		// a snapshot before re-dispatching.
@@ -739,10 +739,10 @@ function handleCueAction(action: CueAction): void {
 			handleDoorCue(action.doorId, action.to);
 			return;
 		case 'lighting':
-			handleLightingCue(action.lightId, action.tween);
+			runtime.lightTweens.handle(levelHandles, action.lightId, action.tween);
 			return;
 		case 'civilian-spawn': {
-			spawnCivilian(action.railId);
+			runtime.civilians.spawn(scene, currentLevel, action.railId, CAPSULE_HEIGHT, CAPSULE_RADIUS);
 			return;
 		}
 		case 'audio-stinger': {
@@ -758,7 +758,7 @@ function handleCueAction(action: CueAction): void {
 			return;
 		}
 		case 'camera-shake': {
-			beginCameraShake(action.intensity, action.durationMs);
+			runtime.cameraShake.begin(action.intensity, action.durationMs);
 			return;
 		}
 		case 'shutter':
@@ -768,7 +768,7 @@ function handleCueAction(action: CueAction): void {
 			handleLevelEvent(action.event);
 			return;
 		case 'prop-anim':
-			handlePropAnimCue(action.propId, action.animId);
+			runtime.propAnims.handle(levelHandles, action.propId, action.animId);
 			return;
 		default:
 			return;
@@ -836,14 +836,7 @@ function handleLightsRestored(): void {
 function handleFireAlarm(): void {
 	if (!levelHandles || !currentLevel) return;
 	audioBus?.startAmbience('fire-alarm-klaxon', 'sfx/klaxon-loop.ogg', 0.6, true);
-	fireAlarmActive = true;
-	fireAlarmStartedMs = now();
-	// Snapshot current intensities so the flicker can ride on top of
-	// authored levels and `clearFireAlarm` can restore them exactly.
-	fireAlarmBaseIntensity.clear();
-	for (const [id, light] of levelHandles.lights) {
-		fireAlarmBaseIntensity.set(id, light.intensity);
-	}
+	runtime.fireAlarm.start(levelHandles);
 	openDoorsBy((door) => door.spawnRailId != null);
 }
 
@@ -865,360 +858,11 @@ function openDoorsBy(predicate: (door: Door) => boolean): void {
 	}
 }
 
-// ── Cue-driven lighting tweens ──────────────────────────────────────────────
-
-// Active fade / flicker / colour-shift tweens keyed by light id. Each entry
-// is consumed by `tickLightTweens` per frame and removed when its end time
-// passes. The `lighting` cue handler installs entries here; `clearFireAlarmFlicker`
-// and the level-dispose path are responsible for stopping them on transition.
-type LightTween =
-	| {
-			readonly kind: 'fade';
-			readonly fromIntensity: number;
-			readonly toIntensity: number;
-			readonly startMs: number;
-			readonly endMs: number;
-	  }
-	| {
-			readonly kind: 'flicker';
-			readonly minIntensity: number;
-			readonly maxIntensity: number;
-			readonly hz: number;
-			readonly startMs: number;
-			readonly endMs: number;
-	  }
-	| {
-			readonly kind: 'colour-shift';
-			readonly fromColor: readonly [number, number, number];
-			readonly toColor: readonly [number, number, number];
-			readonly startMs: number;
-			readonly endMs: number;
-	  };
-const lightTweens = new Map<string, LightTween>();
-
-function handleLightingCue(lightId: string, tween: LightingTween): void {
-	const light = levelHandles?.lights.get(lightId);
-	if (!light) return;
-	if (tween.kind === 'snap') {
-		light.intensity = tween.intensity;
-		if (tween.color && 'diffuse' in light) {
-			const [r, g, b] = tween.color;
-			light.diffuse.set(r, g, b);
-		}
-		return;
-	}
-	const startMs = now();
-	const endMs = startMs + tween.durationMs;
-	if (tween.kind === 'fade') {
-		lightTweens.set(lightId, {
-			kind: 'fade',
-			fromIntensity: light.intensity,
-			toIntensity: tween.toIntensity,
-			startMs,
-			endMs,
-		});
-		return;
-	}
-	if (tween.kind === 'flicker') {
-		lightTweens.set(lightId, {
-			kind: 'flicker',
-			minIntensity: tween.minIntensity,
-			maxIntensity: tween.maxIntensity,
-			hz: tween.hz,
-			startMs,
-			endMs,
-		});
-		return;
-	}
-	if (tween.kind === 'colour-shift' && 'diffuse' in light) {
-		lightTweens.set(lightId, {
-			kind: 'colour-shift',
-			fromColor: [light.diffuse.r, light.diffuse.g, light.diffuse.b],
-			toColor: tween.toColor,
-			startMs,
-			endMs,
-		});
-	}
-}
-
-function tickLightTweens(nowMs: number): void {
-	if (!levelHandles || lightTweens.size === 0) return;
-	for (const [id, tween] of lightTweens) {
-		const light = levelHandles.lights.get(id);
-		if (!light) {
-			lightTweens.delete(id);
-			continue;
-		}
-		applyLightTween(light, tween, nowMs);
-		if (nowMs >= tween.endMs) lightTweens.delete(id);
-	}
-}
-
-function applyLightTween(
-	light: {
-		intensity: number;
-		diffuse?: { r: number; g: number; b: number; set: (r: number, g: number, b: number) => void };
-	},
-	tween: LightTween,
-	nowMs: number,
-): void {
-	const t = Math.min(1, (nowMs - tween.startMs) / Math.max(1, tween.endMs - tween.startMs));
-	if (tween.kind === 'fade') {
-		light.intensity = tween.fromIntensity + (tween.toIntensity - tween.fromIntensity) * t;
-		return;
-	}
-	if (tween.kind === 'flicker') {
-		const phase = ((nowMs - tween.startMs) * tween.hz) / 500;
-		light.intensity = Math.floor(phase) % 2 === 0 ? tween.minIntensity : tween.maxIntensity;
-		return;
-	}
-	if (tween.kind === 'colour-shift' && light.diffuse) {
-		const [fr, fg, fb] = tween.fromColor;
-		const [tr, tg, tb] = tween.toColor;
-		light.diffuse.set(fr + (tr - fr) * t, fg + (tg - fg) * t, fb + (tb - fb) * t);
-	}
-}
-
-// ── Fire-alarm flicker state ────────────────────────────────────────────────
-
-// Drives the 4Hz red flicker on level lights while the alarm is active. The
-// tick loop reads these and modulates `light.intensity` per frame; on level
-// transition `clearFireAlarmFlicker` resets the bookkeeping. Klaxon loop is
-// owned by AudioBus and disposes with the scene.
-let fireAlarmActive = false;
-let fireAlarmStartedMs = 0;
-const fireAlarmBaseIntensity = new Map<string, number>();
-const FIRE_ALARM_FLICKER_HZ = 4;
-
-function tickFireAlarm(nowMs: number): void {
-	if (!fireAlarmActive || !levelHandles) return;
-	// Square wave at FIRE_ALARM_FLICKER_HZ — half-period bright, half-period
-	// dim. The dim phase reads as "red strobe" because authored level lights
-	// fall back to ambient red when their intensity drops; the spec calls for
-	// 4Hz red flicker, which a 50% duty square at 4Hz delivers.
-	const phaseMs = ((nowMs - fireAlarmStartedMs) * FIRE_ALARM_FLICKER_HZ) / 500;
-	const dim = Math.floor(phaseMs) % 2 === 0;
-	for (const [id, light] of levelHandles.lights) {
-		// Cue-driven lighting tweens win over the alarm flicker. Without
-		// this guard, a `lighting` cue authored to fade or colour-shift a
-		// light during the alarm window would be silently clobbered every
-		// frame — `tickLightTweens` runs first and writes the interpolated
-		// value, then `tickFireAlarm` overwrites it.
-		if (lightTweens.has(id)) continue;
-		const base = fireAlarmBaseIntensity.get(id) ?? light.intensity;
-		light.intensity = dim ? base * 0.15 : base;
-	}
-}
-
-function clearFireAlarmFlicker(): void {
-	if (!fireAlarmActive) return;
-	if (levelHandles) {
-		for (const [id, light] of levelHandles.lights) {
-			const base = fireAlarmBaseIntensity.get(id);
-			if (base != null) light.intensity = base;
-		}
-	}
-	fireAlarmActive = false;
-	fireAlarmBaseIntensity.clear();
-}
-
-// ── Camera shake ─────────────────────────────────────────────────────────────
-
-interface CameraShake {
-	readonly intensity: number;
-	readonly startMs: number;
-	readonly endMs: number;
-}
-let cameraShake: CameraShake | null = null;
-let lastShakeDx = 0;
-let lastShakeDy = 0;
-
-function beginCameraShake(intensity: number, durationMs: number): void {
-	const startMs = now();
-	cameraShake = { intensity, startMs, endMs: startMs + durationMs };
-}
-
-function applyCameraShake(camera: FreeCamera): void {
-	camera.position.x -= lastShakeDx;
-	camera.position.y -= lastShakeDy;
-	lastShakeDx = 0;
-	lastShakeDy = 0;
-	if (!cameraShake) return;
-	const t0 = now();
-	if (t0 >= cameraShake.endMs) {
-		cameraShake = null;
-		return;
-	}
-	const totalMs = cameraShake.endMs - cameraShake.startMs;
-	const remainingMs = cameraShake.endMs - t0;
-	const t = totalMs > 0 ? remainingMs / totalMs : 0;
-	const amp = cameraShake.intensity * t;
-	lastShakeDx = (rand() - 0.5) * 2 * amp;
-	lastShakeDy = (rand() - 0.5) * 2 * amp;
-	camera.position.x += lastShakeDx;
-	camera.position.y += lastShakeDy;
-}
-
 function disposeEnemy(enemyId: string): void {
 	const mesh = enemyMeshes.get(enemyId);
 	mesh?.dispose();
 	enemyMeshes.delete(enemyId);
 	enemySpawnHp.delete(enemyId);
-}
-
-// ── Prop animations ──────────────────────────────────────────────────────────
-
-interface ActivePropAnim {
-	readonly mesh: AbstractMesh;
-	readonly startMs: number;
-	readonly durationMs: number;
-	readonly animId: 'drop' | 'roll-in';
-	readonly fromX: number;
-	readonly fromY: number;
-	readonly fromZ: number;
-	readonly toX: number;
-	readonly toY: number;
-	readonly toZ: number;
-	readonly fromRotZ: number;
-	readonly toRotZ: number;
-}
-
-const activePropAnims = new Map<string, ActivePropAnim>();
-
-function handlePropAnimCue(propId: string, animId: string): void {
-	const mesh = levelHandles?.props.get(propId);
-	if (!mesh || mesh.isDisposed()) return;
-	if (activePropAnims.has(propId)) return;
-	if (animId === 'shatter') {
-		mesh.dispose();
-		levelHandles?.props.delete(propId);
-		return;
-	}
-	if (animId === 'drop') {
-		activePropAnims.set(propId, {
-			mesh,
-			startMs: now(),
-			durationMs: 600,
-			animId: 'drop',
-			fromX: mesh.position.x,
-			fromY: mesh.position.y,
-			fromZ: mesh.position.z,
-			toX: mesh.position.x,
-			toY: 0,
-			toZ: mesh.position.z,
-			fromRotZ: mesh.rotation.z,
-			toRotZ: mesh.rotation.z + Math.PI / 6,
-		});
-		return;
-	}
-	if (animId === 'roll-in') {
-		const yaw = mesh.rotation.y;
-		const rollDist = 3;
-		const destX = mesh.position.x;
-		const destZ = mesh.position.z;
-		activePropAnims.set(propId, {
-			mesh,
-			startMs: now(),
-			durationMs: 800,
-			animId: 'roll-in',
-			fromX: destX - Math.sin(yaw) * rollDist,
-			fromY: mesh.position.y,
-			fromZ: destZ - Math.cos(yaw) * rollDist,
-			toX: destX,
-			toY: mesh.position.y,
-			toZ: destZ,
-			fromRotZ: mesh.rotation.z,
-			toRotZ: mesh.rotation.z,
-		});
-		mesh.position.x = destX - Math.sin(yaw) * rollDist;
-		mesh.position.z = destZ - Math.cos(yaw) * rollDist;
-		return;
-	}
-	console.warn(`[cue] unknown prop-anim animId '${animId}' for prop '${propId}'`);
-}
-
-function tickPropAnims(): void {
-	const t0 = now();
-	for (const [id, anim] of activePropAnims) {
-		const elapsed = t0 - anim.startMs;
-		const t = Math.min(1, elapsed / anim.durationMs);
-		const eased = anim.animId === 'drop' ? t * t : 1 - (1 - t) * (1 - t);
-		anim.mesh.position.x = anim.fromX + (anim.toX - anim.fromX) * eased;
-		anim.mesh.position.y = anim.fromY + (anim.toY - anim.fromY) * eased;
-		anim.mesh.position.z = anim.fromZ + (anim.toZ - anim.fromZ) * eased;
-		anim.mesh.rotation.z = anim.fromRotZ + (anim.toRotZ - anim.fromRotZ) * eased;
-		if (t >= 1) activePropAnims.delete(id);
-	}
-}
-
-// ── Civilians ────────────────────────────────────────────────────────────────
-
-interface ActiveCivilian {
-	readonly id: string;
-	readonly path: readonly Vector3[];
-	readonly speed: number;
-	readonly mesh: AbstractMesh;
-	t: number;
-}
-
-const activeCivilians = new Map<string, ActiveCivilian>();
-let civilianSeq = 0;
-
-function spawnCivilian(railId: string): void {
-	if (!scene || !currentLevel) return;
-	const rail = currentLevel.civilianRails.find((r) => r.id === railId);
-	const head = rail?.path[0];
-	if (!rail || !head || rail.path.length < 2) return;
-	const id = `civ-${++civilianSeq}`;
-	const mesh = MeshBuilder.CreateCapsule(
-		`civilian-${id}`,
-		{ radius: CAPSULE_RADIUS, height: CAPSULE_HEIGHT },
-		scene,
-	);
-	mesh.position.copyFrom(head);
-	mesh.position.y += CAPSULE_HALF_HEIGHT;
-	// Civilian-blue placeholder so they read as non-threats. Reticle gradient
-	// (pickAt → reticleColorFor) already returns 'blue' for the enemyId-less
-	// pick; this matches the HUD signal.
-	const mat = new StandardMaterial(`mat-civ-${id}`, scene);
-	mat.diffuseColor = new Color3(0.25, 0.55, 0.95);
-	mat.emissiveColor = new Color3(0.0, 0.05, 0.12);
-	mat.specularColor = new Color3(0.05, 0.05, 0.05);
-	mesh.material = mat;
-	mesh.metadata = { civilianId: id };
-	activeCivilians.set(id, { id, path: rail.path, speed: rail.speed, mesh, t: 0 });
-}
-
-function tickCivilians(dtMs: number): void {
-	const dtS = dtMs / 1000;
-	for (const civ of activeCivilians.values()) {
-		civ.t += civ.speed * dtS;
-		const { position, finished } = sampleCivilianPath(civ);
-		civ.mesh.position.copyFrom(position);
-		civ.mesh.position.y += CAPSULE_HALF_HEIGHT;
-		if (finished) {
-			civ.mesh.dispose();
-			activeCivilians.delete(civ.id);
-		}
-	}
-}
-
-function sampleCivilianPath(civ: ActiveCivilian): { position: Vector3; finished: boolean } {
-	let remaining = civ.t;
-	let last: Vector3 | undefined;
-	for (let i = 0; i < civ.path.length - 1; i++) {
-		const a = civ.path[i];
-		const b = civ.path[i + 1];
-		if (!a || !b) break;
-		last = b;
-		const seg = Vector3.Distance(a, b);
-		if (remaining <= seg) {
-			const u = seg > 0 ? remaining / seg : 0;
-			return { position: Vector3.Lerp(a, b, u), finished: false };
-		}
-		remaining -= seg;
-	}
-	return { position: last ?? civ.path[0] ?? Vector3.Zero(), finished: true };
 }
 
 // ── Main loop ────────────────────────────────────────────────────────────────
@@ -1231,12 +875,12 @@ function tick(): void {
 	const state = game.getState();
 	if (state.phase === 'playing') {
 		if (director && !director.isFinished) director.tick(dtMs);
-		tickCivilians(dtMs);
-		tickPropAnims();
-		tickLightTweens(tickT);
-		tickFireAlarm(tickT);
+		runtime.civilians.tick(dtMs, CAPSULE_HEIGHT);
+		runtime.propAnims.tick();
+		runtime.lightTweens.tick(levelHandles, tickT);
+		runtime.fireAlarm.tick(levelHandles, tickT, (id) => runtime.lightTweens.isActive(id));
 		game.tickReload(now());
-		if (currentCamera) applyCameraShake(currentCamera);
+		if (currentCamera) runtime.cameraShake.apply(currentCamera);
 	}
 
 	// Render-side guard: a gameplay scene built mid-tick (e.g. a level jump
@@ -1261,49 +905,12 @@ function tick(): void {
 
 // ── Hit-test: reticle hover + fire ───────────────────────────────────────────
 
-interface PickResult {
-	readonly kind: 'enemy' | 'civilian' | 'health-kit' | 'air';
-	readonly enemyId?: string;
-	readonly civilianId?: string;
-	readonly healthKitId?: string;
-	readonly target?: 'head' | 'body';
-}
-
 function pickAt(xPx: number, yPx: number): PickResult {
-	if (!scene) return { kind: 'air' };
-	const pick = scene.pick(xPx, yPx);
-	if (!pick?.hit || !pick.pickedMesh) return { kind: 'air' };
-	const meta = pick.pickedMesh.metadata as
-		| { enemyId?: string; civilianId?: string; healthKitId?: string }
-		| null
-		| undefined;
-	if (meta?.enemyId) {
-		const meshY = pick.pickedMesh.position.y;
-		const hitY = pick.pickedPoint?.y ?? meshY;
-		const fromTop = meshY + CAPSULE_HALF_HEIGHT - hitY;
-		const target: 'head' | 'body' = fromTop < CAPSULE_HALF_HEIGHT * 0.5 ? 'head' : 'body';
-		return { kind: 'enemy', enemyId: meta.enemyId, target };
-	}
-	if (meta?.civilianId) {
-		return { kind: 'civilian', civilianId: meta.civilianId };
-	}
-	if (meta?.healthKitId) {
-		return { kind: 'health-kit', healthKitId: meta.healthKitId };
-	}
-	return { kind: 'air' };
+	return pickAtImpl(scene, xPx, yPx, CAPSULE_HALF_HEIGHT);
 }
 
 function reticleColorFor(pick: PickResult): 'green' | 'orange' | 'red' | 'blue' {
-	if (pick.kind === 'civilian') return 'blue';
-	if (pick.kind === 'health-kit') return 'green';
-	if (pick.kind !== 'enemy' || !pick.enemyId || !director) return 'green';
-	const enemy = director.getEnemy(pick.enemyId);
-	const spawn = enemySpawnHp.get(pick.enemyId);
-	if (!enemy || !spawn || spawn <= 0) return 'green';
-	const frac = enemy.hp / spawn;
-	if (frac > 0.66) return 'red';
-	if (frac > 0.33) return 'orange';
-	return 'green';
+	return reticleColorForImpl(pick, director, enemySpawnHp);
 }
 
 // Start.
@@ -1339,9 +946,9 @@ canvas.addEventListener('pointerdown', (e) => {
 		director.hitEnemy(pick.enemyId, pick.target);
 	} else if (pick.kind === 'civilian' && pick.civilianId) {
 		game.hitCivilian();
-		const civ = activeCivilians.get(pick.civilianId);
+		const civ = runtime.civilians.getById(pick.civilianId);
 		civ?.mesh.dispose();
-		activeCivilians.delete(pick.civilianId);
+		runtime.civilians.deleteById(pick.civilianId);
 	} else if (pick.kind === 'health-kit' && pick.healthKitId) {
 		const kit = healthKitMeshes.get(pick.healthKitId);
 		if (kit) {
