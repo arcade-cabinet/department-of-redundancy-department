@@ -192,23 +192,42 @@ function routeOverlay(state: GameState): void {
 	}
 }
 
+// Set when the friend modal is on screen so a rapid second tap on the
+// title-screen INSERT COIN button cannot stack a second modal (which would
+// resolve into a double bailout). Always cleared in the modal dismiss.
+let friendModalOpen = false;
+
 function handleInsertCoin(): void {
-	if (getBalance() > 0 || game.getState().run !== null) {
-		// Normal start: free run begins, no friend modal. (run !== null path
-		// is the "start a fresh run after a wipe" case where the cabinet still
-		// has quarters from the just-wiped session.)
+	if (getBalance() > 0) {
 		game.insertCoin(now());
 		return;
 	}
-	// Zero balance → friend modal, then auto-start the run.
+	if (friendModalOpen) return;
+	friendModalOpen = true;
+	// Zero balance → friend modal, then auto-start the run. Caller is
+	// always in 'insert-coin' phase; dispose the InsertCoinOverlay so the
+	// modal sits alone on the screen.
+	if (activeOverlayDispose) {
+		activeOverlayDispose();
+		activeOverlayDispose = null;
+	}
 	const modal = new FriendModalOverlay(overlay, () => {
 		modal.dispose();
-		void grantFriendBailout().then(() => {
-			game.insertCoin(now());
-		});
+		activeOverlayDispose = null;
+		friendModalOpen = false;
+		grantFriendBailout()
+			.then(() => game.insertCoin(now()))
+			.catch((err) => {
+				console.error('[economy] friend bailout failed', err);
+				// Still let the player play — re-route to insert-coin so they
+				// can tap again or see the modal again with a fresh attempt.
+				game.returnToTitle();
+			});
 	});
-	if (activeOverlayDispose) activeOverlayDispose();
-	activeOverlayDispose = () => modal.dispose();
+	activeOverlayDispose = () => {
+		modal.dispose();
+		friendModalOpen = false;
+	};
 }
 
 async function handleContinue(): Promise<void> {
@@ -329,7 +348,11 @@ function constructLevel(levelId: LevelId): void {
 			const bossId = bossIdForEnemy(enemyId);
 			if (bossId !== null) {
 				const drop = rollBossDrop(BOSSES[bossId].quarterDrop);
-				if (drop > 0) void awardQuarters(drop);
+				if (drop > 0) {
+					awardQuarters(drop).catch((err) => {
+						console.error(`[economy] failed to award boss drop for ${bossId}`, err);
+					});
+				}
 			}
 		},
 		onEnemyCease(enemyId) {

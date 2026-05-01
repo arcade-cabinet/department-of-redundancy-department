@@ -24,7 +24,6 @@ import {
 	FRESH_INSTALL_BALANCE,
 	FRIEND_BAILOUT_GRANT,
 	getBalance,
-	getStats,
 	grantFriendBailout,
 	initQuarters,
 	rollBossDrop,
@@ -48,22 +47,32 @@ describe('initQuarters', () => {
 		await initQuarters();
 		await awardQuarters(3);
 		expect(getBalance()).toBe(FRESH_INSTALL_BALANCE + 3);
-		// Simulate a fresh boot: drop the cache, re-init.
+		// Simulate a fresh boot: clear cache, keep persisted value.
+		memory.set('dord.economy:balance:v1', String(FRESH_INSTALL_BALANCE + 3));
 		await __resetQuartersForTests();
-		// __resetQuartersForTests wipes Preferences too, so re-seed manually
-		// to simulate a returning player whose balance was 11.
 		memory.set('dord.economy:balance:v1', String(FRESH_INSTALL_BALANCE + 3));
 		await initQuarters();
 		expect(getBalance()).toBe(FRESH_INSTALL_BALANCE + 3);
 	});
+
+	it('rejects corrupted values and falls back to defaults', async () => {
+		memory.set('dord.economy:balance:v1', 'not-a-number');
+		await initQuarters();
+		expect(getBalance()).toBe(FRESH_INSTALL_BALANCE);
+	});
+
+	it('rejects negative persisted balances and falls back to default', async () => {
+		memory.set('dord.economy:balance:v1', '-5');
+		await initQuarters();
+		expect(getBalance()).toBe(FRESH_INSTALL_BALANCE);
+	});
 });
 
 describe('awardQuarters', () => {
-	it('adds to the balance and lifetimeEarned', async () => {
+	it('adds to the balance', async () => {
 		await initQuarters();
 		await awardQuarters(2);
 		expect(getBalance()).toBe(FRESH_INSTALL_BALANCE + 2);
-		expect(getStats().lifetimeEarned).toBe(2);
 	});
 
 	it('ignores non-positive awards', async () => {
@@ -71,39 +80,59 @@ describe('awardQuarters', () => {
 		await awardQuarters(0);
 		await awardQuarters(-5);
 		expect(getBalance()).toBe(FRESH_INSTALL_BALANCE);
-		expect(getStats().lifetimeEarned).toBe(0);
+	});
+
+	it('serializes concurrent awards — no lost-write races', async () => {
+		await initQuarters();
+		// Five fire-and-forget awards in the same microtask tick. With
+		// serialization they sum cleanly; without, two could read the same
+		// cached snapshot and one increment is lost.
+		await Promise.all([
+			awardQuarters(1),
+			awardQuarters(1),
+			awardQuarters(1),
+			awardQuarters(1),
+			awardQuarters(1),
+		]);
+		expect(getBalance()).toBe(FRESH_INSTALL_BALANCE + 5);
 	});
 });
 
 describe('spendQuarter', () => {
-	it('decrements on success and tracks lifetimeSpent', async () => {
+	it('decrements on success', async () => {
 		await initQuarters();
 		const ok = await spendQuarter();
 		expect(ok).toBe(true);
 		expect(getBalance()).toBe(FRESH_INSTALL_BALANCE - 1);
-		expect(getStats().lifetimeSpent).toBe(1);
 	});
 
 	it('refuses when balance is 0', async () => {
 		await initQuarters();
-		// Drain the wallet.
 		for (let i = 0; i < FRESH_INSTALL_BALANCE; i++) await spendQuarter();
 		expect(getBalance()).toBe(0);
 		const ok = await spendQuarter();
 		expect(ok).toBe(false);
 		expect(getBalance()).toBe(0);
-		expect(getStats().lifetimeSpent).toBe(FRESH_INSTALL_BALANCE);
+	});
+
+	it('cannot drive the balance negative under concurrent calls', async () => {
+		await initQuarters();
+		// Drain to 1, then race two spends.
+		for (let i = 0; i < FRESH_INSTALL_BALANCE - 1; i++) await spendQuarter();
+		expect(getBalance()).toBe(1);
+		const [a, b] = await Promise.all([spendQuarter(), spendQuarter()]);
+		// Exactly one succeeds; balance settles at 0.
+		expect([a, b].sort()).toEqual([false, true]);
+		expect(getBalance()).toBe(0);
 	});
 });
 
 describe('grantFriendBailout', () => {
-	it('always grants FRIEND_BAILOUT_GRANT and bumps the bailout counter', async () => {
+	it('always grants FRIEND_BAILOUT_GRANT', async () => {
 		await initQuarters();
-		// Drain first to simulate the realistic call site.
 		for (let i = 0; i < FRESH_INSTALL_BALANCE; i++) await spendQuarter();
 		await grantFriendBailout();
 		expect(getBalance()).toBe(FRIEND_BAILOUT_GRANT);
-		expect(getStats().friendBailoutCount).toBe(1);
 	});
 
 	it('has no rate limit — repeated bailouts stack', async () => {
@@ -111,7 +140,6 @@ describe('grantFriendBailout', () => {
 		await grantFriendBailout();
 		await grantFriendBailout();
 		await grantFriendBailout();
-		expect(getStats().friendBailoutCount).toBe(3);
 		expect(getBalance()).toBe(FRESH_INSTALL_BALANCE + FRIEND_BAILOUT_GRANT * 3);
 	});
 });
@@ -137,16 +165,10 @@ describe('rollBossDrop', () => {
 	});
 
 	it('returns a value within [min, max] inclusive', () => {
-		// rand() is the engine RNG facade; in node test mode it's
-		// deterministic per-seed but here we don't seed, so just sample.
 		for (let i = 0; i < 50; i++) {
 			const drop = rollBossDrop([1, 2]);
 			expect(drop).toBeGreaterThanOrEqual(1);
 			expect(drop).toBeLessThanOrEqual(2);
 		}
-	});
-
-	it('clamps min<=0 to 0 when max<=min', () => {
-		expect(rollBossDrop([0, 0])).toBe(0);
 	});
 });

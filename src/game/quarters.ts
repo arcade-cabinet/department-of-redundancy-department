@@ -36,12 +36,26 @@ interface QuartersStats {
 
 let cached: QuartersStats | null = null;
 const listeners = new Set<Listener>();
+// Mutation queue. Every write goes through `enqueue()` so a fire-and-forget
+// awardQuarters from a boss kill cannot interleave with a spendQuarter
+// triggered by the continue prompt — read-modify-write becomes serial.
+let writeChain: Promise<unknown> = Promise.resolve();
+
+function enqueue<T>(fn: () => Promise<T>): Promise<T> {
+	const next = writeChain.then(fn, fn);
+	writeChain = next.catch(() => undefined);
+	return next;
+}
 
 async function readNumber(key: string, fallback: number): Promise<number> {
 	const { value } = await Preferences.get({ key });
 	if (value === null) return fallback;
-	const parsed = Number(value);
-	return Number.isFinite(parsed) ? parsed : fallback;
+	// Defense in depth: parseInt rejects "1e3" / "0x10" / "1.5" / " 8 " edge
+	// shapes that Number() would happily coerce. Negative or non-finite
+	// stored values fall back to `fallback` rather than poisoning state.
+	const parsed = Number.parseInt(value, 10);
+	if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+	return parsed;
 }
 
 async function writeNumber(key: string, value: number): Promise<void> {
@@ -67,14 +81,22 @@ async function ensureLoaded(): Promise<QuartersStats> {
 }
 
 async function update(next: QuartersStats): Promise<void> {
-	cached = next;
+	// Belt + suspenders: never persist a negative balance even if a caller
+	// computed one through arithmetic on a corrupted prior value.
+	const safe: QuartersStats = {
+		balance: Math.max(0, next.balance),
+		lifetimeEarned: Math.max(0, next.lifetimeEarned),
+		lifetimeSpent: Math.max(0, next.lifetimeSpent),
+		friendBailoutCount: Math.max(0, next.friendBailoutCount),
+	};
+	cached = safe;
 	await Promise.all([
-		writeNumber(KEYS.balance, next.balance),
-		writeNumber(KEYS.lifetimeEarned, next.lifetimeEarned),
-		writeNumber(KEYS.lifetimeSpent, next.lifetimeSpent),
-		writeNumber(KEYS.friendBailoutCount, next.friendBailoutCount),
+		writeNumber(KEYS.balance, safe.balance),
+		writeNumber(KEYS.lifetimeEarned, safe.lifetimeEarned),
+		writeNumber(KEYS.lifetimeSpent, safe.lifetimeSpent),
+		writeNumber(KEYS.friendBailoutCount, safe.friendBailoutCount),
 	]);
-	for (const listener of listeners) listener(next.balance);
+	for (const listener of listeners) listener(safe.balance);
 }
 
 /** Initialize the cache from Preferences. Must be awaited once at boot. */
@@ -88,11 +110,6 @@ export function getBalance(): number {
 	return cached?.balance ?? 0;
 }
 
-/** Read full stats for the cabinet-stats screen. */
-export function getStats(): QuartersStats {
-	return cached ?? { balance: 0, lifetimeEarned: 0, lifetimeSpent: 0, friendBailoutCount: 0 };
-}
-
 export function subscribe(listener: Listener): () => void {
 	listeners.add(listener);
 	listener(getBalance());
@@ -102,13 +119,15 @@ export function subscribe(listener: Listener): () => void {
 }
 
 /** Award quarters from a boss kill. Persists immediately. */
-export async function awardQuarters(n: number): Promise<void> {
-	if (n <= 0) return;
-	const stats = await ensureLoaded();
-	await update({
-		...stats,
-		balance: stats.balance + n,
-		lifetimeEarned: stats.lifetimeEarned + n,
+export function awardQuarters(n: number): Promise<void> {
+	if (n <= 0) return Promise.resolve();
+	return enqueue(async () => {
+		const stats = await ensureLoaded();
+		await update({
+			...stats,
+			balance: stats.balance + n,
+			lifetimeEarned: stats.lifetimeEarned + n,
+		});
 	});
 }
 
@@ -117,34 +136,42 @@ export async function awardQuarters(n: number): Promise<void> {
  * balance is 0 (caller should suppress the continue prompt or trigger
  * the friend modal as appropriate).
  */
-export async function spendQuarter(): Promise<boolean> {
-	const stats = await ensureLoaded();
-	if (stats.balance <= 0) return false;
-	await update({
-		...stats,
-		balance: stats.balance - 1,
-		lifetimeSpent: stats.lifetimeSpent + 1,
+export function spendQuarter(): Promise<boolean> {
+	return enqueue(async () => {
+		const stats = await ensureLoaded();
+		if (stats.balance <= 0) return false;
+		await update({
+			...stats,
+			balance: stats.balance - 1,
+			lifetimeSpent: stats.lifetimeSpent + 1,
+		});
+		return true;
 	});
-	return true;
 }
 
-/** Friend modal grant — +8 quarters, no rate limit. */
-export async function grantFriendBailout(): Promise<void> {
-	const stats = await ensureLoaded();
-	await update({
-		...stats,
-		balance: stats.balance + FRIEND_BAILOUT_GRANT,
-		friendBailoutCount: stats.friendBailoutCount + 1,
+/** Friend modal grant — +FRIEND_BAILOUT_GRANT quarters, no rate limit. */
+export function grantFriendBailout(): Promise<void> {
+	return enqueue(async () => {
+		const stats = await ensureLoaded();
+		await update({
+			...stats,
+			balance: stats.balance + FRIEND_BAILOUT_GRANT,
+			friendBailoutCount: stats.friendBailoutCount + 1,
+		});
 	});
 }
 
 /**
  * Resolve a boss's quarter drop range to a concrete payout. Uses the
  * engine `rand()` facade so behavior is deterministic under `?seed=N`.
+ * Both bounds must be non-negative integers with `min <= max`.
  */
 export function rollBossDrop(range: readonly [number, number]): number {
 	const [min, max] = range;
-	if (max <= min) return Math.max(0, Math.floor(min));
+	if (max < min) {
+		throw new Error(`rollBossDrop: invalid range [${min}, ${max}] (max < min)`);
+	}
+	if (max === min) return min;
 	const span = max - min + 1;
 	return Math.floor(min + rand() * span);
 }

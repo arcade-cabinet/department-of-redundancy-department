@@ -107,7 +107,7 @@ function buildWall(scene: Scene, wall: Wall, handles: LevelHandles): Mesh {
 		);
 	}
 	if (wall.healthKit) {
-		buildHealthKit(scene, wall, wall.healthKit, mesh, handles);
+		buildHealthKit(scene, wall.healthKit, mesh, handles);
 	}
 	return mesh;
 }
@@ -117,7 +117,6 @@ const HEALTH_KIT_BOX_DEPTH = 0.18;
 
 function buildHealthKit(
 	scene: Scene,
-	_wall: Wall,
 	kit: import('./types').HealthKitMount,
 	wallMesh: Mesh,
 	handles: LevelHandles,
