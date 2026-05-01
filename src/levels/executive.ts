@@ -28,7 +28,11 @@ const cameraRail: RailGraph = {
 			id: 'pos-1',
 			kind: 'combat',
 			position: new Vector3(0, 1.6, 5),
-			lookAt: new Vector3(-3, 1.6, 5),
+			// lookAt z=8 (forward of camera) so the FOV includes the
+			// reception-A/B spawn-rail termini at z=7+; pre-fix lookAt z=5
+			// pointed perpendicular to the rail axis and put the spawn
+			// rails directly at the camera position.
+			lookAt: new Vector3(-1.5, 1.6, 8),
 			dwellMs: 18000,
 		},
 		{
@@ -581,20 +585,26 @@ export const executiveLevel: Level = {
 	primitives,
 	spawnRails: [
 		{
+			// Reception-side spawn — pre-fix terminus at z=4.5 was behind
+			// the pos-1 camera lookAt; now ends in-frustum at z=7-8 so the
+			// player can engage on entry to pos-1.
 			id: 'rail-spawn-reception-A',
-			path: [new Vector3(-5, 0, 5), new Vector3(-4, 0, 4.5), new Vector3(-3, 0, 4.5)],
+			path: [new Vector3(-5, 0, 4.2), new Vector3(-4, 0, 6), new Vector3(-3, 0, 8)],
 			speed: 2.5,
 			loop: false,
 		},
 		{
 			id: 'rail-spawn-reception-B',
-			path: [new Vector3(5, 0, 5), new Vector3(4, 0, 4.5), new Vector3(3, 0, 4.5)],
+			path: [new Vector3(5, 0, 4.2), new Vector3(4, 0, 6), new Vector3(3, 0, 8)],
 			speed: 2.5,
 			loop: false,
 		},
 		{
+			// Charging enemy from up-rail. Pre-fix terminus at z=5 = camera
+			// position → enemy ran straight INTO the camera. Stop short at
+			// z=7 so the charge reads as a charge from forward of camera.
 			id: 'rail-spawn-reception-charge',
-			path: [new Vector3(0, 0, 8), new Vector3(0, 0, 6), new Vector3(0, 0, 5)],
+			path: [new Vector3(0, 0, 12), new Vector3(0, 0, 9), new Vector3(0, 0, 7)],
 			speed: 3.0,
 			loop: false,
 		},

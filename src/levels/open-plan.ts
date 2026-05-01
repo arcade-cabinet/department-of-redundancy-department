@@ -505,8 +505,11 @@ const cues: Cue[] = [
 		action: { verb: 'audio-stinger', audio: 'stinger/stinger-boss-cleared.mp3' },
 	},
 	{
+		// On-clear of the Whitcomb fight (pos-3 boss-spawn → boss-kill →
+		// dwell empties → on-clear). Wall-clock atMs:75000 pre-dated PR#66
+		// and assumed the broken instant-resume dwell.
 		id: 'transition',
-		trigger: { kind: 'wall-clock', atMs: 75000 },
+		trigger: { kind: 'on-clear', railNodeId: 'pos-3' },
 		action: { verb: 'transition', toLevelId: 'stairway-B' },
 	},
 ];
@@ -517,8 +520,12 @@ export const openPlanLevel: Level = {
 	primitives,
 	spawnRails: [
 		{
+			// Cubicle door at (-4, 0, 4). Enemy walks forward into camera
+			// frustum (camera at pos-1 z=5 looking toward z=6) instead of
+			// terminating behind/below the camera lookAt at z=4.5 — the
+			// same fix-pattern as PR #64 for lobby.
 			id: 'rail-spawn-L1',
-			path: [new Vector3(-5, 0, 5), new Vector3(-4, 0, 5), new Vector3(-3, 0, 4.5)],
+			path: [new Vector3(-4.5, 0, 4.2), new Vector3(-3.5, 0, 6), new Vector3(-3, 0, 8)],
 			speed: 2.5,
 			loop: false,
 		},
@@ -529,14 +536,22 @@ export const openPlanLevel: Level = {
 			loop: false,
 		},
 		{
+			// Vault from cubicle wall at z=6, dropping in from above. Final
+			// waypoint at (3, 0, 7) keeps the enemy in pos-1 frustum (cam
+			// at (0, 1.6, 5) looking toward (-3, 1.6, 6); the FOV cone
+			// includes positive-x out to ~z=8).
 			id: 'rail-spawn-R1-vault',
-			path: [new Vector3(5, 2.6, 7), new Vector3(5, 0, 7), new Vector3(5, 0, 6)],
+			path: [new Vector3(5, 2.6, 7), new Vector3(4, 0, 7), new Vector3(3, 0, 7)],
 			speed: 5.0,
 			loop: false,
 		},
 		{
+			// Cubicle door at (-4, 0, 14). Camera pos-2 at (0, 1.6, 12)
+			// looks toward (4, 1.6, 12) — pos-2 is the printer-dolly fight
+			// on the +x side. Move L2 endpoint forward+right so it doesn't
+			// clip the camera at z=12.
 			id: 'rail-spawn-L2-justice',
-			path: [new Vector3(-5, 0, 15), new Vector3(-4, 0, 15), new Vector3(-3, 0, 14.5)],
+			path: [new Vector3(-4.5, 0, 14.2), new Vector3(-3, 0, 13.5), new Vector3(-1, 0, 12.5)],
 			speed: 2.5,
 			loop: false,
 		},
@@ -559,8 +574,10 @@ export const openPlanLevel: Level = {
 			loop: false,
 		},
 		{
+			// Break-room door spawn — same pos-2 fight; keep in-frustum on
+			// the right side so it reads as a flanker.
 			id: 'rail-spawn-break-room',
-			path: [new Vector3(-5, 0, 13), new Vector3(-4, 0, 13), new Vector3(-3, 0, 12.5)],
+			path: [new Vector3(-4.5, 0, 12.8), new Vector3(-2, 0, 12), new Vector3(1, 0, 11.5)],
 			speed: 2.5,
 			loop: false,
 		},

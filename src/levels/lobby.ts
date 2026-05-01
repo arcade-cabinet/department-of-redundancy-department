@@ -195,8 +195,13 @@ const cues: readonly Cue[] = [
 		action: { verb: 'door', doorId: 'door-elevator-A', to: 'open' },
 	},
 	{
+		// Fire on-clear of the Garrison fight (pos-3). With the dwell-gate
+		// fix in PR #66, the rail no longer auto-resumes early, and
+		// `on-clear` reliably fires when the boss is killed. Wall-clock
+		// transitions risked firing mid-fight if the player took more than
+		// the authored 73s budget on a tough Garrison.
 		id: 'transition',
-		trigger: { kind: 'wall-clock', atMs: 73000 },
+		trigger: { kind: 'on-clear', railNodeId: 'pos-3' },
 		action: { verb: 'transition', toLevelId: 'stairway-A' },
 	},
 ];

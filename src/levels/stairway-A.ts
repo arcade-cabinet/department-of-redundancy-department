@@ -409,16 +409,20 @@ const cues: Cue[] = [
 		},
 	},
 
-	// Exit — open the door 2s before the transition so the player sees it
-	// swing open and the transition feels like a follow-through, not a cut.
+	// Exit — open the door on-arrive at the final combat node so it's
+	// already swung when the player clears, then transition on-clear so
+	// the transition feels like a follow-through. Pre-PR-#66 this used
+	// wall-clock atMs:58000/60000 which assumed the broken instant-resume
+	// dwell — with the gate fixed, those timers fired during the
+	// landing-wave fight.
 	{
 		id: 'p2-exit-door-open',
-		trigger: { kind: 'wall-clock', atMs: 58000 },
+		trigger: { kind: 'on-arrive', railNodeId: 'pos-landing-wave' },
 		action: { verb: 'door', doorId: 'door-exit-open-plan', to: 'open' },
 	},
 	{
 		id: 'transition',
-		trigger: { kind: 'wall-clock', atMs: 60000 },
+		trigger: { kind: 'on-clear', railNodeId: 'pos-landing-wave' },
 		action: { verb: 'transition', toLevelId: 'open-plan' },
 	},
 ];
@@ -445,12 +449,16 @@ export const stairwayALevel: Level = {
 		},
 		// Mid-stair: crawler from below.
 		{
+			// Crawler comes up from below the rail. Final waypoint pulled
+			// forward to z=4 so the enemy ascends to a point in the
+			// camera's lookAt frustum (cam at (0, 2.5, 3) toward
+			// (0, 6, 4)) instead of clipping the camera capsule at z=3.
 			id: 'rail-spawn-mid-crawler',
 			path: [
 				new Vector3(0, -1, 1),
-				new Vector3(0, 0, 1),
-				new Vector3(0, 0.5, 2),
-				new Vector3(0, 1, 3),
+				new Vector3(0, 0, 2),
+				new Vector3(0, 0.5, 3),
+				new Vector3(0, 1, 4),
 			],
 			speed: 1.5,
 			loop: false,
