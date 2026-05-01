@@ -227,6 +227,28 @@ const primitives: Primitive[] = [
 		color: [0.95, 0.95, 1.0],
 		intensity: 0.3,
 	},
+
+	// Stair flights connecting bottom (Y=0) → mid-landing (Y=3) → top
+	// (Y=6). Without these, the camera ascends through visible void between
+	// floor slabs — the defect the visual audit caught.
+	{
+		id: 'stair-flight-1',
+		kind: 'prop',
+		origin: new Vector3(0, 0, 2.5),
+		yaw: 0,
+		glb: 'props/staircase-2.glb',
+		// Same authored scale as the staircase-1 GLB — large reference scene
+		// in source. 0.05 brings it down to a usable ~3m flight per landing.
+		scale: 0.05,
+	},
+	{
+		id: 'stair-flight-2',
+		kind: 'prop',
+		origin: new Vector3(0, 3, 7.5),
+		yaw: 0,
+		glb: 'props/staircase-2.glb',
+		scale: 0.05,
+	},
 ];
 
 const cues: Cue[] = [

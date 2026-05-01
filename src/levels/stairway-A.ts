@@ -244,6 +244,30 @@ const primitives: Primitive[] = [
 		pbr: 'ceiling-tile',
 		height: 9,
 	},
+
+	// Stair flights — visible risers/treads connecting landings. Without these
+	// the camera ascends through visual void between floor slabs. The
+	// staircase GLB is authored to span ~3m vertical × ~4m run; we anchor
+	// each flight at the lower landing's edge and rotate to face the climb.
+	{
+		id: 'stair-flight-1',
+		kind: 'prop',
+		origin: new Vector3(0, 0, 2),
+		yaw: 0,
+		glb: 'props/staircase-1.glb',
+		// Native GLB is ~60m tall, ~19m wide — authored for a much larger
+		// scene. 0.05 brings it to ~3m vertical / ~1m wide, fitting the 4m
+		// shaft and connecting Y=0 to ~Y=3 (mid landing).
+		scale: 0.05,
+	},
+	{
+		id: 'stair-flight-2',
+		kind: 'prop',
+		origin: new Vector3(0, 3, 6),
+		yaw: 0,
+		glb: 'props/staircase-1.glb',
+		scale: 0.05,
+	},
 ];
 
 const cues: Cue[] = [

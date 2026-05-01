@@ -503,14 +503,21 @@ export const lobbyLevel: Level = {
 	primitives,
 	spawnRails: [
 		{
+			// Reception side door at (-3, 0, 4). Enemy enters the door, walks
+			// FORWARD into the camera's frustum so they're visible from pos-1
+			// (camera at z=5 looking at lookAt z=8). Final waypoint sits at
+			// (-2, 0, 8) — in front of the camera, in the lookAt cone.
 			id: 'rail-spawn-reception-A',
-			path: [new Vector3(-3, 0, 5), new Vector3(-3, 0, 4), new Vector3(-2, 0, 4)],
+			path: [new Vector3(-3.5, 0, 4.2), new Vector3(-3, 0, 6), new Vector3(-2, 0, 8)],
 			speed: 2.5,
 			loop: false,
 		},
 		{
+			// Side cubicle door at (3, 0, 6). Enemy emerges and walks across
+			// to z=8 area where pos-1 is looking (lookAt -2, 1.6, 8 — but the
+			// frustum is wide enough that x=1, z=9 is visible too).
 			id: 'rail-spawn-side-1',
-			path: [new Vector3(3, 0, 5.5), new Vector3(3, 0, 6.5), new Vector3(2, 0, 6.5)],
+			path: [new Vector3(3.5, 0, 6.2), new Vector3(2.5, 0, 8), new Vector3(1, 0, 9)],
 			speed: 3.0,
 			loop: false,
 		},
