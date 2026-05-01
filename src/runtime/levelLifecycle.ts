@@ -17,6 +17,7 @@ import {
 	type EncounterListener,
 	type Enemy,
 	type FireEvent,
+	JUSTICE_TARGETS,
 } from '../encounter';
 import type { Game } from '../game/Game';
 import { awardQuarters, rollBossDrop } from '../game/quarters';
@@ -122,6 +123,13 @@ export interface EncounterListenerHost {
 	readonly enemyMeshes: Map<string, AbstractMesh>;
 	readonly enemySpawnHp: Map<string, number>;
 	readonly enemyLastHitTarget: Map<string, 'head' | 'body' | 'justice'>;
+	/**
+	 * Per-enemy glint VFX billboard for `justice-glint` programs only.
+	 * Created at enemy-spawn, toggled visible during the aim window via
+	 * `onFireEvent` (`aim-laser` shows, `fire-hitscan` hides), disposed
+	 * with the capsule (Babylon parent-child cascade).
+	 */
+	readonly enemyGlintMeshes: Map<string, AbstractMesh>;
 	readonly game: Game;
 	readonly camera: FreeCamera;
 	getScene(): Scene | null;
@@ -177,6 +185,36 @@ export function createEncounterListener(host: EncounterListenerHost): EncounterL
 			mesh.metadata = { enemyId: enemy.id };
 			host.enemySpawnHp.set(enemy.id, enemy.hp);
 			host.enemyMeshes.set(enemy.id, mesh);
+			// Justice-glint VFX: a small gold emissive sphere parented to the
+			// capsule at the archetype's `justiceShotTarget` local-Y. Hidden
+			// at spawn; toggled by `onFireEvent` once the `aim-laser` event
+			// opens the window. Disposed with the capsule (parent cascade).
+			if (enemy.fireProgramId === 'justice-glint') {
+				const archetype = ARCHETYPES[enemy.archetypeId];
+				const targetKind = archetype.justiceShotTarget;
+				const glint = MeshBuilder.CreateSphere(
+					`glint-${enemy.id}`,
+					{ diameter: host.capsuleRadius * 0.6 },
+					scene,
+				);
+				glint.parent = mesh;
+				glint.position.y =
+					(host.capsuleHeight / 2) * JUSTICE_TARGETS[targetKind].glintLocalYFraction;
+				const glintMat = new StandardMaterial(`mat-glint-${enemy.id}`, scene);
+				glintMat.diffuseColor = new Color3(1.0, 0.85, 0.25);
+				glintMat.emissiveColor = new Color3(1.0, 0.85, 0.25);
+				glintMat.specularColor = new Color3(0.0, 0.0, 0.0);
+				glintMat.disableLighting = true;
+				glint.material = glintMat;
+				// No `enemyId` metadata on the glint — picks against this mesh
+				// would otherwise read `pickedMesh.position.y` (a local offset
+				// to the parent capsule) and break the head/body band math.
+				// Justice routing works because the picker also checks the
+				// director's window AND the band on the capsule's worldY.
+				glint.isPickable = false;
+				glint.isVisible = false;
+				host.enemyGlintMeshes.set(enemy.id, glint);
+			}
 			// For bosses, attempt to load the archetype GLB and parent it to
 			// the capsule. The capsule remains as the hitbox; the GLB is
 			// purely visual. If the GLB load fails (404, network), the
@@ -215,8 +253,14 @@ export function createEncounterListener(host: EncounterListenerHost): EncounterL
 		onEnemyCease(enemyId) {
 			host.disposeEnemy(enemyId);
 		},
-		onFireEvent(_enemyId, event: FireEvent) {
-			void event;
+		onFireEvent(enemyId, event: FireEvent) {
+			// Glint visibility toggle. Only justice-glint enemies have a glint
+			// mesh registered, so the lookup is cheap and a no-op for everyone
+			// else. `aim-laser` opens the window; `fire-hitscan` closes it.
+			const glint = host.enemyGlintMeshes.get(enemyId);
+			if (!glint) return;
+			if (event.verb === 'aim-laser') glint.isVisible = true;
+			else if (event.verb === 'fire-hitscan') glint.isVisible = false;
 		},
 		onPlayerDamage(damage) {
 			// `applyDamage` carries the `IS_DEV`-gated `__dordGod` check at its

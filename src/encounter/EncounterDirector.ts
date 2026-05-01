@@ -138,6 +138,28 @@ interface DirectorState {
 const ADAPTIVE_FLOOR = 0.5;
 const ADAPTIVE_STEP = 0.05;
 
+// Precomputed `justice-glint` aim/fire boundaries. The pattern is fixed at
+// module load and `isJusticeWindowOpen` runs every frame on the hot path,
+// so scanning `pattern.events` per call would be wasteful — derive once.
+// Stays data-driven (not hardcoded literals) so spec edits to the program
+// re-derive at startup. Falls back to permanently-closed if the pattern
+// is malformed (the test suite catches that, and prod runs better with no
+// justice opportunity than with a crash).
+function deriveJusticeWindowBounds(): { aimAtMs: number; fireAtMs: number } | null {
+	const pattern = getFirePattern('justice-glint');
+	let aim: number | null = null;
+	let fire: number | null = null;
+	for (const ev of pattern.events) {
+		if (ev.verb === 'aim-laser' && aim === null) aim = ev.atMs;
+		else if (ev.verb === 'fire-hitscan' && aim !== null && fire === null) {
+			fire = ev.atMs;
+			break;
+		}
+	}
+	return aim !== null && fire !== null ? { aimAtMs: aim, fireAtMs: fire } : null;
+}
+const JUSTICE_WINDOW_BOUNDS = deriveJusticeWindowBounds();
+
 export class EncounterDirector {
 	private readonly cues: readonly Cue[];
 	private readonly spawnRailMap: ReadonlyMap<string, SpawnRailGraph>;
@@ -254,6 +276,30 @@ export class EncounterDirector {
 
 	getEnemy(enemyId: string): Enemy | undefined {
 		return this.state.enemies.get(enemyId);
+	}
+
+	/**
+	 * True when the enemy is mid-`justice-glint` aim window — i.e. between
+	 * the `aim-laser` event start and the subsequent `fire-hitscan` event.
+	 * The picker reads this to route a hit on the archetype's
+	 * `justiceShotTarget` sub-region to `target: 'justice'`.
+	 *
+	 * Outside the window, justice picks degrade to body — the disarm is
+	 * meant to be a precision-timed bonus, not a free shot.
+	 *
+	 * Difficulty multiplier applies to aim duration but not the authored
+	 * `atMs`, so reading the precomputed bounds is correct (the aim CAN
+	 * end early under low windupMultiplier, but the `fire-hitscan` event
+	 * still fires at its authored atMs — the closing edge we care about).
+	 */
+	isJusticeWindowOpen(enemyId: string): boolean {
+		if (!JUSTICE_WINDOW_BOUNDS) return false;
+		const enemy = this.state.enemies.get(enemyId);
+		if (!enemy || enemy.fireProgramId !== 'justice-glint') return false;
+		return (
+			enemy.elapsedMs >= JUSTICE_WINDOW_BOUNDS.aimAtMs &&
+			enemy.elapsedMs < JUSTICE_WINDOW_BOUNDS.fireAtMs
+		);
 	}
 
 	hitEnemy(enemyId: string, target: 'head' | 'body' | 'justice'): void {

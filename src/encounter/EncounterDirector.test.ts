@@ -248,3 +248,108 @@ describe('EncounterDirector — boss phase HP escalation', () => {
 		expect(cueFires.filter((f) => f.verb === 'boss-phase').length).toBe(initial);
 	});
 });
+
+describe('EncounterDirector — justice-glint window', () => {
+	function justiceSetup() {
+		// Spawn one middle-manager on a justice-glint program at pos-1.
+		const cues: Cue[] = [
+			{
+				id: 'p1-spawn-justice',
+				trigger: { kind: 'on-arrive', railNodeId: 'pos-1' },
+				action: {
+					verb: 'enemy-spawn',
+					railId: 'r1',
+					archetype: 'middle-manager',
+					fireProgram: 'justice-glint',
+				},
+			},
+		];
+		const director = new EncounterDirector({
+			cameraRail: railWithDwell,
+			cues,
+			spawnRails: [
+				{
+					id: 'r1',
+					path: [new Vector3(0, 0, 7), new Vector3(0, 0, 8)],
+					speed: 4,
+					loop: false,
+				},
+			],
+			difficulty: 'normal',
+			listener: noopListener,
+		});
+		// Tick to pos-1 — spawns the justice-glint enemy. Glide takes ~1.25s
+		// at speed 4. After 2s of ticks the enemy has been alive for the time
+		// remaining after arrival.
+		director.tick(2000);
+		const enemy = [
+			...(director as unknown as { state: { enemies: Map<string, unknown> } }).state.enemies.keys(),
+		][0];
+		if (!enemy) throw new Error('expected justice-glint enemy spawned');
+		return { director, enemyId: enemy };
+	}
+
+	it('window is closed before aim-laser starts (elapsedMs < 300)', () => {
+		const { director, enemyId } = justiceSetup();
+		expect(director.isJusticeWindowOpen(enemyId)).toBe(false);
+	});
+
+	it('window is open during aim-laser phase (300 ≤ elapsedMs < 600)', () => {
+		const { director, enemyId } = justiceSetup();
+		// Tick another 400ms — pushes enemy past the aim-laser event (atMs:300)
+		// but short of the fire-hitscan event (atMs:600). Window must be open.
+		director.tick(400);
+		expect(director.isJusticeWindowOpen(enemyId)).toBe(true);
+	});
+
+	it('window closes after fire-hitscan event (elapsedMs ≥ 600)', () => {
+		const { director, enemyId } = justiceSetup();
+		// Tick well past the fire-hitscan event — window must be closed.
+		director.tick(800);
+		expect(director.isJusticeWindowOpen(enemyId)).toBe(false);
+	});
+
+	it('returns false for non-justice-glint programs', () => {
+		// Spawn a regular middle-manager on pistol-pop-aim. isJusticeWindowOpen
+		// must always return false regardless of timing.
+		const cues: Cue[] = [
+			{
+				id: 'p1-spawn',
+				trigger: { kind: 'on-arrive', railNodeId: 'pos-1' },
+				action: {
+					verb: 'enemy-spawn',
+					railId: 'r1',
+					archetype: 'middle-manager',
+					fireProgram: 'pistol-pop-aim',
+				},
+			},
+		];
+		const director = new EncounterDirector({
+			cameraRail: railWithDwell,
+			cues,
+			spawnRails: [
+				{
+					id: 'r1',
+					path: [new Vector3(0, 0, 7), new Vector3(0, 0, 8)],
+					speed: 4,
+					loop: false,
+				},
+			],
+			difficulty: 'normal',
+			listener: noopListener,
+		});
+		director.tick(2000);
+		const enemyId = [
+			...(director as unknown as { state: { enemies: Map<string, unknown> } }).state.enemies.keys(),
+		][0];
+		if (!enemyId) throw new Error('expected enemy spawned');
+		// Tick through several seconds of the program — window must stay closed.
+		for (let i = 0; i < 5; i++) director.tick(500);
+		expect(director.isJusticeWindowOpen(enemyId)).toBe(false);
+	});
+
+	it('returns false for unknown enemy ids', () => {
+		const { director } = justiceSetup();
+		expect(director.isJusticeWindowOpen('does-not-exist')).toBe(false);
+	});
+});
