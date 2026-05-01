@@ -52,8 +52,8 @@ import {
 	SettingsOverlay,
 } from './gui';
 import { getLevel, type Level } from './levels';
-import { applyDoorOpen, applyShutterState, buildLevel, type LevelHandles } from './levels/build';
-import type { Door, LevelId, Light, Shutter } from './levels/types';
+import { buildLevel, type LevelHandles } from './levels/build';
+import type { LevelId } from './levels/types';
 import {
 	loadHighScore,
 	loadHighScores,
@@ -63,6 +63,13 @@ import {
 	saveSettings,
 } from './preferences';
 import { createRuntimeContext } from './runtime/context';
+import {
+	handleDoorCue as handleDoorCueImpl,
+	handleLightsRestored as handleLightsRestoredImpl,
+	handlePowerOut as handlePowerOutImpl,
+	handleShutterCue as handleShutterCueImpl,
+	openDoorsBy as openDoorsByImpl,
+} from './runtime/cueHelpers';
 import {
 	type PickResult,
 	pickAt as pickAtImpl,
@@ -255,14 +262,7 @@ if (IS_DEV) {
 const overlay = new Overlay('dord-ui', uiScene);
 const reticle = new Reticle(overlay);
 
-let activeOverlayDispose: (() => void) | null = null;
-// Bumped every time routeOverlay disposes the prior overlay. Async overlay
-// constructors (e.g. high-scores' loadHighScores) capture this token at
-// dispatch time and bail when it has changed by resolution time, so they
-// cannot install a stale overlay over a newer phase.
-let overlayGeneration = 0;
-let hud: HudOverlay | null = null;
-let narrator: NarratorOverlay | null = null;
+// Overlay bookkeeping moved to runtime.overlayState. See src/runtime/overlayState.ts.
 
 // Install `?frame=N` deterministic-replay hook BEFORE the first wall-clock
 // read. Otherwise `lastTickMs` would be captured at virtualMs=0, then
@@ -279,7 +279,7 @@ await initQuarters();
 
 // Keep the HUD's quarter readout in sync with the persistent balance.
 subscribeQuarters((balance) => {
-	hud?.setQuarters(balance);
+	runtime.overlayState.hud?.setQuarters(balance);
 });
 
 window.addEventListener('resize', () => engine.resize());
@@ -297,24 +297,24 @@ document.addEventListener('visibilitychange', () => {
 game.subscribe((state) => routeOverlay(state));
 
 function routeOverlay(state: GameState): void {
-	if (activeOverlayDispose) {
-		activeOverlayDispose();
-		activeOverlayDispose = null;
+	if (runtime.overlayState.activeDispose) {
+		runtime.overlayState.activeDispose();
+		runtime.overlayState.activeDispose = null;
 	}
-	overlayGeneration++;
+	runtime.overlayState.generation++;
 	reticle.setVisible(state.phase === 'playing');
 	const wantsHud = state.phase === 'playing' || state.phase === 'continue-prompt';
-	if (wantsHud && !hud) {
-		hud = new HudOverlay(overlay);
-		hud.setQuarters(getBalance());
-		narrator = new NarratorOverlay(overlay);
-	} else if (!wantsHud && hud) {
-		hud.dispose();
-		hud = null;
-		narrator?.dispose();
-		narrator = null;
+	if (wantsHud && !runtime.overlayState.hud) {
+		runtime.overlayState.hud = new HudOverlay(overlay);
+		runtime.overlayState.hud.setQuarters(getBalance());
+		runtime.overlayState.narrator = new NarratorOverlay(overlay);
+	} else if (!wantsHud && runtime.overlayState.hud) {
+		runtime.overlayState.hud.dispose();
+		runtime.overlayState.hud = null;
+		runtime.overlayState.narrator?.dispose();
+		runtime.overlayState.narrator = null;
 	}
-	hud?.render(state);
+	runtime.overlayState.hud?.render(state);
 	switch (state.phase) {
 		case 'insert-coin': {
 			// If we just returned from a run, the gameplay scene is still alive
@@ -346,19 +346,19 @@ function routeOverlay(state: GameState): void {
 				() => game.openHighScores(),
 				() => game.openCabinetStats(),
 			);
-			activeOverlayDispose = () => coin.dispose();
+			runtime.overlayState.activeDispose = () => coin.dispose();
 			break;
 		}
 		case 'high-scores': {
-			const generation = overlayGeneration;
+			const generation = runtime.overlayState.generation;
 			void loadHighScores().then((scores) => {
 				// Bail if the user navigated away (or back-and-forth) while
 				// the load was in flight — installing this overlay now would
 				// orphan whatever has replaced it.
-				if (generation !== overlayGeneration) return;
+				if (generation !== runtime.overlayState.generation) return;
 				if (game.getState().phase !== 'high-scores') return;
 				const panel = new HighScoresOverlay(overlay, scores, () => game.closeHighScores());
-				activeOverlayDispose = () => panel.dispose();
+				runtime.overlayState.activeDispose = () => panel.dispose();
 			});
 			break;
 		}
@@ -367,7 +367,7 @@ function routeOverlay(state: GameState): void {
 			// that initQuarters() populated at boot, so no async race window.
 			const stats = getLifetimeStats();
 			const panel = new CabinetStatsOverlay(overlay, stats, () => game.closeCabinetStats());
-			activeOverlayDispose = () => panel.dispose();
+			runtime.overlayState.activeDispose = () => panel.dispose();
 			break;
 		}
 		case 'playing': {
@@ -388,7 +388,7 @@ function routeOverlay(state: GameState): void {
 				},
 				() => game.endRun(true),
 			);
-			activeOverlayDispose = () => cont.dispose();
+			runtime.overlayState.activeDispose = () => cont.dispose();
 			break;
 		}
 		case 'game-over':
@@ -409,7 +409,7 @@ function routeOverlay(state: GameState): void {
 				},
 				() => game.closeSettings(),
 			);
-			activeOverlayDispose = () => overlayInstance.dispose(overlay);
+			runtime.overlayState.activeDispose = () => overlayInstance.dispose(overlay);
 			break;
 		}
 	}
@@ -418,16 +418,14 @@ function routeOverlay(state: GameState): void {
 // Set when the friend modal is on screen so a rapid second tap on the
 // title-screen INSERT COIN button cannot stack a second modal (which would
 // resolve into a double bailout). Always cleared in the modal dismiss.
-let friendModalOpen = false;
-
 function handleInsertCoin(): void {
 	if (getBalance() > 0) {
 		audioBus?.playStinger('ui/ui-confirm.mp3', 0.7);
 		game.insertCoin(now());
 		return;
 	}
-	if (friendModalOpen) return;
-	friendModalOpen = true;
+	if (runtime.overlayState.friendModalOpen) return;
+	runtime.overlayState.friendModalOpen = true;
 	// Friend bailout sting — cheery pickup-style cue announces the modal.
 	// Reused from the inventory pickup library per docs/spec/06-economy.md
 	// audio polish item.
@@ -435,9 +433,9 @@ function handleInsertCoin(): void {
 	// Zero balance → friend modal, then auto-start the run. Caller is
 	// always in 'insert-coin' phase; dispose the InsertCoinOverlay so the
 	// modal sits alone on the screen.
-	if (activeOverlayDispose) {
-		activeOverlayDispose();
-		activeOverlayDispose = null;
+	if (runtime.overlayState.activeDispose) {
+		runtime.overlayState.activeDispose();
+		runtime.overlayState.activeDispose = null;
 	}
 	let modalDisposed = false;
 	const disposeOnce = (): void => {
@@ -448,7 +446,7 @@ function handleInsertCoin(): void {
 	const modal = new FriendModalOverlay(overlay, () => {
 		audioBus?.playStinger('ui/ui-confirm.mp3', 0.7);
 		disposeOnce();
-		activeOverlayDispose = null;
+		runtime.overlayState.activeDispose = null;
 		// Hold `friendModalOpen=true` until the bailout has resolved so a
 		// rapid re-tap of INSERT COIN cannot stack a second modal (and a
 		// second +8 grant) while the first grant is still in flight.
@@ -461,12 +459,12 @@ function handleInsertCoin(): void {
 				game.returnToTitle();
 			})
 			.finally(() => {
-				friendModalOpen = false;
+				runtime.overlayState.friendModalOpen = false;
 			});
 	});
-	activeOverlayDispose = () => {
+	runtime.overlayState.activeDispose = () => {
 		disposeOnce();
-		friendModalOpen = false;
+		runtime.overlayState.friendModalOpen = false;
 	};
 }
 
@@ -504,7 +502,7 @@ async function emitGameOver(state: GameState, score: number, cleared: boolean): 
 		// between free-start and friend-modal based on the persisted balance.
 		game.returnToTitle();
 	});
-	activeOverlayDispose = () => overlayInstance.dispose(overlay);
+	runtime.overlayState.activeDispose = () => overlayInstance.dispose(overlay);
 	void loadHighScore(); // pre-warm cache for next coin
 }
 
@@ -736,7 +734,7 @@ function handleCueAction(action: CueAction): void {
 			game.transitionLevel(action.toLevelId);
 			return;
 		case 'door':
-			handleDoorCue(action.doorId, action.to);
+			handleDoorCueImpl(levelHandles, currentLevel, action.doorId, action.to);
 			return;
 		case 'lighting':
 			runtime.lightTweens.handle(levelHandles, action.lightId, action.tween);
@@ -754,7 +752,7 @@ function handleCueAction(action: CueAction): void {
 			return;
 		}
 		case 'narrator': {
-			narrator?.show(action.text, action.durationMs);
+			runtime.overlayState.narrator?.show(action.text, action.durationMs);
 			return;
 		}
 		case 'camera-shake': {
@@ -762,7 +760,7 @@ function handleCueAction(action: CueAction): void {
 			return;
 		}
 		case 'shutter':
-			handleShutterCue(action.shutterId, action.to);
+			handleShutterCueImpl(levelHandles, currentLevel, action.shutterId, action.to);
 			return;
 		case 'level-event':
 			handleLevelEvent(action.event);
@@ -775,34 +773,16 @@ function handleCueAction(action: CueAction): void {
 	}
 }
 
-function handleDoorCue(doorId: string, to: 'open' | 'closed'): void {
-	const mesh = levelHandles?.doors.get(doorId);
-	if (!mesh || !currentLevel) return;
-	const doorPrim = currentLevel.primitives.find(
-		(p): p is Door => p.kind === 'door' && p.id === doorId,
-	);
-	if (doorPrim && to === 'open') applyDoorOpen(mesh, doorPrim);
-}
-
-function handleShutterCue(shutterId: string, to: 'down' | 'up' | 'half'): void {
-	const mesh = levelHandles?.shutters.get(shutterId);
-	if (!mesh || !currentLevel) return;
-	const shutterPrim = currentLevel.primitives.find(
-		(p): p is Shutter => p.kind === 'shutter' && p.id === shutterId,
-	);
-	if (shutterPrim) applyShutterState(mesh, shutterPrim, to);
-}
-
 function handleLevelEvent(
 	event: 'fire-alarm' | 'power-out' | 'lights-restored' | 'elevator-ding',
 ): void {
 	if (!levelHandles || !currentLevel) return;
 	switch (event) {
 		case 'power-out':
-			handlePowerOut();
+			handlePowerOutImpl(levelHandles);
 			return;
 		case 'lights-restored':
-			handleLightsRestored();
+			handleLightsRestoredImpl(levelHandles, currentLevel);
 			return;
 		case 'fire-alarm':
 			handleFireAlarm();
@@ -810,21 +790,6 @@ function handleLevelEvent(
 		case 'elevator-ding':
 			handleElevatorDing();
 			return;
-	}
-}
-
-function handlePowerOut(): void {
-	if (!levelHandles) return;
-	for (const light of levelHandles.lights.values()) light.intensity = 0;
-}
-
-function handleLightsRestored(): void {
-	if (!levelHandles || !currentLevel) return;
-	for (const prim of currentLevel.primitives) {
-		if (prim.kind !== 'light') continue;
-		const lightPrim = prim as Light;
-		const bl = levelHandles.lights.get(lightPrim.id);
-		if (bl) bl.intensity = lightPrim.intensity;
 	}
 }
 
@@ -837,25 +802,14 @@ function handleFireAlarm(): void {
 	if (!levelHandles || !currentLevel) return;
 	audioBus?.startAmbience('fire-alarm-klaxon', 'sfx/klaxon-loop.ogg', 0.6, true);
 	runtime.fireAlarm.start(levelHandles);
-	openDoorsBy((door) => door.spawnRailId != null);
+	openDoorsByImpl(levelHandles, currentLevel, (door) => door.spawnRailId != null);
 }
 
 // Lobby exit + HR-corridor exit set piece — stinger + open the lift door.
 function handleElevatorDing(): void {
 	if (!levelHandles || !currentLevel) return;
 	audioBus?.playStinger('stingers/elevator-ding.ogg', 0.7);
-	openDoorsBy((door) => door.family === 'lift');
-}
-
-function openDoorsBy(predicate: (door: Door) => boolean): void {
-	if (!levelHandles || !currentLevel) return;
-	for (const prim of currentLevel.primitives) {
-		if (prim.kind !== 'door') continue;
-		const door = prim as Door;
-		if (!predicate(door)) continue;
-		const mesh = levelHandles.doors.get(door.id);
-		if (mesh) applyDoorOpen(mesh, door);
-	}
+	openDoorsByImpl(levelHandles, currentLevel, (door) => door.family === 'lift');
 }
 
 function disposeEnemy(enemyId: string): void {

@@ -2,6 +2,7 @@ import { CameraShake } from './cameraShake';
 import { Civilians } from './civilians';
 import { FireAlarm } from './fireAlarm';
 import { LightTweens } from './lightTweens';
+import { OverlayState } from './overlayState';
 import { PropAnims } from './propAnims';
 
 /**
@@ -18,6 +19,7 @@ export interface RuntimeContext {
 	readonly civilians: Civilians;
 	readonly fireAlarm: FireAlarm;
 	readonly lightTweens: LightTweens;
+	readonly overlayState: OverlayState;
 	readonly propAnims: PropAnims;
 }
 
@@ -27,6 +29,7 @@ export function createRuntimeContext(): RuntimeContext {
 		civilians: new Civilians(),
 		fireAlarm: new FireAlarm(),
 		lightTweens: new LightTweens(),
+		overlayState: new OverlayState(),
 		propAnims: new PropAnims(),
 	};
 }
