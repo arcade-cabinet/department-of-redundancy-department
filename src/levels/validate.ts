@@ -44,6 +44,7 @@ interface LevelIndex {
 	readonly civilianRailIds: ReadonlySet<string>;
 	readonly ambienceLayerIds: ReadonlySet<string>;
 	readonly railNodeIds: ReadonlySet<string>;
+	readonly lastRailNodeId: string | undefined;
 }
 
 class IssueLog {
@@ -147,6 +148,7 @@ function indexLevel(level: Level, log: IssueLog): LevelIndex {
 	for (const n of level.cameraRail.nodes) {
 		addUnique(railNodeIds, n.id, 'DUP_RAIL_NODE_ID', 'cameraRail node', log);
 	}
+	const lastRailNodeId = level.cameraRail.nodes.at(-1)?.id;
 
 	return {
 		doorIds,
@@ -157,6 +159,7 @@ function indexLevel(level: Level, log: IssueLog): LevelIndex {
 		civilianRailIds,
 		ambienceLayerIds,
 		railNodeIds,
+		lastRailNodeId,
 	};
 }
 
@@ -211,6 +214,20 @@ function checkCueTrigger(cue: Cue, index: LevelIndex, log: IssueLog): void {
 			log.err(
 				'CUE_DANGLING_RAIL_NODE',
 				`cue '${cue.id}' trigger.railNodeId '${cue.trigger.railNodeId}' not in cameraRail`,
+			);
+			return;
+		}
+		// `on-clear` requires the rail to have entered AND exited the dwell
+		// at the named node. The last node in the camera-rail graph is
+		// terminal — `arriveAtNode` in src/rail/Rail.ts skips dwelling
+		// for it entirely, so no dwell→glide transition ever occurs and
+		// the on-clear cue is unreachable. Catch this at validation time
+		// rather than letting an authored level transition silently never
+		// fire.
+		if (cue.trigger.kind === 'on-clear' && cue.trigger.railNodeId === index.lastRailNodeId) {
+			log.err(
+				'CUE_ON_CLEAR_FINAL_NODE',
+				`cue '${cue.id}' uses 'on-clear' on the final cameraRail node '${cue.trigger.railNodeId}' — that trigger never fires (final node has no dwell→glide transition)`,
 			);
 		}
 	}
