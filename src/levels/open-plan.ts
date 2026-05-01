@@ -81,6 +81,9 @@ const primitives: Primitive[] = [
 		width: 24,
 		height: 3,
 		pbr: 'drywall',
+		// Authored health kit on the west wall — picked up between the
+		// office-cluster ambushes per docs/spec/06-economy.md pacing.
+		healthKit: { id: 'kit-open-plan-west', hp: 35, offset: [4, 1.4] },
 	},
 	{
 		id: 'wall-end-glass',

@@ -21,12 +21,27 @@ export interface RetroOverlay {
 	readonly uvScale?: readonly [number, number];
 }
 
+/**
+ * Wall-mounted health kit — the only authored pickup in the canonical run
+ * (per docs/spec/06-economy.md). Rail-compatible: shoot to collect as the
+ * camera passes. Optional on any Wall primitive; the renderer mounts a
+ * red-cross box decal on the wall face when present.
+ */
+export interface HealthKitMount {
+	readonly id: string;
+	readonly hp: number;
+	// Local offset from wall origin in wall-plane coordinates [horiz, vert].
+	// Defaults to [0, 0] (center of wall) if omitted.
+	readonly offset?: readonly [number, number];
+}
+
 export interface Wall extends PrimitiveBase {
 	readonly kind: 'wall';
 	readonly width: number;
 	readonly height: number;
 	readonly pbr: 'drywall' | 'whiteboard';
 	readonly overlay?: RetroOverlay;
+	readonly healthKit?: HealthKitMount;
 }
 
 export interface Floor extends PrimitiveBase {

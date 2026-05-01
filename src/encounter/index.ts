@@ -1,3 +1,4 @@
+export { BOSSES, type BossDefinition, bossEnemyId, bossIdForEnemy } from './Boss';
 export type {
 	BossId,
 	Cue,

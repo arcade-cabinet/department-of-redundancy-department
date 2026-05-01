@@ -1,14 +1,7 @@
 import { Control } from '@babylonjs/gui/2D/controls/control';
 import { Rectangle } from '@babylonjs/gui/2D/controls/rectangle';
 import { TextBlock } from '@babylonjs/gui/2D/controls/textBlock';
-import { getDailyModifier } from '../game/dailyChallenge';
-import {
-	activeModifierFlags,
-	comboMultiplier,
-	type GameState,
-	WEAPONS,
-	type WeaponState,
-} from '../game/GameState';
+import { comboMultiplier, type GameState, WEAPONS, type WeaponState } from '../game/GameState';
 import {
 	COLOR_HP_HIGH,
 	COLOR_HP_LOW,
@@ -23,13 +16,17 @@ const HP_BAR_WIDTH = 320;
 const HP_BAR_THICKNESS = 2;
 const HP_FILL_MAX_WIDTH = HP_BAR_WIDTH - HP_BAR_THICKNESS * 2;
 
+const QUARTERS_GOLD = '#FFD55A';
+
 /**
- * Heads-up display: top strip carrying HP bar (left), score + combo (center),
- * lives stack (right). Mounted by main.ts during the 'playing' and
- * 'continue-prompt' phases, and disposed when leaving those phases.
+ * Heads-up display: HP bar (top-left), score + combo (top-center),
+ * lives stack (top-right above ammo), QUARTERS readout (top-right above lives).
  *
- * Reads GameState every frame the Game emits an update; never reads from the
- * encounter director directly (HP / lives / score belong to GameState).
+ * Per the canonical-run pivot:
+ *  - LIVES = current run state (♥ × 3 default)
+ *  - QUARTERS = persistent balance from quarters.ts (separate readout)
+ *
+ * Mounted by main.ts during 'playing' and 'continue-prompt' phases.
  */
 export class HudOverlay {
 	private readonly hpBar: Rectangle;
@@ -38,9 +35,10 @@ export class HudOverlay {
 	private readonly scoreLabel: TextBlock;
 	private readonly comboLabel: TextBlock;
 	private readonly livesLabel: TextBlock;
+	private readonly quartersLabel: TextBlock;
 	private readonly ammoLabel: TextBlock;
-	private readonly dailyBadge: TextBlock;
 	private readonly controls: readonly Control[];
+	private currentQuarters = 0;
 
 	constructor(private readonly overlay: Overlay) {
 		this.hpBar = new Rectangle('hud-hp-bar');
@@ -96,6 +94,22 @@ export class HudOverlay {
 		this.comboLabel.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
 		this.comboLabel.top = '60px';
 
+		this.quartersLabel = new TextBlock('hud-quarters', `Q  0`);
+		this.quartersLabel.color = QUARTERS_GOLD;
+		this.quartersLabel.fontSize = 22;
+		this.quartersLabel.fontFamily = FONT_DISPLAY;
+		this.quartersLabel.fontWeight = 'bold';
+		this.quartersLabel.height = '32px';
+		this.quartersLabel.width = '160px';
+		this.quartersLabel.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+		this.quartersLabel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+		this.quartersLabel.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+		this.quartersLabel.left = '-24px';
+		this.quartersLabel.top = '24px';
+		this.quartersLabel.shadowColor = 'rgba(0, 0, 0, 0.95)';
+		this.quartersLabel.shadowOffsetX = 1;
+		this.quartersLabel.shadowOffsetY = 1;
+
 		this.livesLabel = new TextBlock('hud-lives', '♥ ♥ ♥');
 		this.livesLabel.color = COLOR_HP_LOW;
 		this.livesLabel.fontSize = 28;
@@ -106,7 +120,7 @@ export class HudOverlay {
 		this.livesLabel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
 		this.livesLabel.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
 		this.livesLabel.left = '-24px';
-		this.livesLabel.top = '24px';
+		this.livesLabel.top = '60px';
 
 		this.ammoLabel = new TextBlock('hud-ammo', 'PISTOL  8 / 8');
 		this.ammoLabel.color = COLOR_PAPER;
@@ -119,51 +133,31 @@ export class HudOverlay {
 		this.ammoLabel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
 		this.ammoLabel.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
 		this.ammoLabel.left = '-24px';
-		this.ammoLabel.top = '70px';
+		this.ammoLabel.top = '104px';
 		this.ammoLabel.shadowColor = 'rgba(0, 0, 0, 0.95)';
 		this.ammoLabel.shadowBlur = 0;
 		this.ammoLabel.shadowOffsetX = 1;
 		this.ammoLabel.shadowOffsetY = 1;
 
-		this.dailyBadge = new TextBlock('hud-daily-badge', '');
-		this.dailyBadge.color = COLOR_HP_LOW;
-		this.dailyBadge.fontSize = 14;
-		this.dailyBadge.fontFamily = FONT_DISPLAY;
-		this.dailyBadge.fontWeight = 'bold';
-		this.dailyBadge.height = '20px';
-		this.dailyBadge.width = '420px';
-		this.dailyBadge.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
-		this.dailyBadge.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
-		this.dailyBadge.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
-		this.dailyBadge.top = '88px';
-		this.dailyBadge.shadowColor = 'rgba(0, 0, 0, 0.95)';
-		this.dailyBadge.shadowOffsetX = 1;
-		this.dailyBadge.shadowOffsetY = 1;
-		this.dailyBadge.isVisible = false;
-
 		this.controls = [
 			this.hpBar,
 			this.scoreLabel,
 			this.comboLabel,
+			this.quartersLabel,
 			this.livesLabel,
 			this.ammoLabel,
-			this.dailyBadge,
 		];
 		for (const c of this.controls) overlay.add(c);
+	}
+
+	setQuarters(n: number): void {
+		this.currentQuarters = n;
+		this.quartersLabel.text = `Q  ${n}`;
 	}
 
 	render(state: GameState): void {
 		const run = state.run;
 		if (!run) return;
-		// No-HUD modifier hides every HUD control. The reticle (rendered by
-		// Reticle, not this overlay) stays visible — that's the only readout
-		// the player gets per spec § Daily Challenge.
-		const flags = activeModifierFlags(state);
-		if (flags.hideHud) {
-			for (const c of this.controls) c.isVisible = false;
-			return;
-		}
-		for (const c of this.controls) c.isVisible = true;
 		const hpFrac = Math.max(0, Math.min(1, run.playerHp / run.maxPlayerHp));
 		this.hpFill.width = `${Math.round(HP_FILL_MAX_WIDTH * hpFrac)}px`;
 		this.hpFill.background = hpColorFor(hpFrac);
@@ -179,23 +173,12 @@ export class HudOverlay {
 		}
 
 		this.livesLabel.text = '♥ '.repeat(Math.max(0, run.remainingLives)).trimEnd();
+		this.quartersLabel.text = `Q  ${this.currentQuarters}`;
 
-		this.renderAmmoLabel(run.weapon, flags.noReload);
-
-		if (run.mode === 'daily-challenge' && run.dailyModifier) {
-			this.dailyBadge.text = `★ DAILY: ${getDailyModifier(run.dailyModifier).title}`;
-			this.dailyBadge.isVisible = true;
-		} else {
-			this.dailyBadge.isVisible = false;
-		}
+		this.renderAmmoLabel(run.weapon);
 	}
 
-	private renderAmmoLabel(weapon: WeaponState, noReload: boolean): void {
-		if (noReload) {
-			this.ammoLabel.text = `${weapon.active.toUpperCase()}  ∞`;
-			this.ammoLabel.color = COLOR_PAPER;
-			return;
-		}
+	private renderAmmoLabel(weapon: WeaponState): void {
 		const ammo = weapon.active === 'pistol' ? weapon.pistolAmmo : weapon.rifleAmmo;
 		const mag = WEAPONS[weapon.active].magSize;
 		const reloading = weapon.reloadEndsAtMs !== null;

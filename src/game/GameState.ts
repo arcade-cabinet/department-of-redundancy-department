@@ -1,24 +1,14 @@
-import type { Difficulty } from '../encounter';
 import type { LevelId } from '../levels/types';
-import type { Lives } from '../preferences';
-import {
-	DAILY_FLAGS_INERT,
-	type DailyModifierFlags,
-	type DailyModifierId,
-	dailyModifierFlags,
-} from './dailyChallenge';
-
-export function activeModifierFlags(state: GameState): DailyModifierFlags {
-	if (!state.run || state.run.mode !== 'daily-challenge') return DAILY_FLAGS_INERT;
-	return dailyModifierFlags(state.run.dailyModifier);
-}
 
 /**
  * Top-level game state machine — drives which screen is shown and what the
  * runtime ticks. No router, no React. Just a pure-data state transition table.
+ *
+ * Per the canonical-run pivot (docs/spec/00-overview.md), there is one run
+ * shape: 3 lives, designer-driven Normal-column director parameters, no
+ * modifier toggles. Continues are funded by the persistent quarter balance
+ * tracked in src/game/quarters.ts.
  */
-
-export type GameMode = 'standard' | 'daily-challenge';
 
 // Two-weapon loadout per docs/spec/00-overview.md. Pistol is the default;
 // rifle is swap-tab. Reload is 1.0s per spec.
@@ -53,7 +43,6 @@ export const INITIAL_WEAPON_STATE: WeaponState = {
 
 export type GamePhase =
 	| 'insert-coin'
-	| 'difficulty-select'
 	| 'playing'
 	| 'continue-prompt'
 	| 'game-over'
@@ -62,12 +51,6 @@ export type GamePhase =
 	| 'high-scores';
 
 export interface RunState {
-	readonly difficulty: Difficulty;
-	readonly lives: Lives;
-	readonly mode: GameMode;
-	// Active daily-challenge modifier when mode === 'daily-challenge'.
-	// null in standard runs.
-	readonly dailyModifier: DailyModifierId | null;
 	readonly currentLevelId: LevelId;
 	readonly playerHp: number;
 	readonly maxPlayerHp: number;
@@ -93,6 +76,7 @@ export const INITIAL_GAME_STATE: GameState = {
 };
 
 export const PLAYER_BASE_HP = 100;
+export const RUN_LIVES = 3;
 export const COMBO_CAP = 30;
 export const COMBO_STEP = 0.05;
 
@@ -100,41 +84,14 @@ export function comboMultiplier(combo: number): number {
 	return 1.0 + COMBO_STEP * Math.min(Math.max(0, combo), COMBO_CAP);
 }
 
-export function startRun(
-	difficulty: Difficulty,
-	lives: Lives,
-	mode: GameMode,
-	nowMs: number,
-	dailyModifier: DailyModifierId | null = null,
-): GameState {
-	const flags = mode === 'daily-challenge' ? dailyModifierFlags(dailyModifier) : DAILY_FLAGS_INERT;
-	// forcePermadeath modifier overrides the picker's lives choice (the daily
-	// picker always passes 'three-lives'). Glass-cannon halves the HP budget.
-	const effectiveLives: Lives = flags.forcePermadeath ? 'permadeath' : lives;
-	const livesCount = effectiveLives === 'permadeath' ? 1 : 3;
-	const maxHp = flags.glassCannon ? Math.round(PLAYER_BASE_HP / 2) : PLAYER_BASE_HP;
-	// Lock active weapon explicitly per modifier — don't rely on
-	// INITIAL_WEAPON_STATE.active being pistol by coincidence.
-	const lockedActive: WeaponKind | null = flags.rifleOnly
-		? 'rifle'
-		: flags.pistolOnly
-			? 'pistol'
-			: null;
-	const initialWeapon: WeaponState =
-		lockedActive !== null
-			? { ...INITIAL_WEAPON_STATE, active: lockedActive }
-			: INITIAL_WEAPON_STATE;
+export function startRun(nowMs: number): GameState {
 	return {
 		phase: 'playing',
 		run: {
-			difficulty,
-			lives: effectiveLives,
-			mode,
-			dailyModifier,
 			currentLevelId: 'lobby',
-			playerHp: maxHp,
-			maxPlayerHp: maxHp,
-			remainingLives: livesCount,
+			playerHp: PLAYER_BASE_HP,
+			maxPlayerHp: PLAYER_BASE_HP,
+			remainingLives: RUN_LIVES,
 			score: 0,
 			comboCount: 0,
 			civilianHits: 0,
@@ -142,7 +99,7 @@ export function startRun(
 			headshots: 0,
 			justiceShots: 0,
 			startedAtMs: nowMs,
-			weapon: initialWeapon,
+			weapon: INITIAL_WEAPON_STATE,
 		},
 	};
 }
@@ -177,22 +134,8 @@ export function tryConsumeAmmo(state: GameState, nowMs: number): FireOutcome {
 	if (!state.run || state.phase !== 'playing') return { kind: 'misfire' };
 	const weapon = state.run.weapon;
 	if (weapon.reloadEndsAtMs !== null) return { kind: 'misfire' };
-	const flags = activeModifierFlags(state);
-	// Pistol-only / Rifle-only / No-reload share unlimited-ammo semantics: a
-	// trigger pull always fires exactly one shot, no reload window. Mag display
-	// rolls magSize → magSize-1 → ... → 1 → magSize → ... and never visits 0
-	// (the would-have-emptied frame refills atomically + still fires).
-	const unlimited = flags.noReload;
 	const ammo = ammoOf(weapon);
 	if (ammo <= 0) {
-		if (unlimited) {
-			const def = WEAPONS[weapon.active];
-			const refilled: WeaponState = withAmmo(weapon, def.magSize - 1);
-			return {
-				kind: 'shot',
-				state: { ...state, run: { ...state.run, weapon: refilled } },
-			};
-		}
 		const def = WEAPONS[weapon.active];
 		const reloading: WeaponState = { ...weapon, reloadEndsAtMs: nowMs + def.reloadDurationMs };
 		return {
@@ -201,18 +144,12 @@ export function tryConsumeAmmo(state: GameState, nowMs: number): FireOutcome {
 		};
 	}
 	const newAmmo = ammo - 1;
-	// Under unlimited, when this pull empties the mag, refill atomically so
-	// the next pull starts fresh from magSize - 1 (no zero-ammo frame, no
-	// reload queued). Without this, the next pull's `ammo <= 0` branch would
-	// fire-and-refill — net result was 9 shots per 8-round cycle.
 	const finalWeapon: WeaponState =
 		newAmmo === 0
-			? unlimited
-				? withAmmo(weapon, WEAPONS[weapon.active].magSize)
-				: {
-						...withAmmo(weapon, 0),
-						reloadEndsAtMs: nowMs + WEAPONS[weapon.active].reloadDurationMs,
-					}
+			? {
+					...withAmmo(weapon, 0),
+					reloadEndsAtMs: nowMs + WEAPONS[weapon.active].reloadDurationMs,
+				}
 			: withAmmo(weapon, newAmmo);
 	return {
 		kind: 'shot',
@@ -222,10 +159,6 @@ export function tryConsumeAmmo(state: GameState, nowMs: number): FireOutcome {
 
 export function startReload(state: GameState, nowMs: number): GameState {
 	if (!state.run || state.phase !== 'playing') return state;
-	// noReload (set by no-reload, pistol-only, rifle-only modifiers) refills
-	// atomically on dry pull instead of through a manual reload window — the
-	// reload key becomes a no-op.
-	if (activeModifierFlags(state).noReload) return state;
 	const weapon = state.run.weapon;
 	if (weapon.reloadEndsAtMs !== null) return state;
 	const def = WEAPONS[weapon.active];
@@ -253,9 +186,6 @@ export function tickReload(state: GameState, nowMs: number): GameState {
 
 export function swapWeapon(state: GameState): GameState {
 	if (!state.run || state.phase !== 'playing') return state;
-	// pistol-only / rifle-only modifiers lock the player on one weapon.
-	const flags = activeModifierFlags(state);
-	if (flags.pistolOnly || flags.rifleOnly) return state;
 	const weapon = state.run.weapon;
 	// Swap is instant; cancels any in-flight reload (player chose to switch
 	// weapons rather than wait for reload).
@@ -269,27 +199,16 @@ export function swapWeapon(state: GameState): GameState {
 
 export function damagePlayer(state: GameState, damage: number): GameState {
 	if (!state.run || state.phase !== 'playing') return state;
-	const flags = activeModifierFlags(state);
-	// Glass cannon: damage taken is tripled (in addition to halved max HP at
-	// run start — net "you die in ~6× fewer hits").
-	const effectiveDamage = flags.glassCannon ? damage * 3 : damage;
-	const newHp = state.run.playerHp - effectiveDamage;
+	const newHp = state.run.playerHp - damage;
 	if (newHp > 0) {
 		return { ...state, run: { ...state.run, playerHp: newHp, comboCount: 0 } };
 	}
-	const remaining = state.run.remainingLives - 1;
-	// Iron man: no continues. The first time HP hits zero ends the run, even
-	// if remainingLives > 0. Bypasses the continue-prompt phase entirely.
-	// We still decrement remainingLives accurately so the end-of-run summary,
-	// analytics, and any "you had X lives left" stat see the truthful count
-	// (not zeroed out for cosmetic effect).
-	if (remaining <= 0 || flags.ironMan) {
-		return {
-			...state,
-			phase: 'game-over',
-			run: { ...state.run, playerHp: 0, remainingLives: Math.max(0, remaining) },
-		};
-	}
+	// Every lethal hit moves to continue-prompt. The HUD lives counter
+	// decrements (capped at 0) for visual feedback; the run-end decision
+	// is made by the user in main.ts (continue vs. give up) per
+	// docs/spec/06-economy.md. resumeFromContinue refills lives back to
+	// RUN_LIVES — a continue is a fresh credit.
+	const remaining = Math.max(0, state.run.remainingLives - 1);
 	return {
 		...state,
 		phase: 'continue-prompt',
@@ -302,23 +221,18 @@ export function resumeFromContinue(state: GameState): GameState {
 	return {
 		...state,
 		phase: 'playing',
-		run: { ...state.run, playerHp: state.run.maxPlayerHp, comboCount: 0 },
+		run: {
+			...state.run,
+			playerHp: state.run.maxPlayerHp,
+			remainingLives: RUN_LIVES,
+			comboCount: 0,
+		},
 	};
 }
 
 export function recordKill(state: GameState, target: 'head' | 'body' | 'justice'): GameState {
 	if (!state.run || state.phase !== 'playing') return state;
-	const flags = activeModifierFlags(state);
-	// Justice-only: head and body kills still register (combo counter, kill
-	// counter) but contribute zero score. Only justice-shots score.
-	const baseScore =
-		flags.justiceOnly && target !== 'justice'
-			? 0
-			: target === 'head'
-				? 250
-				: target === 'justice'
-					? 200
-					: 100;
+	const baseScore = target === 'head' ? 250 : target === 'justice' ? 200 : 100;
 	const combo = state.run.comboCount + 1;
 	const earned = Math.round(baseScore * comboMultiplier(combo));
 	return {
@@ -348,6 +262,19 @@ export function recordCivilianHit(state: GameState): GameState {
 		},
 		25,
 	);
+}
+
+export const HEALTH_KIT_HP = 35;
+
+/**
+ * Wall-mounted health kit pickup. Refunds HP up to maxPlayerHp; never
+ * exceeds the cap. Combo is preserved (kits do not break the chain).
+ */
+export function collectHealthKit(state: GameState, hp: number = HEALTH_KIT_HP): GameState {
+	if (!state.run || state.phase !== 'playing') return state;
+	const newHp = Math.min(state.run.maxPlayerHp, state.run.playerHp + hp);
+	if (newHp === state.run.playerHp) return state;
+	return { ...state, run: { ...state.run, playerHp: newHp } };
 }
 
 export function transitionLevel(state: GameState, toLevelId: LevelId): GameState {

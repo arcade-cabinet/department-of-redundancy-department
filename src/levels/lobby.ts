@@ -263,6 +263,9 @@ const primitives: readonly Primitive[] = [
 		width: 8,
 		height: 6,
 		pbr: 'drywall',
+		// Authored health kit at the east-corridor wall — pacing beat between
+		// the second wave and the boss elevator. Per docs/spec/06-economy.md.
+		healthKit: { id: 'kit-lobby-east', hp: 35, offset: [0, 1.4] },
 	},
 	{
 		kind: 'wall',

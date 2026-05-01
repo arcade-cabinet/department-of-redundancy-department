@@ -1,10 +1,7 @@
-import type { Difficulty } from '../encounter';
 import type { LevelId } from '../levels/types';
-import type { Lives } from '../preferences';
-import type { DailyModifierId } from './dailyChallenge';
 import {
+	collectHealthKit,
 	damagePlayer,
-	type GameMode,
 	type GamePhase,
 	type GameState,
 	INITIAL_GAME_STATE,
@@ -25,6 +22,9 @@ type Listener = (state: GameState) => void;
 /**
  * Mutable Game owns a GameState and broadcasts changes. The runtime
  * (src/main.ts) holds a single instance; UI overlays subscribe.
+ *
+ * Per the canonical-run pivot: INSERT COIN starts the run directly with
+ * no picker. There is no difficulty selector and no daily challenge.
  */
 export class Game {
 	private state: GameState = INITIAL_GAME_STATE;
@@ -42,18 +42,12 @@ export class Game {
 		};
 	}
 
-	insertCoin(): void {
-		this.update(setPhase(this.state, 'difficulty-select'));
+	insertCoin(nowMs: number): void {
+		this.update(startRun(nowMs));
 	}
 
-	chooseDifficulty(
-		difficulty: Difficulty,
-		lives: Lives,
-		mode: GameMode,
-		nowMs: number,
-		dailyModifier: DailyModifierId | null = null,
-	): void {
-		this.update(startRun(difficulty, lives, mode, nowMs, dailyModifier));
+	returnToTitle(): void {
+		this.update(setPhase({ ...this.state, run: null }, 'insert-coin'));
 	}
 
 	hit(target: 'head' | 'body' | 'justice'): void {
@@ -66,6 +60,10 @@ export class Game {
 
 	takeDamage(damage: number): void {
 		this.update(damagePlayer(this.state, damage));
+	}
+
+	collectHealthKit(hp?: number): void {
+		this.update(collectHealthKit(this.state, hp));
 	}
 
 	continueRun(): void {
