@@ -423,6 +423,47 @@ async function emitGameOver(state: GameState, score: number, cleared: boolean): 
 
 // ── Level construction ──────────────────────────────────────────────────────
 
+// Imported nodes arrive as a tree of multiple top-level meshes, plus
+// particle systems and skeletons that need their own dispose calls to
+// release GPU buffers — `meshes[0].dispose()` alone leaks the rest.
+function disposeImportResult(result: {
+	readonly meshes: readonly AbstractMesh[];
+	readonly particleSystems?: readonly { dispose(): void }[];
+	readonly skeletons?: readonly { dispose(): void }[];
+}): void {
+	for (const m of result.meshes) m.dispose();
+	for (const ps of result.particleSystems ?? []) ps.dispose();
+	for (const sk of result.skeletons ?? []) sk.dispose();
+}
+
+// Load the archetype GLB for a boss enemy and parent it to the hitbox
+// capsule. Async; bails if the spawn-time scene was disposed before the
+// import resolved (e.g., player died mid-load and the level was torn down).
+function loadBossGlb(spawnScene: Scene, capsule: AbstractMesh, enemy: Enemy): void {
+	const glb = ARCHETYPES[enemy.archetypeId].glb;
+	ImportMeshAsync(`/assets/models/${glb}`, spawnScene)
+		.then((result) => {
+			if (spawnScene.isDisposed || capsule.isDisposed() || scene !== spawnScene) {
+				disposeImportResult(result);
+				return;
+			}
+			const root = result.meshes[0];
+			if (!root) return;
+			root.name = `boss-glb-${enemy.id}`;
+			root.parent = capsule;
+			root.position.y = -CAPSULE_HALF_HEIGHT;
+			// Reaper is the final boss — scale up so they read as a ~3m
+			// menacing figure. Other bosses are reskinned grunts at native
+			// scale.
+			if (enemy.archetypeId === 'reaper') {
+				root.scaling.setAll(2.0);
+			}
+		})
+		.catch((err) => {
+			console.warn(`[boss-glb] failed to load ${glb}`, err);
+		});
+}
+
 function constructLevel(levelId: LevelId): void {
 	if (scene) {
 		scene.dispose();
@@ -520,32 +561,7 @@ function constructLevel(levelId: LevelId): void {
 			// purely visual. If the GLB load fails (404, network), the
 			// colored capsule stays as the visible body.
 			if (isBoss) {
-				const glb = ARCHETYPES[enemy.archetypeId].glb;
-				ImportMeshAsync(`/assets/models/${glb}`, scene)
-					.then((result) => {
-						const root = result.meshes[0];
-						if (!root) return;
-						// Re-check that the boss is still alive — the level
-						// could have torn down before the async load
-						// resolved, in which case `mesh` is disposed and
-						// parenting would orphan the GLB.
-						if (mesh.isDisposed()) {
-							root.dispose();
-							return;
-						}
-						root.name = `boss-glb-${enemy.id}`;
-						root.parent = mesh;
-						root.position.y = -CAPSULE_HALF_HEIGHT;
-						// Reaper is the final boss — scale up so they read
-						// as a 3m menacing figure. Other bosses are
-						// reskinned grunts; native scale.
-						if (enemy.archetypeId === 'reaper') {
-							root.scaling.setAll(2.0);
-						}
-					})
-					.catch((err) => {
-						console.warn(`[boss-glb] failed to load ${glb}`, err);
-					});
+				loadBossGlb(scene, mesh, enemy);
 			}
 		},
 		onEnemyMove(enemyId, position) {
