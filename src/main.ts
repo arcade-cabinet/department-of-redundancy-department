@@ -17,6 +17,7 @@ import {
 	type Enemy,
 	type FireEvent,
 } from './encounter';
+import { now } from './engine/clock';
 import { rand } from './engine/rng';
 import { Game } from './game/Game';
 import type { GameState } from './game/GameState';
@@ -222,6 +223,7 @@ function constructLevel(levelId: LevelId): void {
 		enemyMeshes.clear();
 		activeCivilians.clear();
 		civilianSeq = 0;
+		activePropAnims.clear();
 	}
 	currentLevel = getLevel(levelId);
 	scene = new Scene(engine);
@@ -344,7 +346,10 @@ function handleCueAction(action: CueAction): void {
 		case 'level-event':
 			handleLevelEvent(action.event);
 			return;
-		// prop-anim / boss-spawn / boss-phase / enemy-spawn
+		case 'prop-anim':
+			handlePropAnimCue(action.propId, action.animId);
+			return;
+		// boss-spawn / boss-phase / enemy-spawn
 		// are handled by their respective subsystems in subsequent commits.
 		default:
 			return;
@@ -408,7 +413,7 @@ let lastShakeDx = 0;
 let lastShakeDy = 0;
 
 function beginCameraShake(intensity: number, durationMs: number): void {
-	const startMs = performance.now();
+	const startMs = now();
 	cameraShake = { intensity, startMs, endMs: startMs + durationMs };
 }
 
@@ -418,13 +423,13 @@ function applyCameraShake(camera: FreeCamera): void {
 	lastShakeDx = 0;
 	lastShakeDy = 0;
 	if (!cameraShake) return;
-	const now = performance.now();
-	if (now >= cameraShake.endMs) {
+	const t0 = now();
+	if (t0 >= cameraShake.endMs) {
 		cameraShake = null;
 		return;
 	}
 	const totalMs = cameraShake.endMs - cameraShake.startMs;
-	const remainingMs = cameraShake.endMs - now;
+	const remainingMs = cameraShake.endMs - t0;
 	const t = totalMs > 0 ? remainingMs / totalMs : 0;
 	const amp = cameraShake.intensity * t;
 	lastShakeDx = (rand() - 0.5) * 2 * amp;
@@ -438,6 +443,99 @@ function disposeEnemy(enemyId: string): void {
 	mesh?.dispose();
 	enemyMeshes.delete(enemyId);
 	enemySpawnHp.delete(enemyId);
+}
+
+// ── Prop animations ──────────────────────────────────────────────────────────
+// Three authored animIds drive prop-anim cues across lobby + open-plan:
+// drop (clipboard falls to floor), roll-in (printer-dolly slides in along
+// prop yaw), shatter (mug disappears). Each is a per-frame tween over a fixed
+// duration. Stored in a Map and ticked alongside civilians.
+
+interface ActivePropAnim {
+	readonly mesh: AbstractMesh;
+	readonly startMs: number;
+	readonly durationMs: number;
+	readonly animId: 'drop' | 'roll-in';
+	readonly fromX: number;
+	readonly fromY: number;
+	readonly fromZ: number;
+	readonly toX: number;
+	readonly toY: number;
+	readonly toZ: number;
+	readonly fromRotZ: number;
+	readonly toRotZ: number;
+}
+
+const activePropAnims = new Map<string, ActivePropAnim>();
+
+function handlePropAnimCue(propId: string, animId: string): void {
+	const mesh = levelHandles?.props.get(propId);
+	if (!mesh || mesh.isDisposed()) return;
+	// Re-entrancy guard: if a prop is mid-animation, drop the second cue. The
+	// authored prop position is captured at construction time; firing a new
+	// roll-in while the mesh is offset would corrupt the destination capture.
+	if (activePropAnims.has(propId)) return;
+	if (animId === 'shatter') {
+		mesh.dispose();
+		levelHandles?.props.delete(propId);
+		return;
+	}
+	if (animId === 'drop') {
+		activePropAnims.set(propId, {
+			mesh,
+			startMs: now(),
+			durationMs: 600,
+			animId: 'drop',
+			fromX: mesh.position.x,
+			fromY: mesh.position.y,
+			fromZ: mesh.position.z,
+			toX: mesh.position.x,
+			toY: 0,
+			toZ: mesh.position.z,
+			fromRotZ: mesh.rotation.z,
+			toRotZ: mesh.rotation.z + Math.PI / 6,
+		});
+		return;
+	}
+	if (animId === 'roll-in') {
+		const yaw = mesh.rotation.y;
+		const rollDist = 3;
+		const destX = mesh.position.x;
+		const destZ = mesh.position.z;
+		activePropAnims.set(propId, {
+			mesh,
+			startMs: now(),
+			durationMs: 800,
+			animId: 'roll-in',
+			fromX: destX - Math.sin(yaw) * rollDist,
+			fromY: mesh.position.y,
+			fromZ: destZ - Math.cos(yaw) * rollDist,
+			toX: destX,
+			toY: mesh.position.y,
+			toZ: destZ,
+			fromRotZ: mesh.rotation.z,
+			toRotZ: mesh.rotation.z,
+		});
+		// Snap to start position so the tween rolls in from offscreen.
+		mesh.position.x = destX - Math.sin(yaw) * rollDist;
+		mesh.position.z = destZ - Math.cos(yaw) * rollDist;
+		return;
+	}
+	console.warn(`[cue] unknown prop-anim animId '${animId}' for prop '${propId}'`);
+}
+
+function tickPropAnims(): void {
+	const t0 = now();
+	for (const [id, anim] of activePropAnims) {
+		const elapsed = t0 - anim.startMs;
+		const t = Math.min(1, elapsed / anim.durationMs);
+		const eased = anim.animId === 'drop' ? t * t : 1 - (1 - t) * (1 - t);
+		anim.mesh.position.x = anim.fromX + (anim.toX - anim.fromX) * eased;
+		anim.mesh.position.y = anim.fromY + (anim.toY - anim.fromY) * eased;
+		anim.mesh.position.z = anim.fromZ + (anim.toZ - anim.fromZ) * eased;
+		anim.mesh.rotation.z = anim.fromRotZ + (anim.toRotZ - anim.fromRotZ) * eased;
+		if (t >= 1) activePropAnims.delete(id);
+	}
 }
 
 // ── Civilians ────────────────────────────────────────────────────────────────
@@ -515,6 +613,7 @@ function tick(): void {
 	if (state.phase === 'playing') {
 		if (director && !director.isFinished) director.tick(dtMs);
 		tickCivilians(dtMs);
+		tickPropAnims();
 		if (currentCamera) applyCameraShake(currentCamera);
 	}
 
