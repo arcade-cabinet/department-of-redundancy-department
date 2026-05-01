@@ -399,8 +399,10 @@ const cues: Cue[] = [
 	},
 
 	{
+		// On-clear of the mass-pop wave at the top landing. Wall-clock
+		// atMs:90000 pre-dated PR#66 and assumed instant-resume dwell.
 		id: 'transition',
-		trigger: { kind: 'wall-clock', atMs: 90000 },
+		trigger: { kind: 'on-clear', railNodeId: 'pos-2-mass-pop' },
 		action: { verb: 'transition', toLevelId: 'hr-corridor' },
 	},
 ];

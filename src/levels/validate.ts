@@ -393,15 +393,30 @@ export function totalEnemyCount(level: Level): number {
 	return level.cues.filter((c) => c.action.verb === 'enemy-spawn').length;
 }
 
-/** Length of the level in milliseconds (max wall-clock cue time). */
+/**
+ * Approximate length of the level in milliseconds. Accounts for both
+ * authored wall-clock cue endpoints AND the dwell budget of camera-rail
+ * combat nodes — levels that gate transitions on `on-clear` of the
+ * final dwell node have no wall-clock terminal cue, so the duration
+ * must come from the rail's dwellMs sum (plus a glide approximation).
+ *
+ * Used as a sanity bound by validate.test.ts to confirm a level isn't
+ * empty / a single-tick transition.
+ */
 export function levelDurationMs(level: Level): number {
-	let max = 0;
+	let maxCue = 0;
 	for (const cue of level.cues) {
-		if (cue.trigger.kind === 'wall-clock' && cue.trigger.atMs > max) {
-			max = cue.trigger.atMs;
+		if (cue.trigger.kind === 'wall-clock' && cue.trigger.atMs > maxCue) {
+			maxCue = cue.trigger.atMs;
 		}
 	}
-	return max;
+	let dwellSum = 0;
+	for (const node of level.cameraRail.nodes) {
+		if (node.kind === 'combat' && typeof node.dwellMs === 'number') {
+			dwellSum += node.dwellMs;
+		}
+	}
+	return Math.max(maxCue, dwellSum);
 }
 
 // Re-export for tests.
