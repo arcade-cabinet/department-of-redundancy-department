@@ -108,13 +108,6 @@ uiScene.autoClearDepthAndStencil = false;
 	// builds and emit a "no active camera" warning on the first render).
 	uiCam.setTarget(Vector3.Zero());
 	uiScene.activeCamera = uiCam;
-	// Pre-warm: render the uiScene once before any gameplay-scene swap
-	// so its PassPostProcess shader compiles against a stable engine
-	// state. Without this prewarm, the first gameplay-scene dispose
-	// invalidates the engine's postProcessManager cache mid-compile and
-	// the next uiScene.render() throws a null deref. (Reproduced by the
-	// `every level constructs cleanly` e2e test on first INSERT COIN.)
-	uiScene.render();
 }
 
 // Title-screen scene. While at the title we render this; constructLevel
@@ -186,6 +179,12 @@ if (IS_DEV) {
 		// until handles are populated, so without this hook the scene
 		// stays black throughout a fast-jump test.
 		levelHandlesReady: () => levelHandles !== null,
+		// Engine-clock now(). Tests must use this rather than
+		// `performance.now()` to honour the engine clock facade
+		// (profiles/ts-browser-game.md): once `?frame=N` test mode lands,
+		// `performance.now()` and `now()` will diverge, and any test
+		// passing real time to `game.insertCoin` would break.
+		now,
 	};
 	// God-mode toggle for the visual-audit harness. When true, takeDamage
 	// is short-circuited so the audit can fast-forward through firing
@@ -194,6 +193,15 @@ if (IS_DEV) {
 }
 const overlay = new Overlay('dord-ui', uiScene);
 const reticle = new Reticle(overlay);
+
+// Pre-warm the uiScene's GUI PassPostProcess shader compilation NOW —
+// after the AdvancedDynamicTexture has been attached by `new Overlay`.
+// On the first `uiScene.render()` after a `scene.dispose()` the engine's
+// shared post-process effect cache is invalidated, and Babylon throws
+// `null reading 'postProcessManager'` while recompiling. Forcing the
+// compile here, before the title scene ever disposes, ensures the
+// pipeline is hot when INSERT COIN first tears down a scene.
+uiScene.render();
 
 let activeOverlayDispose: (() => void) | null = null;
 // Bumped every time routeOverlay disposes the prior overlay. Async overlay
@@ -508,8 +516,7 @@ function constructLevel(levelId: LevelId): void {
 		// shared post-process effect cache. Forcing the uiScene to render
 		// once here recompiles the GUI's PassPostProcess against the
 		// engine's new state, so the next render-loop tick doesn't see a
-		// null postProcessManager. The boot-time prewarm (above the
-		// title-scene block) does the same for the first dispose.
+		// null postProcessManager.
 		scene.dispose();
 		uiScene.render();
 		scene = null;
@@ -983,9 +990,17 @@ function tick(): void {
 	// by the render loop before primitives have attached their materials.
 	// At that point Babylon tries to compile a default post-process effect
 	// against a still-null postProcessManager and throws. Holding off the
-	// scene render until `levelHandles` resolves keeps the title/UI scene
-	// drawing while the level finishes async construction; the gameplay
-	// scene catches up on the next tick.
+	// scene render until `levelHandles` resolves keeps the uiScene drawing
+	// (the InsertCoin overlay et al composite over a black framebuffer)
+	// while the level finishes async construction; the gameplay scene
+	// catches up on the next tick. The title scene's clear-color
+	// background is intentionally not drawn here — exposing it would mean
+	// the title scene's camera ever gets rendered, and once Babylon binds
+	// a post-process pipeline to that camera, disposing the title scene
+	// on INSERT COIN invalidates the engine's shared effect cache and the
+	// next uiScene.render() throws on a null postProcessManager. The
+	// uiScene's overlays are visually sufficient on a transparent black
+	// background, so we accept the cosmetic loss to keep the engine sane.
 	if (scene?.activeCamera && !scene.isDisposed && levelHandles) {
 		scene.render();
 	}
