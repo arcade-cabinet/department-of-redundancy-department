@@ -87,6 +87,9 @@ const primitives: Primitive[] = [
 		pbr: 'drywall',
 	},
 	{
+		// Spec calls for a chalk-arrow "AUDITOR ↑" graffiti decal on this
+		// wall. No chalk-arrow PNG exists yet in the retro library — once a
+		// chalk-arrow texture lands, set `overlay: { texture: '...' }`.
 		id: 'wall-shaft-S',
 		kind: 'wall',
 		origin: new Vector3(3, 0, 5),
@@ -94,7 +97,6 @@ const primitives: Primitive[] = [
 		width: 14,
 		height: 9,
 		pbr: 'drywall',
-		overlay: { texture: 'T_Window_Wood_004.png' },
 	},
 
 	// Doors.
@@ -122,7 +124,7 @@ const primitives: Primitive[] = [
 		texture: 'T_Door_Metal_07.png',
 		swing: 'inward',
 		state: 'closed',
-		spawnRailId: 'rail-spawn-top-L',
+		spawnRailId: 'rail-spawn-top-L-A',
 	},
 	{
 		id: 'door-top-R',
@@ -135,7 +137,7 @@ const primitives: Primitive[] = [
 		texture: 'T_Door_Metal_08.png',
 		swing: 'inward',
 		state: 'closed',
-		spawnRailId: 'rail-spawn-top-R',
+		spawnRailId: 'rail-spawn-top-R-A',
 	},
 	{
 		id: 'shutter-vending',
@@ -144,7 +146,7 @@ const primitives: Primitive[] = [
 		yaw: 0,
 		width: 1.5,
 		height: 2.2,
-		texture: 'T_Shutter_Wood_010.png',
+		texture: 'T_Shutter_Wood_009.png',
 		state: 'down',
 	},
 	{
@@ -204,7 +206,9 @@ const cues: Cue[] = [
 		},
 	},
 
-	// Position 1 — propped door already open; no door cue needed.
+	// Position 1 — propped door already open; no door cue needed. Spec
+	// authorial intent is "double-crawler" — one guard via the propped door
+	// (cover-pop tempo), one manager crawling up the well from below.
 	{
 		id: 'p1-spawn-A',
 		trigger: { kind: 'on-arrive', railNodeId: 'pos-1' },
@@ -216,13 +220,15 @@ const cues: Cue[] = [
 		},
 	},
 	{
+		// Crawler comes up the lower well, not through the propped door —
+		// distinct rail so the two enemies don't share a path.
 		id: 'p1-spawn-B',
 		trigger: { kind: 'on-arrive', railNodeId: 'pos-1' },
 		action: {
 			verb: 'enemy-spawn',
-			railId: 'rail-spawn-mid-propped',
+			railId: 'rail-spawn-mid-crawler',
 			archetype: 'middle-manager',
-			fireProgram: 'pistol-pop-aim',
+			fireProgram: 'crawler-lunge',
 		},
 	},
 
@@ -242,7 +248,7 @@ const cues: Cue[] = [
 		trigger: { kind: 'on-arrive', railNodeId: 'pos-2-mass-pop' },
 		action: {
 			verb: 'enemy-spawn',
-			railId: 'rail-spawn-top-L',
+			railId: 'rail-spawn-top-L-A',
 			archetype: 'security-guard',
 			fireProgram: 'mass-pop-volley',
 		},
@@ -252,7 +258,7 @@ const cues: Cue[] = [
 		trigger: { kind: 'on-arrive', railNodeId: 'pos-2-mass-pop' },
 		action: {
 			verb: 'enemy-spawn',
-			railId: 'rail-spawn-top-L',
+			railId: 'rail-spawn-top-L-B',
 			archetype: 'middle-manager',
 			fireProgram: 'mass-pop-volley',
 		},
@@ -262,7 +268,7 @@ const cues: Cue[] = [
 		trigger: { kind: 'on-arrive', railNodeId: 'pos-2-mass-pop' },
 		action: {
 			verb: 'enemy-spawn',
-			railId: 'rail-spawn-top-R',
+			railId: 'rail-spawn-top-R-A',
 			archetype: 'security-guard',
 			fireProgram: 'mass-pop-volley',
 		},
@@ -272,26 +278,32 @@ const cues: Cue[] = [
 		trigger: { kind: 'on-arrive', railNodeId: 'pos-2-mass-pop' },
 		action: {
 			verb: 'enemy-spawn',
-			railId: 'rail-spawn-top-R',
+			railId: 'rail-spawn-top-R-B',
 			archetype: 'middle-manager',
 			fireProgram: 'mass-pop-volley',
 		},
 	},
 
-	// Hitman reveal — wall-clock 60s into level (12s into pos-2 dwell).
+	// Hitman reveal — wall-clock timing tuned to the actual rail timeline
+	// (enter glide ≈1s + pos-1 dwell 24s + glide ≈2s = pos-2 starts ≈27s).
+	// Reveal lands ~12s into pos-2 dwell = wall-clock 39s, well inside the
+	// 32s dwell window that ends at ~59s. Vault at +18s, second hitman at
+	// +24s. All three resolve before pos-2 dwell expires.
 	{
 		id: 'p2-shutter',
-		trigger: { kind: 'wall-clock', atMs: 60000 },
+		trigger: { kind: 'wall-clock', atMs: 39000 },
 		action: { verb: 'shutter', shutterId: 'shutter-vending', to: 'up' },
 	},
 	{
 		id: 'p2-hitman-stinger',
-		trigger: { kind: 'wall-clock', atMs: 60100 },
-		action: { verb: 'audio-stinger', audio: 'stinger/hitman-reveal.ogg' },
+		trigger: { kind: 'wall-clock', atMs: 39100 },
+		// Bespoke hitman-reveal.ogg is a future asset slice; reuse the
+		// shipped bright stinger so the cue plays at runtime.
+		action: { verb: 'audio-stinger', audio: 'stinger/stinger-bright.mp3' },
 	},
 	{
 		id: 'p2-hitman-spawn',
-		trigger: { kind: 'wall-clock', atMs: 60200 },
+		trigger: { kind: 'wall-clock', atMs: 39200 },
 		action: {
 			verb: 'enemy-spawn',
 			railId: 'rail-spawn-vending',
@@ -301,7 +313,7 @@ const cues: Cue[] = [
 	},
 	{
 		id: 'p2-vault',
-		trigger: { kind: 'wall-clock', atMs: 66000 },
+		trigger: { kind: 'wall-clock', atMs: 45000 },
 		action: {
 			verb: 'enemy-spawn',
 			railId: 'rail-spawn-vault-service-door',
@@ -311,7 +323,7 @@ const cues: Cue[] = [
 	},
 	{
 		id: 'p2-hitman-B',
-		trigger: { kind: 'wall-clock', atMs: 72000 },
+		trigger: { kind: 'wall-clock', atMs: 51000 },
 		action: {
 			verb: 'enemy-spawn',
 			railId: 'rail-spawn-vending',
@@ -338,15 +350,42 @@ export const stairwayBLevel: Level = {
 			speed: 2.5,
 			loop: false,
 		},
+		// Crawler-from-below rail used by p1-spawn-B; comes up the lower
+		// well alongside (not through) the propped door.
 		{
-			id: 'rail-spawn-top-L',
-			path: [new Vector3(-2, 6, 12), new Vector3(-2, 6, 11), new Vector3(-1, 6, 10)],
+			id: 'rail-spawn-mid-crawler',
+			path: [
+				new Vector3(0, -1, 1),
+				new Vector3(0, 0, 1),
+				new Vector3(0, 1.5, 3),
+				new Vector3(0, 2.5, 4),
+			],
+			speed: 1.5,
+			loop: false,
+		},
+		// Mass-pop: four lanes, two per door, lateral offsets so the four
+		// enemies don't share a path or overlap visually.
+		{
+			id: 'rail-spawn-top-L-A',
+			path: [new Vector3(-2.4, 6, 12), new Vector3(-2.4, 6, 11), new Vector3(-1.4, 6, 10)],
 			speed: 2.5,
 			loop: false,
 		},
 		{
-			id: 'rail-spawn-top-R',
-			path: [new Vector3(2, 6, 12), new Vector3(2, 6, 11), new Vector3(1, 6, 10)],
+			id: 'rail-spawn-top-L-B',
+			path: [new Vector3(-1.6, 6, 12), new Vector3(-1.6, 6, 11), new Vector3(-0.6, 6, 10)],
+			speed: 2.5,
+			loop: false,
+		},
+		{
+			id: 'rail-spawn-top-R-A',
+			path: [new Vector3(2.4, 6, 12), new Vector3(2.4, 6, 11), new Vector3(1.4, 6, 10)],
+			speed: 2.5,
+			loop: false,
+		},
+		{
+			id: 'rail-spawn-top-R-B',
+			path: [new Vector3(1.6, 6, 12), new Vector3(1.6, 6, 11), new Vector3(0.6, 6, 10)],
 			speed: 2.5,
 			loop: false,
 		},
