@@ -121,6 +121,14 @@ interface DirectorState {
 	readonly firedCueIds: ReadonlySet<string>;
 	readonly currentDwellNodeId: string | null;
 	readonly currentDwellEnemyIds: ReadonlySet<string>;
+	// True once any enemy has spawned at the current dwell node. Without
+	// this, `allDwellEnemiesCleared()` returns true on the very first tick
+	// after arrival — BEFORE any enemy-spawn cue has had a chance to fire
+	// (cues fire in the same tick but the early-resume check used to look
+	// at a stale empty set on arrival ticks where no on-arrive enemy-spawn
+	// cue exists, OR on later wall-clock ticks where the spawn cue is
+	// scheduled for atMs > arrival). Resets on each new dwell node.
+	readonly currentDwellHadSpawn: boolean;
 }
 
 // Adaptive difficulty within a dwell node — per docs/spec/03:
@@ -157,6 +165,7 @@ export class EncounterDirector {
 			firedCueIds: new Set(),
 			currentDwellNodeId: null,
 			currentDwellEnemyIds: new Set(),
+			currentDwellHadSpawn: false,
 		};
 	}
 
@@ -188,10 +197,13 @@ export class EncounterDirector {
 			}
 		}
 
-		// New dwell node → reset the adaptive-difficulty streak. Skill from a
-		// past position should not carry forward as a discount on the next
-		// firing line.
-		if (arrivedNodeId !== null && arrivedNodeId !== prev.currentDwellNodeId) {
+		// New dwell node → reset the adaptive-difficulty streak AND the
+		// "had spawn" flag. Skill from a past position should not carry
+		// forward as a discount on the next firing line, and the
+		// early-resume gate must re-arm so the new dwell can't auto-resume
+		// before any of its on-arrive enemy-spawns fire.
+		const enteringNewDwell = arrivedNodeId !== null && arrivedNodeId !== prev.currentDwellNodeId;
+		if (enteringNewDwell) {
 			this.hitlessKills = 0;
 		}
 
@@ -201,13 +213,23 @@ export class EncounterDirector {
 			elapsedMs: newElapsed,
 			enemies: updatedEnemies,
 			currentDwellNodeId: arrivedNodeId ?? prev.currentDwellNodeId,
+			currentDwellHadSpawn: enteringNewDwell ? false : prev.currentDwellHadSpawn,
 		};
 
 		// Match wall-clock + on-arrive + on-clear cues.
 		this.processCues(prev.elapsedMs, newElapsed, arrivedNodeId, clearedNodeId);
 
-		// If dwell finished and all dwell enemies cleared → resume rail.
-		if (this.state.rail.phase === 'dwelling' && this.allDwellEnemiesCleared()) {
+		// Early-resume condition: dwell phase, at least one enemy DID spawn
+		// at this dwell, AND every dwell enemy has been killed/ceased. The
+		// `currentDwellHadSpawn` gate prevents resuming on the arrival tick
+		// before any on-arrive spawns fire (or on later ticks where the
+		// dwell's spawn cues are wall-clock-scheduled into the future and
+		// haven't fired yet).
+		if (
+			this.state.rail.phase === 'dwelling' &&
+			this.state.currentDwellHadSpawn &&
+			this.allDwellEnemiesCleared()
+		) {
 			this.state = { ...this.state, rail: resumeFromCombat(this.state.rail) };
 		}
 	}
@@ -390,7 +412,12 @@ export class EncounterDirector {
 		updated.set(id, enemy);
 		const dwell = new Set(this.state.currentDwellEnemyIds);
 		dwell.add(id);
-		this.state = { ...this.state, enemies: updated, currentDwellEnemyIds: dwell };
+		this.state = {
+			...this.state,
+			enemies: updated,
+			currentDwellEnemyIds: dwell,
+			currentDwellHadSpawn: true,
+		};
 		this.listener.onEnemySpawn(enemy);
 	}
 
@@ -445,7 +472,12 @@ export class EncounterDirector {
 		updated.set(id, enemy);
 		const dwell = new Set(this.state.currentDwellEnemyIds);
 		dwell.add(id);
-		this.state = { ...this.state, enemies: updated, currentDwellEnemyIds: dwell };
+		this.state = {
+			...this.state,
+			enemies: updated,
+			currentDwellEnemyIds: dwell,
+			currentDwellHadSpawn: true,
+		};
 		this.listener.onEnemySpawn(enemy);
 	}
 
