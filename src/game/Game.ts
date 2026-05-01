@@ -87,16 +87,33 @@ export class Game {
 		return outcome.kind === 'shot';
 	}
 
-	reload(nowMs: number): void {
-		this.update(startReload(this.state, nowMs));
+	/**
+	 * Starts a reload if one is needed. Returns `true` only when the call
+	 * actually advanced state — caller can use this to gate side-effects
+	 * like SFX so they don't fire on no-op invocations (mag-full, already
+	 * reloading).
+	 */
+	reload(nowMs: number): boolean {
+		const next = startReload(this.state, nowMs);
+		if (next === this.state) return false;
+		this.update(next);
+		return true;
 	}
 
 	tickReload(nowMs: number): void {
 		this.update(tickReload(this.state, nowMs));
 	}
 
-	swapWeapon(): void {
-		this.update(swapWeapon(this.state));
+	/**
+	 * Swap to the next equipped weapon. Returns `true` when the call
+	 * actually changed the active weapon (false when no alternate is
+	 * unlocked or the swap was rejected mid-reload).
+	 */
+	swapWeapon(): boolean {
+		const next = swapWeapon(this.state);
+		if (next === this.state) return false;
+		this.update(next);
+		return true;
 	}
 
 	openSettings(): void {

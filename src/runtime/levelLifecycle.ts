@@ -136,6 +136,13 @@ export interface EncounterListenerHost {
 	disposeEnemy(enemyId: string): void;
 	handleCueAction(action: CueAction): void;
 	applyDamage(damage: number): void;
+	/**
+	 * Closure into the per-level `audioBus`. Routed through a callback so the
+	 * listener factory doesn't need to know how main.ts manages bus lifecycle
+	 * (the bus is reconstructed per level; capturing it directly would bind
+	 * to a stale instance after a level transition).
+	 */
+	playSfx(audioFile: string, volume?: number): void;
 }
 
 /**
@@ -185,6 +192,18 @@ export function createEncounterListener(host: EncounterListenerHost): EncounterL
 			mesh.metadata = { enemyId: enemy.id };
 			host.enemySpawnHp.set(enemy.id, enemy.hp);
 			host.enemyMeshes.set(enemy.id, mesh);
+			// Boss-roar stinger on first appearance of any boss-tier enemy.
+			// Reaper gets the bigger explosion sample; mini-bosses get the
+			// shorter "bright" stinger so the four arena entrances each feel
+			// distinct from the climax.
+			if (isBoss) {
+				host.playSfx(
+					enemy.archetypeId === 'reaper'
+						? 'explosion/explosion-big-01.mp3'
+						: 'stinger/stinger-bright.mp3',
+					0.8,
+				);
+			}
 			// Justice-glint VFX: a small gold emissive sphere parented to the
 			// capsule at the archetype's `justiceShotTarget` local-Y. Hidden
 			// at spawn; toggled by `onFireEvent` once the `aim-laser` event
@@ -231,6 +250,14 @@ export function createEncounterListener(host: EncounterListenerHost): EncounterL
 		},
 		onEnemyHit(enemyId, target, _damage) {
 			host.enemyLastHitTarget.set(enemyId, target);
+			// Hit-confirm stinger — different sample for head vs body so the
+			// player can hear the headshot bonus pre-empt the kill stinger.
+			// Justice hits route through hit-confirm too; the gold-reticle
+			// VFX is the visual indicator that the bonus banked.
+			host.playSfx(
+				target === 'head' ? 'impact/impact-heavy-01.ogg' : 'impact/impact-body-01.ogg',
+				0.7,
+			);
 		},
 		onEnemyKill(enemyId) {
 			// Read the last-hit-target BEFORE dispose — `disposeEnemy` clears
@@ -239,8 +266,15 @@ export function createEncounterListener(host: EncounterListenerHost): EncounterL
 			const target = host.enemyLastHitTarget.get(enemyId) ?? 'body';
 			host.disposeEnemy(enemyId);
 			host.game.hit(target);
-			// Boss kills drop quarters per docs/spec/06-economy.md.
+			// Enemy-kill stinger — bosses get a louder explosion-debris cue
+			// (the boardroom climax wants to land); rank-and-file get the
+			// short heavy-impact sample.
 			const bossId = bossIdForEnemy(enemyId);
+			host.playSfx(
+				bossId !== null ? 'explosion/explosion-debris.mp3' : 'impact/impact-heavy-02.ogg',
+				bossId !== null ? 0.85 : 0.6,
+			);
+			// Boss kills drop quarters per docs/spec/06-economy.md.
 			if (bossId !== null) {
 				const drop = rollBossDrop(BOSSES[bossId].quarterDrop);
 				if (drop > 0) {
