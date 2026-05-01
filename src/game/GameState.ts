@@ -47,6 +47,12 @@ export const INITIAL_GAME_STATE: GameState = {
 };
 
 export const PLAYER_BASE_HP = 100;
+export const COMBO_CAP = 30;
+export const COMBO_STEP = 0.05;
+
+export function comboMultiplier(combo: number): number {
+	return 1.0 + COMBO_STEP * Math.min(Math.max(0, combo), COMBO_CAP);
+}
 
 export function startRun(difficulty: Difficulty, lives: Lives, mode: GameMode): GameState {
 	const livesCount = lives === 'permadeath' ? 1 : 3;
@@ -101,8 +107,7 @@ export function recordKill(state: GameState, target: 'head' | 'body' | 'justice'
 	if (!state.run || state.phase !== 'playing') return state;
 	const baseScore = target === 'head' ? 250 : target === 'justice' ? 200 : 100;
 	const combo = state.run.comboCount + 1;
-	const comboMul = 1.0 + 0.05 * Math.min(combo, 30);
-	const earned = Math.round(baseScore * comboMul);
+	const earned = Math.round(baseScore * comboMultiplier(combo));
 	return {
 		...state,
 		run: {

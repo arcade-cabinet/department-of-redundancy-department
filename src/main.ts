@@ -20,6 +20,7 @@ import type { GameState } from './game/GameState';
 import {
 	ContinueOverlay,
 	GameOverOverlay,
+	HudOverlay,
 	InsertCoinOverlay,
 	Overlay,
 	Reticle,
@@ -67,6 +68,7 @@ const overlay = new Overlay('dord-ui');
 const reticle = new Reticle(overlay);
 
 let activeOverlayDispose: (() => void) | null = null;
+let hud: HudOverlay | null = null;
 let lastTickMs = performance.now();
 
 const settings: Settings = await loadSettings();
@@ -91,6 +93,14 @@ function routeOverlay(state: GameState): void {
 		activeOverlayDispose();
 		activeOverlayDispose = null;
 	}
+	const wantsHud = state.phase === 'playing' || state.phase === 'continue-prompt';
+	if (wantsHud && !hud) {
+		hud = new HudOverlay(overlay);
+	} else if (!wantsHud && hud) {
+		hud.dispose();
+		hud = null;
+	}
+	hud?.render(state);
 	switch (state.phase) {
 		case 'insert-coin': {
 			const coin = new InsertCoinOverlay(overlay, () => game.insertCoin());
@@ -103,7 +113,7 @@ function routeOverlay(state: GameState): void {
 			break;
 		}
 		case 'playing': {
-			// HUD only; reticle is global.
+			// HUD already mounted above; nothing else to do here.
 			break;
 		}
 		case 'continue-prompt': {
