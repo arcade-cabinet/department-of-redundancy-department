@@ -173,11 +173,12 @@ describe('recordKill under justiceOnly', () => {
 		expect(after.run?.score).toBe(0);
 	});
 
-	it('justice kills still score normally', () => {
+	it('justice kills still score normally — exactly 210 at combo 1', () => {
 		const state = startRun('normal', 'three-lives', 'daily-challenge', T0, 'justice-only');
 		const after = recordKill(state, 'justice');
-		// 200 base × 1.05 (combo of 1) = 210
-		expect(after.run?.score).toBeGreaterThan(0);
+		// 200 base × 1.05 combo multiplier (combo of 1) = 210. Pinned exactly
+		// so a future change to the score model or combo step gets caught.
+		expect(after.run?.score).toBe(210);
 	});
 });
 
