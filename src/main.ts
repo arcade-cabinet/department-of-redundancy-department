@@ -17,6 +17,7 @@ import {
 	type Enemy,
 	type FireEvent,
 } from './encounter';
+import { now } from './engine/clock';
 import { rand } from './engine/rng';
 import { Game } from './game/Game';
 import type { GameState } from './game/GameState';
@@ -412,7 +413,7 @@ let lastShakeDx = 0;
 let lastShakeDy = 0;
 
 function beginCameraShake(intensity: number, durationMs: number): void {
-	const startMs = performance.now();
+	const startMs = now();
 	cameraShake = { intensity, startMs, endMs: startMs + durationMs };
 }
 
@@ -422,13 +423,13 @@ function applyCameraShake(camera: FreeCamera): void {
 	lastShakeDx = 0;
 	lastShakeDy = 0;
 	if (!cameraShake) return;
-	const now = performance.now();
-	if (now >= cameraShake.endMs) {
+	const t0 = now();
+	if (t0 >= cameraShake.endMs) {
 		cameraShake = null;
 		return;
 	}
 	const totalMs = cameraShake.endMs - cameraShake.startMs;
-	const remainingMs = cameraShake.endMs - now;
+	const remainingMs = cameraShake.endMs - t0;
 	const t = totalMs > 0 ? remainingMs / totalMs : 0;
 	const amp = cameraShake.intensity * t;
 	lastShakeDx = (rand() - 0.5) * 2 * amp;
@@ -469,17 +470,20 @@ const activePropAnims = new Map<string, ActivePropAnim>();
 
 function handlePropAnimCue(propId: string, animId: string): void {
 	const mesh = levelHandles?.props.get(propId);
-	if (!mesh) return;
+	if (!mesh || mesh.isDisposed()) return;
+	// Re-entrancy guard: if a prop is mid-animation, drop the second cue. The
+	// authored prop position is captured at construction time; firing a new
+	// roll-in while the mesh is offset would corrupt the destination capture.
+	if (activePropAnims.has(propId)) return;
 	if (animId === 'shatter') {
 		mesh.dispose();
 		levelHandles?.props.delete(propId);
-		activePropAnims.delete(propId);
 		return;
 	}
 	if (animId === 'drop') {
 		activePropAnims.set(propId, {
 			mesh,
-			startMs: performance.now(),
+			startMs: now(),
 			durationMs: 600,
 			animId: 'drop',
 			fromX: mesh.position.x,
@@ -496,31 +500,33 @@ function handlePropAnimCue(propId: string, animId: string): void {
 	if (animId === 'roll-in') {
 		const yaw = mesh.rotation.y;
 		const rollDist = 3;
+		const destX = mesh.position.x;
+		const destZ = mesh.position.z;
 		activePropAnims.set(propId, {
 			mesh,
-			startMs: performance.now(),
+			startMs: now(),
 			durationMs: 800,
 			animId: 'roll-in',
-			fromX: mesh.position.x - Math.sin(yaw) * rollDist,
+			fromX: destX - Math.sin(yaw) * rollDist,
 			fromY: mesh.position.y,
-			fromZ: mesh.position.z - Math.cos(yaw) * rollDist,
-			toX: mesh.position.x,
+			fromZ: destZ - Math.cos(yaw) * rollDist,
+			toX: destX,
 			toY: mesh.position.y,
-			toZ: mesh.position.z,
+			toZ: destZ,
 			fromRotZ: mesh.rotation.z,
 			toRotZ: mesh.rotation.z,
 		});
 		// Snap to start position so the tween rolls in from offscreen.
-		mesh.position.x = mesh.position.x - Math.sin(yaw) * rollDist;
-		mesh.position.z = mesh.position.z - Math.cos(yaw) * rollDist;
+		mesh.position.x = destX - Math.sin(yaw) * rollDist;
+		mesh.position.z = destZ - Math.cos(yaw) * rollDist;
 		return;
 	}
 }
 
 function tickPropAnims(): void {
-	const now = performance.now();
+	const t0 = now();
 	for (const [id, anim] of activePropAnims) {
-		const elapsed = now - anim.startMs;
+		const elapsed = t0 - anim.startMs;
 		const t = Math.min(1, elapsed / anim.durationMs);
 		const eased = anim.animId === 'drop' ? t * t : 1 - (1 - t) * (1 - t);
 		anim.mesh.position.x = anim.fromX + (anim.toX - anim.fromX) * eased;
