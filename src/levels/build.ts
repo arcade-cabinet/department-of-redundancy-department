@@ -50,17 +50,48 @@ const PBR_BASE = '/assets/textures';
 const RETRO_BASE = '/assets/textures/retro';
 const MODEL_BASE = '/assets/models/';
 
-function pbrMaterial(scene: Scene, surface: PbrSurface, name: string): PBRMaterial {
+// One full texture tile covers this many meters of surface, per PBR set.
+// Without these, a single 2K tile stretches across an entire 6×10m floor —
+// the visible 2-plank-laminate defect. The texture authoring scale here
+// matches the apparent feature size of each material set; e.g. one
+// laminate diffuse contains ~5 planks across, so PBR_TILE_METERS=2.5 gives
+// roughly 0.5m planks at runtime.
+const PBR_TILE_METERS: Readonly<Record<PbrSurface, number>> = {
+	laminate: 2.5,
+	carpet: 2.0,
+	drywall: 3.0,
+	'ceiling-tile': 2.4, // ceiling-tile diffuse contains a 4×4 tile grid
+	whiteboard: 4.0, // whiteboards are large flat panels — don't over-tile
+};
+
+function pbrMaterial(
+	scene: Scene,
+	surface: PbrSurface,
+	name: string,
+	uvSize?: { readonly width: number; readonly height: number },
+): PBRMaterial {
 	const mat = new PBRMaterial(name, scene);
 	const root = `${PBR_BASE}/${surface}/${surface}`;
-	mat.albedoTexture = new Texture(`${root}_Diffuse_2k.jpg`, scene);
-	mat.bumpTexture = new Texture(`${root}_nor_gl_2k.jpg`, scene);
-	mat.metallicTexture = new Texture(`${root}_Rough_2k.jpg`, scene);
+	const tileMeters = PBR_TILE_METERS[surface];
+	// Sub-1 scale is valid for surfaces narrower than one full tile (e.g.
+	// a 0.5m-wide pillar with drywall@3m gets uScale=0.17), preserving
+	// realistic feature size. Clamping to 1 stretches a single tile across
+	// the surface, which is exactly the bug we fixed elsewhere.
+	const uScale = uvSize ? uvSize.width / tileMeters : 1;
+	const vScale = uvSize ? uvSize.height / tileMeters : 1;
+	const apply = (tex: Texture) => {
+		tex.uScale = uScale;
+		tex.vScale = vScale;
+		return tex;
+	};
+	mat.albedoTexture = apply(new Texture(`${root}_Diffuse_2k.jpg`, scene));
+	mat.bumpTexture = apply(new Texture(`${root}_nor_gl_2k.jpg`, scene));
+	mat.metallicTexture = apply(new Texture(`${root}_Rough_2k.jpg`, scene));
 	mat.useRoughnessFromMetallicTextureGreen = true;
 	mat.useMetallnessFromMetallicTextureBlue = false;
 	mat.metallic = 0;
 	mat.roughness = 1;
-	mat.ambientTexture = new Texture(`${root}_AO_2k.jpg`, scene);
+	mat.ambientTexture = apply(new Texture(`${root}_AO_2k.jpg`, scene));
 	return mat;
 }
 
@@ -89,7 +120,10 @@ function buildWall(scene: Scene, wall: Wall, handles: LevelHandles): Mesh {
 	mesh.position.copyFrom(wall.origin);
 	mesh.position.y += wall.height / 2; // origin is base; plane centers
 	mesh.rotation.y = wall.yaw;
-	mesh.material = pbrMaterial(scene, wall.pbr, `mat-wall-${wall.id}`);
+	mesh.material = pbrMaterial(scene, wall.pbr, `mat-wall-${wall.id}`, {
+		width: wall.width,
+		height: wall.height,
+	});
 	if (wall.overlay) {
 		// Overlay rendered as a thin parented plane in front of the wall.
 		const overlay = MeshBuilder.CreatePlane(
@@ -150,7 +184,10 @@ function buildFloor(scene: Scene, floor: Floor): Mesh {
 	);
 	mesh.position.copyFrom(floor.origin);
 	mesh.rotation.y = floor.yaw;
-	mesh.material = pbrMaterial(scene, floor.pbr, `mat-floor-${floor.id}`);
+	mesh.material = pbrMaterial(scene, floor.pbr, `mat-floor-${floor.id}`, {
+		width: floor.width,
+		height: floor.depth,
+	});
 	return mesh;
 }
 
@@ -164,7 +201,10 @@ function buildCeiling(scene: Scene, ceiling: Ceiling): Mesh {
 	mesh.position.y = ceiling.height;
 	mesh.rotation.x = Math.PI; // flip ground to face down
 	mesh.rotation.y = ceiling.yaw;
-	mesh.material = pbrMaterial(scene, ceiling.pbr, `mat-ceiling-${ceiling.id}`);
+	mesh.material = pbrMaterial(scene, ceiling.pbr, `mat-ceiling-${ceiling.id}`, {
+		width: ceiling.width,
+		height: ceiling.depth,
+	});
 
 	// Emissive cutouts: small downward-facing planes with emissive material.
 	if (ceiling.emissiveCutouts) {
@@ -284,7 +324,10 @@ function buildWhiteboard(scene: Scene, wb: Whiteboard, handles: LevelHandles): M
 	mesh.position.copyFrom(wb.origin);
 	mesh.position.y += wb.height / 2;
 	mesh.rotation.y = wb.yaw;
-	mesh.material = pbrMaterial(scene, wb.pbr, `mat-whiteboard-${wb.id}`);
+	mesh.material = pbrMaterial(scene, wb.pbr, `mat-whiteboard-${wb.id}`, {
+		width: wb.width,
+		height: wb.height,
+	});
 	handles.whiteboards.set(wb.id, mesh);
 	return mesh;
 }
@@ -305,7 +348,12 @@ function buildPillar(scene: Scene, pillar: Pillar): Mesh {
 	mesh.position.copyFrom(pillar.origin);
 	mesh.position.y += pillar.height / 2;
 	mesh.rotation.y = pillar.yaw;
-	mesh.material = pbrMaterial(scene, pillar.pbr, `mat-pillar-${pillar.id}`);
+	// Pillar wraps a cylinder/box; approximate UV span as circumference × height.
+	const pillarPerimeter = pillar.shape === 'round' ? Math.PI * pillar.size : pillar.size * 4;
+	mesh.material = pbrMaterial(scene, pillar.pbr, `mat-pillar-${pillar.id}`, {
+		width: pillarPerimeter,
+		height: pillar.height,
+	});
 	return mesh;
 }
 

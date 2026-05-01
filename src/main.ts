@@ -1,5 +1,7 @@
 import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
 import { Engine } from '@babylonjs/core/Engines/engine';
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
+import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
@@ -83,7 +85,44 @@ const CAPSULE_RADIUS = 0.35;
 const CAPSULE_HALF_HEIGHT = CAPSULE_HEIGHT / 2;
 
 const engine = new Engine(canvas, true, { stencil: true, preserveDrawingBuffer: false });
-let scene: Scene | null = null;
+
+// Persistent UI scene. Hosts the AdvancedDynamicTexture for ALL overlays
+// (HUD, reticle, insert-coin, continue, game-over, settings, ledgers). Never
+// disposed. `autoClear=false` so it composites on top of the gameplay scene
+// instead of wiping its framebuffer. The gameplay scene is rendered first in
+// `tick()`, then `uiScene.render()` draws the GUI on top.
+//
+// Why this exists: ADTs are owned by their host scene. When constructLevel
+// did `scene.dispose()` on INSERT COIN, the title-bound GUI texture died
+// with it, leaving every gameplay overlay silently mounting on a dead
+// surface (HUD invisible, reticle gone, continue-prompt never rendered).
+const uiScene = new Scene(engine);
+uiScene.autoClear = false;
+uiScene.autoClearDepthAndStencil = false;
+{
+	const uiCam = new FreeCamera('ui-cam', new Vector3(0, 0, -10), uiScene);
+	// Explicit target so Babylon's view-matrix update never hits the
+	// degenerate position==target case (which can produce NaN on some
+	// builds and emit a "no active camera" warning on the first render).
+	uiCam.setTarget(Vector3.Zero());
+	uiScene.activeCamera = uiCam;
+}
+
+// Title-screen scene. While at the title we render this; constructLevel
+// disposes and replaces it on INSERT COIN. The UI scene above is the one
+// that hosts all overlays and survives the swap. After game-over /
+// returnToTitle, `enterTitleScene()` rebuilds this so overlays don't
+// composite over a corpse-of-lobby.
+function buildTitleScene(): Scene {
+	const s = new Scene(engine);
+	s.clearColor = new Color4(0.082, 0.094, 0.11, 1);
+	const titleCam = new FreeCamera('title-cam', new Vector3(0, 1.6, 0), s);
+	titleCam.minZ = 0.05;
+	s.activeCamera = titleCam;
+	return s;
+}
+
+let scene: Scene | null = buildTitleScene();
 let currentCamera: FreeCamera | null = null;
 let director: EncounterDirector | null = null;
 let currentLevel: Level | null = null;
@@ -103,7 +142,15 @@ const healthKitMeshes = new Map<string, AbstractMesh>();
 const pendingCueActions: CueAction[] = [];
 
 const game = new Game();
-const overlay = new Overlay('dord-ui');
+
+// Debug surface for visual-audit screenshots — exposes the Game state
+// machine + engine handle so the audit harness can drive overlays without
+// pointer-event flakiness. Stripped from production by the same
+// `import.meta.env.PROD` gate as the engine clock test hooks.
+if (!(import.meta?.env?.PROD ?? false)) {
+	(globalThis as { __dord?: unknown }).__dord = { game, engine };
+}
+const overlay = new Overlay('dord-ui', uiScene);
 const reticle = new Reticle(overlay);
 
 let activeOverlayDispose: (() => void) | null = null;
@@ -153,6 +200,7 @@ function routeOverlay(state: GameState): void {
 		activeOverlayDispose = null;
 	}
 	overlayGeneration++;
+	reticle.setVisible(state.phase === 'playing');
 	const wantsHud = state.phase === 'playing' || state.phase === 'continue-prompt';
 	if (wantsHud && !hud) {
 		hud = new HudOverlay(overlay);
@@ -167,6 +215,32 @@ function routeOverlay(state: GameState): void {
 	hud?.render(state);
 	switch (state.phase) {
 		case 'insert-coin': {
+			// If we just returned from a run, the gameplay scene is still alive
+			// behind the overlay — tear it down and rebuild the title scene so
+			// the title-screen overlays don't composite over a corpse-of-level.
+			if (scene && scene.activeCamera?.name !== 'title-cam') {
+				// Null director/audioBus FIRST so any in-flight observable
+				// callbacks during scene.dispose() can't dereference a
+				// half-cleaned-up world.
+				director = null;
+				audioBus = null;
+				scene.dispose();
+				scene = buildTitleScene();
+				currentCamera = null;
+				cameraShake = null;
+				lastShakeDx = 0;
+				lastShakeDy = 0;
+				levelHandles = null;
+				currentLevel = null;
+				enemySpawnHp.clear();
+				enemyLastHitTarget.clear();
+				enemyMeshes.clear();
+				healthKitMeshes.clear();
+				activeCivilians.clear();
+				civilianSeq = 0;
+				activePropAnims.clear();
+				pendingCueActions.length = 0;
+			}
 			const coin = new InsertCoinOverlay(
 				overlay,
 				() => handleInsertCoin(),
@@ -403,6 +477,15 @@ function constructLevel(levelId: LevelId): void {
 			);
 			mesh.position.copyFrom(enemy.position);
 			mesh.position.y += CAPSULE_HALF_HEIGHT;
+			// Placeholder material so the capsule reads as a threat until
+			// archetype GLBs land. Without this, the capsule has no material
+			// and renders as a near-invisible default-shaded silhouette,
+			// which is what the visual audit caught.
+			const mat = new StandardMaterial(`mat-enemy-${enemy.id}`, scene);
+			mat.diffuseColor = new Color3(0.85, 0.18, 0.18);
+			mat.emissiveColor = new Color3(0.12, 0.0, 0.0);
+			mat.specularColor = new Color3(0.05, 0.05, 0.05);
+			mesh.material = mat;
 			mesh.metadata = { enemyId: enemy.id };
 			enemySpawnHp.set(enemy.id, enemy.hp);
 			enemyMeshes.set(enemy.id, mesh);
@@ -707,6 +790,14 @@ function spawnCivilian(railId: string): void {
 	);
 	mesh.position.copyFrom(head);
 	mesh.position.y += CAPSULE_HALF_HEIGHT;
+	// Civilian-blue placeholder so they read as non-threats. Reticle gradient
+	// (pickAt → reticleColorFor) already returns 'blue' for the enemyId-less
+	// pick; this matches the HUD signal.
+	const mat = new StandardMaterial(`mat-civ-${id}`, scene);
+	mat.diffuseColor = new Color3(0.25, 0.55, 0.95);
+	mat.emissiveColor = new Color3(0.0, 0.05, 0.12);
+	mat.specularColor = new Color3(0.05, 0.05, 0.05);
+	mesh.material = mat;
 	mesh.metadata = { civilianId: id };
 	activeCivilians.set(id, { id, path: rail.path, speed: rail.speed, mesh, t: 0 });
 }
@@ -760,6 +851,9 @@ function tick(): void {
 	}
 
 	scene?.render();
+	// Composite the GUI on top. `uiScene.autoClear=false` preserves the
+	// gameplay framebuffer; this draw lays the ADT over it.
+	uiScene.render();
 }
 
 // ── Hit-test: reticle hover + fire ───────────────────────────────────────────
