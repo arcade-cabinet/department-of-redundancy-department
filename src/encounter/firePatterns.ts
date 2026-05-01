@@ -218,7 +218,9 @@ export const FIRE_PATTERNS: Readonly<Record<FirePatternId, FirePattern>> = {
 	},
 	'crawford-suppress': {
 		// COO Crawford phase 1: SWAT-trained — suppressing fire in cover-pop
-		// rhythm with a slight stagger.
+		// rhythm with a slight stagger. The cycle ends in `duck` so the loop
+		// restart at atMs:0 (also `duck`) is a no-op visually rather than a
+		// pop-out → duck flicker.
 		id: 'crawford-suppress',
 		loop: true,
 		events: [
@@ -228,7 +230,7 @@ export const FIRE_PATTERNS: Readonly<Record<FirePatternId, FirePattern>> = {
 			{ atMs: 1100, verb: 'fire-hitscan', damage: 14 },
 			{ atMs: 1300, verb: 'fire-hitscan', damage: 14 },
 			{ atMs: 1500, verb: 'duck' },
-			{ atMs: 2200, verb: 'pop-out' },
+			{ atMs: 2200, verb: 'idle' },
 		],
 	},
 	'crawford-charge': {
