@@ -145,6 +145,42 @@ describe('level validator', () => {
 		expect(codes).toContain('DUP_HEALTH_KIT_ID');
 	});
 
+	it('flags on-clear cue targeting the final cameraRail node', () => {
+		// `arriveAtNode` skips dwelling for the terminal node, so on-clear of
+		// the last node never fires. Authors must use on-arrive instead.
+		const level: Level = {
+			id: 'victory',
+			displayName: 'test-on-clear-final',
+			primitives: [],
+			spawnRails: [],
+			civilianRails: [],
+			ambienceLayers: [],
+			cameraRail: {
+				defaultSpeedUps: 3,
+				nodes: [
+					{ id: 'a', kind: 'glide', position: new Vector3(0, 0, 0), lookAt: new Vector3(0, 0, 1) },
+					{
+						id: 'b',
+						kind: 'combat',
+						position: new Vector3(0, 0, 1),
+						lookAt: new Vector3(0, 0, 2),
+						dwellMs: 1000,
+					},
+				],
+			},
+			cues: [
+				{
+					id: 'unreachable',
+					trigger: { kind: 'on-clear', railNodeId: 'b' },
+					action: { verb: 'transition', toLevelId: 'victory' },
+				},
+			],
+		};
+		const report = validateLevel(level);
+		const codes = report.issues.map((i) => i.code);
+		expect(codes).toContain('CUE_ON_CLEAR_FINAL_NODE');
+	});
+
 	it('flags non-positive healthKit hp', () => {
 		const level: Level = {
 			id: 'victory',
