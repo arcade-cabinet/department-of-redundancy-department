@@ -109,9 +109,17 @@ export function startRun(
 ): GameState {
 	const flags = mode === 'daily-challenge' ? dailyModifierFlags(dailyModifier) : DAILY_FLAGS_INERT;
 	const livesCount = lives === 'permadeath' ? 1 : 3;
-	const initialWeapon: WeaponState = flags.rifleOnly
-		? { ...INITIAL_WEAPON_STATE, active: 'rifle' }
-		: INITIAL_WEAPON_STATE;
+	// Lock active weapon explicitly per modifier — don't rely on
+	// INITIAL_WEAPON_STATE.active being pistol by coincidence.
+	const lockedActive: WeaponKind | null = flags.rifleOnly
+		? 'rifle'
+		: flags.pistolOnly
+			? 'pistol'
+			: null;
+	const initialWeapon: WeaponState =
+		lockedActive !== null
+			? { ...INITIAL_WEAPON_STATE, active: lockedActive }
+			: INITIAL_WEAPON_STATE;
 	return {
 		phase: 'playing',
 		run: {
@@ -166,9 +174,10 @@ export function tryConsumeAmmo(state: GameState, nowMs: number): FireOutcome {
 	const weapon = state.run.weapon;
 	if (weapon.reloadEndsAtMs !== null) return { kind: 'misfire' };
 	const flags = activeModifierFlags(state);
-	// Pistol-only / Rifle-only / No-reload all share unlimited-ammo semantics:
-	// no reload window, mag refills atomically on dry pull. The shot still
-	// fires that frame (the trigger pull is a successful shot, not a misfire).
+	// Pistol-only / Rifle-only / No-reload share unlimited-ammo semantics: a
+	// trigger pull always fires exactly one shot, no reload window. Mag display
+	// rolls magSize → magSize-1 → ... → 1 → magSize → ... and never visits 0
+	// (the would-have-emptied frame refills atomically + still fires).
 	const unlimited = flags.noReload;
 	const ammo = ammoOf(weapon);
 	if (ammo <= 0) {
@@ -188,11 +197,19 @@ export function tryConsumeAmmo(state: GameState, nowMs: number): FireOutcome {
 		};
 	}
 	const newAmmo = ammo - 1;
-	const next: WeaponState = withAmmo(weapon, newAmmo);
+	// Under unlimited, when this pull empties the mag, refill atomically so
+	// the next pull starts fresh from magSize - 1 (no zero-ammo frame, no
+	// reload queued). Without this, the next pull's `ammo <= 0` branch would
+	// fire-and-refill — net result was 9 shots per 8-round cycle.
 	const finalWeapon: WeaponState =
-		newAmmo === 0 && !unlimited
-			? { ...next, reloadEndsAtMs: nowMs + WEAPONS[weapon.active].reloadDurationMs }
-			: next;
+		newAmmo === 0
+			? unlimited
+				? withAmmo(weapon, WEAPONS[weapon.active].magSize)
+				: {
+						...withAmmo(weapon, 0),
+						reloadEndsAtMs: nowMs + WEAPONS[weapon.active].reloadDurationMs,
+					}
+			: withAmmo(weapon, newAmmo);
 	return {
 		kind: 'shot',
 		state: { ...state, run: { ...state.run, weapon: finalWeapon } },
