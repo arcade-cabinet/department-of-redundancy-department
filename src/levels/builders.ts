@@ -1,4 +1,4 @@
-import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import type { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Ceiling, Floor, Pillar, Wall } from './types';
 
 /**
@@ -111,4 +111,3 @@ export function pillar(opts: PillarOpts): Pillar {
 		pbr: opts.pbr ?? 'drywall',
 	};
 }
-
