@@ -54,6 +54,13 @@ if (!canvas) {
 	throw new Error('main.ts: <canvas id="game"> not found in DOM');
 }
 
+// Placeholder capsule geometry used for both enemies and civilians until
+// archetype GLBs land. Height 1.8 → half-height 0.9 lifts the capsule center
+// off the rail's foot-position; pickRay headshot math uses the same value.
+const CAPSULE_HEIGHT = 1.8;
+const CAPSULE_RADIUS = 0.35;
+const CAPSULE_HALF_HEIGHT = CAPSULE_HEIGHT / 2;
+
 const engine = new Engine(canvas, true, { stencil: true, preserveDrawingBuffer: false });
 let scene: Scene | null = null;
 let director: EncounterDirector | null = null;
@@ -234,14 +241,20 @@ function constructLevel(levelId: LevelId): void {
 			// raycasts have a meaningful split. Replaced when archetype GLBs are wired.
 			const mesh = MeshBuilder.CreateCapsule(
 				`enemy-${enemy.id}`,
-				{ radius: 0.35, height: 1.8 },
+				{ radius: CAPSULE_RADIUS, height: CAPSULE_HEIGHT },
 				scene,
 			);
 			mesh.position.copyFrom(enemy.position);
-			mesh.position.y += 0.9; // capsule center; feet at enemy.position.y
+			mesh.position.y += CAPSULE_HALF_HEIGHT;
 			mesh.metadata = { enemyId: enemy.id };
 			enemySpawnHp.set(enemy.id, enemy.hp);
 			enemyMeshes.set(enemy.id, mesh);
+		},
+		onEnemyMove(enemyId, position) {
+			const mesh = enemyMeshes.get(enemyId);
+			if (!mesh) return;
+			mesh.position.copyFrom(position);
+			mesh.position.y += CAPSULE_HALF_HEIGHT;
 		},
 		onEnemyHit(enemyId, target, _damage) {
 			enemyLastHitTarget.set(enemyId, target);
@@ -346,9 +359,13 @@ function spawnCivilian(railId: string): void {
 	const head = rail?.path[0];
 	if (!rail || !head || rail.path.length < 2) return;
 	const id = `civ-${++civilianSeq}`;
-	const mesh = MeshBuilder.CreateCapsule(`civilian-${id}`, { radius: 0.35, height: 1.8 }, scene);
+	const mesh = MeshBuilder.CreateCapsule(
+		`civilian-${id}`,
+		{ radius: CAPSULE_RADIUS, height: CAPSULE_HEIGHT },
+		scene,
+	);
 	mesh.position.copyFrom(head);
-	mesh.position.y += 0.9;
+	mesh.position.y += CAPSULE_HALF_HEIGHT;
 	mesh.metadata = { civilianId: id };
 	activeCivilians.set(id, { id, path: rail.path, speed: rail.speed, mesh, t: 0 });
 }
@@ -358,9 +375,8 @@ function tickCivilians(dtMs: number): void {
 	for (const civ of activeCivilians.values()) {
 		civ.t += civ.speed * dtS;
 		const { position, finished } = sampleCivilianPath(civ);
-		civ.mesh.position.x = position.x;
-		civ.mesh.position.y = position.y + 0.9;
-		civ.mesh.position.z = position.z;
+		civ.mesh.position.copyFrom(position);
+		civ.mesh.position.y += CAPSULE_HALF_HEIGHT;
 		if (finished) {
 			civ.mesh.dispose();
 			activeCivilians.delete(civ.id);
@@ -422,10 +438,9 @@ function pickAt(xPx: number, yPx: number): PickResult {
 	if (meta?.enemyId) {
 		// Headshot if the picked point is in the top quarter of the capsule.
 		const meshY = pick.pickedMesh.position.y;
-		const halfH = 0.9; // capsule half-height
 		const hitY = pick.pickedPoint?.y ?? meshY;
-		const fromTop = meshY + halfH - hitY;
-		const target: 'head' | 'body' = fromTop < halfH * 0.5 ? 'head' : 'body';
+		const fromTop = meshY + CAPSULE_HALF_HEIGHT - hitY;
+		const target: 'head' | 'body' = fromTop < CAPSULE_HALF_HEIGHT * 0.5 ? 'head' : 'body';
 		return { kind: 'enemy', enemyId: meta.enemyId, target };
 	}
 	if (meta?.civilianId) {
