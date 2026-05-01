@@ -289,6 +289,73 @@ const primitives: Primitive[] = [
 		direction: new Vector3(0, -0.3, -1),
 		conicalAngle: 0.7,
 	},
+	{
+		// Suite is wood-paneled and would render near-black with only the
+		// per-position spots. Warm-tinted hemi sells the executive lounge
+		// without overwhelming the boss-spot reveal at pos-3.
+		id: 'light-fill',
+		kind: 'light',
+		origin: new Vector3(0, 3, 14),
+		yaw: 0,
+		light: 'hemispheric',
+		color: [1.0, 0.9, 0.8],
+		intensity: 0.5,
+	},
+
+	// Executive-suite props per docs/spec/levels/07-executive-suites.md
+	// §"Props & lights". Reception desk → leather booths → wet bar →
+	// Crawford's executive desk at the boss position.
+	{
+		id: 'prop-reception-desk',
+		kind: 'prop',
+		origin: new Vector3(0, 0, 6),
+		yaw: 0,
+		glb: 'props/desk.glb',
+	},
+	{
+		id: 'prop-leather-booth-L',
+		kind: 'prop',
+		origin: new Vector3(-3, 0, 12),
+		yaw: Math.PI / 2,
+		glb: 'props/cabinet-3.glb',
+	},
+	{
+		id: 'prop-leather-booth-R',
+		kind: 'prop',
+		origin: new Vector3(3, 0, 12),
+		yaw: -Math.PI / 2,
+		glb: 'props/cabinet-3.glb',
+	},
+	{
+		id: 'prop-wet-bar',
+		kind: 'prop',
+		origin: new Vector3(0, 0, 14),
+		yaw: 0,
+		glb: 'props/cabinet-1.glb',
+	},
+	{
+		id: 'prop-crawford-desk',
+		kind: 'prop',
+		origin: new Vector3(0, 0, 26),
+		yaw: 0,
+		glb: 'props/desk.glb',
+		scale: 1.4,
+	},
+	// Side credenzas flanking Crawford's office.
+	{
+		id: 'prop-credenza-N',
+		kind: 'prop',
+		origin: new Vector3(-4, 0, 24),
+		yaw: Math.PI / 2,
+		glb: 'props/cabinet-2.glb',
+	},
+	{
+		id: 'prop-credenza-S',
+		kind: 'prop',
+		origin: new Vector3(4, 0, 24),
+		yaw: -Math.PI / 2,
+		glb: 'props/cabinet-2.glb',
+	},
 ];
 
 const cues: Cue[] = [

@@ -106,7 +106,10 @@ const primitives: Primitive[] = [
 		height: 3,
 		pbr: 'drywall',
 	},
-	// Ceiling. Open-plan offices are flat 3m drop-ceiling tile.
+	// Ceiling. Open-plan offices are flat 3m drop-ceiling tile. The spec
+	// calls for a 6×6 grid of cool-white emissive cutouts per
+	// docs/spec/levels/03-open-plan.md §"Floors / ceiling" so the field
+	// reads as fluorescent-lit, not a dark cavern.
 	{
 		id: 'ceiling-cubicle-field',
 		kind: 'ceiling',
@@ -116,6 +119,33 @@ const primitives: Primitive[] = [
 		depth: 24,
 		pbr: 'ceiling-tile',
 		height: 3,
+		emissiveCutouts: [
+			{ width: 1.2, depth: 1.2, offset: [-8, -8], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [-4, -8], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [0, -8], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [4, -8], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [8, -8], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [-8, -4], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [-4, -4], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [0, -4], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [4, -4], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [8, -4], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [-8, 0], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [-4, 0], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [0, 0], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [4, 0], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [8, 0], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [-8, 4], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [-4, 4], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [0, 4], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [4, 4], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [8, 4], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [-8, 8], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [-4, 8], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [0, 8], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [4, 8], intensity: 0.7, color: [1, 1, 0.95] },
+			{ width: 1.2, depth: 1.2, offset: [8, 8], intensity: 0.7, color: [1, 1, 0.95] },
+		],
 	},
 	{
 		id: 'light-fill',
@@ -124,7 +154,9 @@ const primitives: Primitive[] = [
 		yaw: 0,
 		light: 'hemispheric',
 		color: [1.0, 1.0, 0.95],
-		intensity: 0.4,
+		// 0.7 to read with the new ceiling-tile emissive grid; 0.4 was too
+		// dim and rendered the carpet as near-black.
+		intensity: 0.7,
 	},
 
 	// Whiteboards — readable plants for tone + boss-office signage.
@@ -224,6 +256,61 @@ const primitives: Primitive[] = [
 		swing: 'inward',
 		state: 'closed',
 		spawnRailId: 'rail-spawn-whitcomb',
+	},
+
+	// Cubicle furniture — desks scattered through the field. The spec calls
+	// for 15 cubicle dividers + per-cubicle desks; without them the field
+	// reads as a bare carpet box. Spec at docs/spec/levels/03-open-plan.md
+	// §"Props & lights" + §"Cubicle dividers".
+	{
+		id: 'prop-cubicle-desk-L1',
+		kind: 'prop',
+		origin: new Vector3(-4, 0, 5),
+		yaw: 0,
+		glb: 'props/desk.glb',
+	},
+	{
+		id: 'prop-cubicle-desk-R1',
+		kind: 'prop',
+		origin: new Vector3(4, 0, 6),
+		yaw: Math.PI,
+		glb: 'props/desk.glb',
+	},
+	{
+		id: 'prop-cubicle-desk-L2',
+		kind: 'prop',
+		origin: new Vector3(-4, 0, 14),
+		yaw: 0,
+		glb: 'props/desk.glb',
+	},
+	{
+		id: 'prop-cubicle-desk-R2',
+		kind: 'prop',
+		origin: new Vector3(4, 0, 14),
+		yaw: Math.PI,
+		glb: 'props/desk.glb',
+	},
+	{
+		id: 'prop-cubicle-cabinet-mid-L',
+		kind: 'prop',
+		origin: new Vector3(-6, 0, 12),
+		yaw: Math.PI / 2,
+		glb: 'props/cabinet-1.glb',
+	},
+	{
+		id: 'prop-cubicle-cabinet-mid-R',
+		kind: 'prop',
+		origin: new Vector3(6, 0, 12),
+		yaw: -Math.PI / 2,
+		glb: 'props/cabinet-2.glb',
+	},
+	{
+		id: 'prop-whitcomb-desk',
+		kind: 'prop',
+		origin: new Vector3(0, 0, 23),
+		yaw: 0,
+		glb: 'props/desk.glb',
+		scale: 1.2,
 	},
 
 	// Lights.

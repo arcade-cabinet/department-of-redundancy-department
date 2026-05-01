@@ -160,7 +160,17 @@ if (!(import.meta?.env?.PROD ?? false)) {
 			constructLevel(id);
 			game.transitionLevel(id);
 		},
+		// Fast-forward the encounter director by `ms` of simulated time. The
+		// director's tick handles arbitrary deltas, so feeding a 30000ms tick
+		// jumps the rail through any number of dwell windows. Used by the
+		// visual-audit harness to reach mid-/late-level camera positions
+		// without waiting real time.
+		fastForward: (ms: number) => director?.tick(ms),
 	};
+	// God-mode toggle for the visual-audit harness. When true, takeDamage
+	// is short-circuited so the audit can fast-forward through firing
+	// enemies without dying mid-screenshot. Dev-only, same PROD gate.
+	(globalThis as { __dordGod?: boolean }).__dordGod = false;
 }
 const overlay = new Overlay('dord-ui', uiScene);
 const reticle = new Reticle(overlay);
@@ -597,6 +607,7 @@ function constructLevel(levelId: LevelId): void {
 			void event;
 		},
 		onPlayerDamage(damage) {
+			if ((globalThis as { __dordGod?: boolean }).__dordGod) return;
 			game.takeDamage(damage);
 		},
 		onCameraUpdate(position, lookAt) {
