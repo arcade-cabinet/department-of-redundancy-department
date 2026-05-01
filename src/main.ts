@@ -1,8 +1,7 @@
 import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
 import { Engine } from '@babylonjs/core/Engines/engine';
-import { ImportMeshAsync } from '@babylonjs/core/Loading/sceneLoader';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
-import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
+import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
@@ -14,7 +13,6 @@ import '@babylonjs/loaders/glTF';
 
 import { AudioBus } from './audio/AudioBus';
 import {
-	ARCHETYPES,
 	BOSSES,
 	bossIdForEnemy,
 	type Cue,
@@ -70,6 +68,10 @@ import {
 	handleShutterCue as handleShutterCueImpl,
 	openDoorsBy as openDoorsByImpl,
 } from './runtime/cueHelpers';
+import {
+	buildTitleScene as buildTitleSceneImpl,
+	loadBossGlb as loadBossGlbImpl,
+} from './runtime/levelLifecycle';
 import {
 	type PickResult,
 	pickAt as pickAtImpl,
@@ -143,20 +145,10 @@ uiScene.autoClearDepthAndStencil = false;
 // never runs against a soon-to-be-disposed scene.
 const sharedBrdf = GetEnvironmentBRDFTexture(uiScene);
 
-// Title-screen scene. While at the title we render this; constructLevel
-// disposes and replaces it on INSERT COIN. The UI scene above is the one
-// that hosts all overlays and survives the swap. After game-over /
-// returnToTitle, `enterTitleScene()` rebuilds this so overlays don't
-// composite over a corpse-of-lobby.
-function buildTitleScene(): Scene {
-	const s = new Scene(engine);
-	s.environmentBRDFTexture = sharedBrdf;
-	s.clearColor = new Color4(0.082, 0.094, 0.11, 1);
-	const titleCam = new FreeCamera('title-cam', new Vector3(0, 1.6, 0), s);
-	titleCam.minZ = 0.05;
-	s.activeCamera = titleCam;
-	return s;
-}
+// Title-screen scene factory bound to this module's engine + shared BRDF.
+// `constructLevel` disposes the result on INSERT COIN; `routeOverlay`
+// rebuilds via this same closure on game-over → title.
+const buildTitleScene = (): Scene => buildTitleSceneImpl(engine, sharedBrdf);
 
 const runtime = createRuntimeContext();
 
@@ -508,47 +500,6 @@ async function emitGameOver(state: GameState, score: number, cleared: boolean): 
 
 // ── Level construction ──────────────────────────────────────────────────────
 
-// Imported nodes arrive as a tree of multiple top-level meshes, plus
-// particle systems and skeletons that need their own dispose calls to
-// release GPU buffers — `meshes[0].dispose()` alone leaks the rest.
-function disposeImportResult(result: {
-	readonly meshes: readonly AbstractMesh[];
-	readonly particleSystems?: readonly { dispose(): void }[];
-	readonly skeletons?: readonly { dispose(): void }[];
-}): void {
-	for (const m of result.meshes) m.dispose();
-	for (const ps of result.particleSystems ?? []) ps.dispose();
-	for (const sk of result.skeletons ?? []) sk.dispose();
-}
-
-// Load the archetype GLB for a boss enemy and parent it to the hitbox
-// capsule. Async; bails if the spawn-time scene was disposed before the
-// import resolved (e.g., player died mid-load and the level was torn down).
-function loadBossGlb(spawnScene: Scene, capsule: AbstractMesh, enemy: Enemy): void {
-	const glb = ARCHETYPES[enemy.archetypeId].glb;
-	ImportMeshAsync(`/assets/models/${glb}`, spawnScene)
-		.then((result) => {
-			if (spawnScene.isDisposed || capsule.isDisposed() || scene !== spawnScene) {
-				disposeImportResult(result);
-				return;
-			}
-			const root = result.meshes[0];
-			if (!root) return;
-			root.name = `boss-glb-${enemy.id}`;
-			root.parent = capsule;
-			root.position.y = -CAPSULE_HALF_HEIGHT;
-			// Reaper is the final boss — scale up so they read as a ~3m
-			// menacing figure. Other bosses are reskinned grunts at native
-			// scale.
-			if (enemy.archetypeId === 'reaper') {
-				root.scaling.setAll(2.0);
-			}
-		})
-		.catch((err) => {
-			console.warn(`[boss-glb] failed to load ${glb}`, err);
-		});
-}
-
 function constructLevel(levelId: LevelId): void {
 	// Pause the render loop across the dispose+rebuild boundary. Defence
 	// against any partial-frame rendering of a scene that's mid-teardown
@@ -656,7 +607,7 @@ function constructLevel(levelId: LevelId): void {
 			// purely visual. If the GLB load fails (404, network), the
 			// colored capsule stays as the visible body.
 			if (isBoss) {
-				loadBossGlb(scene, mesh, enemy);
+				loadBossGlbImpl(scene, mesh, enemy, () => scene);
 			}
 		},
 		onEnemyMove(enemyId, position) {
