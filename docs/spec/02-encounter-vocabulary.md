@@ -21,12 +21,14 @@ Levels never invent archetypes or fire programs — they pick from the tables be
 
 An archetype is a stat-line + weakpoint map. The GLB asset is shared across the four canonical attacker archetypes by reskinning the material LUT (each archetype has a distinct material tint). The fifth and sixth archetypes (intern/consultant/executive) are non-combat civilians; the seventh (Reaper) is the final boss.
 
+**Lore note.** The combatants the auditor faces are all corporate staff — not police. The IDs `security-guard` and `swat` are stable internal handles; their in-fiction roles are *Office Security Guard* (rank-and-file uniformed staff) and *Head of Security* (the office's tactical-response tier — armored, helmeted, deployed late-game). The auditor is not fighting the law.
+
 | Archetype id | GLB | HP | Weakpoint | Justice-shot target | Body damage | Head damage | Civilian? |
 |---|---|---|---|---|---|---|---|
-| `security-guard` | `policeman.glb` | 80 | head | weapon-hand | 100 | 250 | no |
+| `security-guard` (Office Security Guard) | `security-guard.glb` | 80 | head | weapon-hand | 100 | 250 | no |
 | `middle-manager` | `middle-manager.glb` | 60 | head | tie-knot | 100 | 250 | no |
 | `hitman` | `hitman.glb` | 100 | head | weapon-hand | 100 | 250 | no |
-| `swat` | `swat.glb` | 140 | head (helmet halves head damage) | weapon-hand | 100 | 250 | no |
+| `swat` (Head of Security) | `head-of-security.glb` | 140 | head (helmet halves head damage) | weapon-hand | 100 | 250 | no |
 | `intern` | `(office-worker-intern.glb)` ※ | n/a | n/a | n/a | n/a | n/a | yes |
 | `consultant` | `(office-worker-consultant.glb)` ※ | n/a | n/a | n/a | n/a | n/a | yes |
 | `executive` | `(office-worker-executive.glb)` ※ | n/a | n/a | n/a | n/a | n/a | yes |

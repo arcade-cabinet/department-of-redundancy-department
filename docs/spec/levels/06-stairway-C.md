@@ -79,11 +79,11 @@ sequenceDiagram
     Player-->>PaintingDoor: Headshot
 
     Note over UpperFlight: t=8s
-    UpperFlight->>Player: cover-pop<br/>Policeman
+    UpperFlight->>Player: cover-pop<br/>Office Security Guard
     Player-->>UpperFlight: Time peek
 
     Note over LowerWell: t=12s
-    LowerWell->>Player: crawler ×2<br/>Hitman + Policeman
+    LowerWell->>Player: crawler ×2<br/>Hitman + Office Security Guard
     Note over Player: Hitman-tier crawler — fast lunge
     Player-->>LowerWell: Sweep — prioritize hitman
 
@@ -93,7 +93,7 @@ sequenceDiagram
     Player-->>UpperFlight: Mid-air shot
 
     Note over Rail: t=24s
-    Rail->>Player: charge<br/>Policeman from lower well
+    Rail->>Player: charge<br/>Office Security Guard from lower well
     Player-->>Rail: Sustained fire
 
     Note over Rail: t=28s — Position cleared
@@ -104,10 +104,10 @@ sequenceDiagram
 | t | Beat | Enemy | Notes |
 |---|---|---|---|
 | 2.0s | door-burst (hidden) | hitman | First hidden-door reveal |
-| 8.0s | cover-pop | policeman | Upper flight |
-| 12.0s | crawler ×2 | hitman + policeman | Lower well |
+| 8.0s | cover-pop | office security guard | Upper flight |
+| 12.0s | crawler ×2 | hitman + office security guard | Lower well |
 | 20.0s | vault-drop | hitman | From upper bannister |
-| 24.0s | charge | policeman | Lower well |
+| 24.0s | charge | office security guard | Lower well |
 
 Six enemies. The hidden-door reveal is Stairway C's signature new beat — paintings, vases, even one wall section will swing open as enemy doors. The player can't trust visual environment cues to mean "scenery only."
 
@@ -131,9 +131,9 @@ sequenceDiagram
 
     Note over Doors: t=3s — synchronized creak (wider mass-pop)
     par Left Doors
-        Doors->>Player: door-burst (×2)<br/>Hitman + Policeman
+        Doors->>Player: door-burst (×2)<br/>Hitman + Office Security Guard
     and Right Doors
-        Doors->>Player: door-burst (×2)<br/>Policeman + Manager
+        Doors->>Player: door-burst (×2)<br/>Office Security Guard + Manager
     end
 
     Note over Player: 4 simultaneous orange reticles<br/>Sweep-fire moment
@@ -144,7 +144,7 @@ sequenceDiagram
     Player-->>Bannister: Two mid-air shots
 
     Note over Doors: t=22s — second wave from same doors
-    Doors->>Player: cover-pop ×2<br/>Hitman left + Policeman right
+    Doors->>Player: cover-pop ×2<br/>Hitman left + Office Security Guard right
     Player-->>Doors: Justice-shot opportunity (left hitman glint)
 
     Note over Rail: t=28s — optional crate-pop
@@ -157,9 +157,9 @@ sequenceDiagram
 
 | t | Beat | Enemy | Notes |
 |---|---|---|---|
-| 3.0s | mass-pop ×4 | hitman + policeman + policeman + manager | 4-door synchronized burst |
+| 3.0s | mass-pop ×4 | hitman + office security guard + office security guard + manager | 4-door synchronized burst |
 | 14.0s | vault-drop ×2 | hitman + hitman | Over-the-bannister |
-| 22.0s | cover-pop ×2 | hitman + policeman | Door cycles |
+| 22.0s | cover-pop ×2 | hitman + office security guard | Door cycles |
 | 28.0s | crate-pop | potted fern (optional) | Ammo |
 
 Eight enemies + 1 optional crate. Larger than any prior mass-pop. The over-the-bannister vault-drop layer is new — the player must scan vertically AND horizontally simultaneously.
@@ -192,7 +192,7 @@ sequenceDiagram
     Player-->>Sniper: Sustained fire OR break LOS
 
     Note over Doors: t=8s
-    Doors->>Player: door-burst ×2<br/>Two policemen
+    Doors->>Player: door-burst ×2<br/>Two office security guards
     Player-->>Doors: Headshots
 
     Note over LowerWell: t=14s
@@ -204,7 +204,7 @@ sequenceDiagram
     Note over Player: Decision: save for ad-rush or use now?
 
     Note over Doors: t=22s — ad rush (if chandelier unused)
-    Doors->>Player: door-burst ×3<br/>Manager + Policeman + Hitman
+    Doors->>Player: door-burst ×3<br/>Manager + Office Security Guard + Hitman
     Note over Player: 3-target sweep OR drop chandelier
     Player-->>Doors: Sweep OR chandelier crash
 
@@ -220,10 +220,10 @@ sequenceDiagram
 | t | Beat | Enemy | Notes |
 |---|---|---|---|
 | 2.0s | rooftop-sniper | hitman | Upper bannister, laser-sight cue |
-| 8.0s | door-burst ×2 | policeman + policeman | Landing doors |
+| 8.0s | door-burst ×2 | office security guard + office security guard | Landing doors |
 | 14.0s | crawler | hitman | Lower well |
 | 18.0s | (mineable) | chandelier | Tactical area-clear, optional |
-| 22.0s | door-burst ×3 | manager + policeman + hitman | Ad rush |
+| 22.0s | door-burst ×3 | manager + office security guard + hitman | Ad rush |
 | 28.0s | rooftop-sniper (cond.) | hitman | Only fires if not killed at t=2s |
 
 Six enemies + 3 ad-rush + 1 conditional sniper repeat = up to 10 enemies. The chandelier is a **tactical pickup** — the player chooses when to use it. This is the first taste of player tactical agency beyond shoot/cover.
@@ -257,7 +257,7 @@ The chandelier is the only player-facing tactical object in the run — it is a 
 
 ## Memory budget
 
-Persistent from HR Corridor: hands, staple-rifle, manager + policeman + hitman GLBs. Loaded for Stairway C: walnut-stair GLB (NEW — not the metal stairs from A/B), brass-rail prop, oil-painting GLB (instanced 8-10 times with material variants per portrait), chandelier-GLB (single instance), red-carpet-runner GLB, hidden-door-painting variant.
+Persistent from HR Corridor: hands, staple-rifle, manager + office security guard + hitman GLBs. Loaded for Stairway C: walnut-stair GLB (NEW — not the metal stairs from A/B), brass-rail prop, oil-painting GLB (instanced 8-10 times with material variants per portrait), chandelier-GLB (single instance), red-carpet-runner GLB, hidden-door-painting variant.
 
 Total VRAM during Stairway C: ~33 MB (3 MB net add — walnut stair material + chandelier offsets disposed Stairway A/B metal stairs).
 

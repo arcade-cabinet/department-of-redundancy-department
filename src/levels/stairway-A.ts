@@ -270,7 +270,7 @@ const cues: Cue[] = [
 		},
 	},
 
-	// Position 2 — landing-door wave (synchronized 4-pop, first policeman).
+	// Position 2 — landing-door wave (synchronized 4-pop, first office security guard).
 	{
 		id: 'p2-door-L',
 		trigger: { kind: 'on-arrive', railNodeId: 'pos-landing-wave' },

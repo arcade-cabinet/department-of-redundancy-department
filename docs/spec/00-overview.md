@@ -108,7 +108,7 @@ Every existing curated asset has a v1 home in this design:
 
 | Asset | Use |
 |---|---|
-| `policeman.glb`, `middle-manager.glb`, `hitman.glb`, `swat.glb` | Enemy archetypes (per `02-encounter-vocabulary.md`) |
+| `security-guard.glb`, `middle-manager.glb`, `hitman.glb`, `head-of-security.glb` | Enemy archetypes (per `02-encounter-vocabulary.md`) — `security-guard` is the Office Security Guard, `head-of-security` is the Head of Security |
 | `hr-reaper.glb` | Final boss (Boardroom) |
 | `desk.glb`, `cabinet-1/2/3.glb`, `bedside-1/2.glb`, `closet.glb` | Cubicle / executive props |
 | `staircase-1.glb`, `staircase-2.glb` | Stairway-level core geometry |

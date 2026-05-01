@@ -4,6 +4,13 @@ import type { SpawnRailState } from './SpawnRail';
 
 /**
  * Archetype id — mirrors docs/spec/02-encounter-vocabulary.md table.
+ *
+ * Lore mapping (the IDs are stable internal handles; in-fiction labels are):
+ *   security-guard  — Office Security Guard (rank-and-file uniformed staff)
+ *   middle-manager  — Middle Manager (the most numerous threat)
+ *   hitman          — Hitman (corporate-contracted assassin)
+ *   swat            — Head of Security (the office's tactical-response tier)
+ *   reaper          — The Reaper of HR (final boss)
  */
 export type ArchetypeId = 'security-guard' | 'middle-manager' | 'hitman' | 'swat' | 'reaper';
 
@@ -20,7 +27,7 @@ export interface Archetype {
 export const ARCHETYPES: Readonly<Record<ArchetypeId, Archetype>> = {
 	'security-guard': {
 		id: 'security-guard',
-		glb: 'characters/policeman.glb',
+		glb: 'characters/security-guard.glb',
 		hp: 80,
 		weakpoint: 'head',
 		justiceShotTarget: 'weapon-hand',
@@ -47,7 +54,7 @@ export const ARCHETYPES: Readonly<Record<ArchetypeId, Archetype>> = {
 	},
 	swat: {
 		id: 'swat',
-		glb: 'characters/swat.glb',
+		glb: 'characters/head-of-security.glb',
 		hp: 140,
 		weakpoint: 'head',
 		justiceShotTarget: 'weapon-hand',
