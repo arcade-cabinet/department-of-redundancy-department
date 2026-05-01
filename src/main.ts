@@ -145,11 +145,18 @@ const pendingCueActions: CueAction[] = [];
 
 const game = new Game();
 
+// Module-level dev/prod constant. Vite inlines `import.meta.env.PROD` at
+// build time, so `IS_DEV` is a compile-time constant. Every `if (IS_DEV)`
+// branch tree-shakes to nothing in production — including the god-mode
+// short-circuit in `onPlayerDamage` below. Without this hoist, the
+// runtime `globalThis.__dordGod` read survives in shipped bundles and
+// becomes a trivially-discoverable cheat surface.
+const IS_DEV = !(import.meta?.env?.PROD ?? false);
+
 // Debug surface for visual-audit screenshots — exposes the Game state
 // machine + engine handle so the audit harness can drive overlays without
-// pointer-event flakiness. Stripped from production by the same
-// `import.meta.env.PROD` gate as the engine clock test hooks.
-if (!(import.meta?.env?.PROD ?? false)) {
+// pointer-event flakiness. Stripped from production by `IS_DEV`.
+if (IS_DEV) {
 	(globalThis as { __dord?: unknown }).__dord = {
 		game,
 		engine,
@@ -164,12 +171,13 @@ if (!(import.meta?.env?.PROD ?? false)) {
 		// director's tick handles arbitrary deltas, so feeding a 30000ms tick
 		// jumps the rail through any number of dwell windows. Used by the
 		// visual-audit harness to reach mid-/late-level camera positions
-		// without waiting real time.
-		fastForward: (ms: number) => director?.tick(ms),
+		// without waiting real time. Clamped to non-negative finite to
+		// guard against negative or NaN deltas corrupting director state.
+		fastForward: (ms: number) => director?.tick(Math.max(0, Number.isFinite(ms) ? ms : 0)),
 	};
 	// God-mode toggle for the visual-audit harness. When true, takeDamage
 	// is short-circuited so the audit can fast-forward through firing
-	// enemies without dying mid-screenshot. Dev-only, same PROD gate.
+	// enemies without dying mid-screenshot.
 	(globalThis as { __dordGod?: boolean }).__dordGod = false;
 }
 const overlay = new Overlay('dord-ui', uiScene);
@@ -607,7 +615,10 @@ function constructLevel(levelId: LevelId): void {
 			void event;
 		},
 		onPlayerDamage(damage) {
-			if ((globalThis as { __dordGod?: boolean }).__dordGod) return;
+			// `IS_DEV` is a Vite compile-time constant — this entire branch
+			// tree-shakes in production builds, so the `__dordGod` cheat
+			// surface never ships.
+			if (IS_DEV && (globalThis as { __dordGod?: boolean }).__dordGod) return;
 			game.takeDamage(damage);
 		},
 		onCameraUpdate(position, lookAt) {
