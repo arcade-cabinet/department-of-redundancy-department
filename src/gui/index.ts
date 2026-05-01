@@ -1,5 +1,6 @@
 export { ContinueOverlay } from './ContinueOverlay';
 export { GameOverOverlay, type GameOverSummary } from './GameOverOverlay';
+export { HudOverlay } from './HudOverlay';
 export { InsertCoinOverlay } from './InsertCoinOverlay';
 export { Overlay } from './Overlay';
 export { Reticle, type ReticleColor } from './Reticle';
