@@ -13,22 +13,21 @@
 
 const FIXED_FRAME_DT_MS = 1000 / 60;
 
+// Test hooks are stripped from production via Vite's `import.meta.env.PROD`
+// constant — any attempt to set `?frame=N` on a production URL is ignored,
+// preventing the determinism-bypass surface flagged by the security audit.
+// `import.meta.env` is always defined under Vite (dev, build, and node tests
+// via vitest); the optional-chain belt + suspenders covers exotic loaders.
+const TEST_HOOKS_ENABLED = !(import.meta?.env?.PROD ?? false);
+
 function readQueryParams(): URLSearchParams {
-	if (typeof globalThis === 'undefined' || !('location' in globalThis)) {
-		return new URLSearchParams();
-	}
-	try {
-		// Wrapped to tolerate exotic environments (e.g. node test harness)
-		// where `globalThis.location` might exist as a stub without a search.
-		const search = (globalThis as { location?: { search?: string } }).location?.search ?? '';
-		return new URLSearchParams(search);
-	} catch {
-		return new URLSearchParams();
-	}
+	if (!TEST_HOOKS_ENABLED) return new URLSearchParams();
+	const search = (globalThis as { location?: { search?: string } }).location?.search ?? '';
+	return new URLSearchParams(search);
 }
 
 const params = readQueryParams();
-const frameDriven = params.has('frame');
+const frameDriven = TEST_HOOKS_ENABLED && params.has('frame');
 
 let virtualMs = 0;
 

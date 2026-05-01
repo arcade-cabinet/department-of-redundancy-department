@@ -1,6 +1,7 @@
 import { Button } from '@babylonjs/gui/2D/controls/button';
 import { Control } from '@babylonjs/gui/2D/controls/control';
 import { TextBlock } from '@babylonjs/gui/2D/controls/textBlock';
+import { now } from '../engine/clock';
 import type { Overlay } from './Overlay';
 
 const COUNTDOWN_MS = 10000;
@@ -83,12 +84,12 @@ export class ContinueOverlay {
 		this.skipButton.onPointerUpObservable.add(() => onTimeout());
 		this.overlay.add(this.skipButton);
 
-		this.startedAt = performance.now();
+		this.startedAt = now();
 		this.tick();
 	}
 
 	private tick = (): void => {
-		const elapsed = performance.now() - this.startedAt;
+		const elapsed = now() - this.startedAt;
 		this.remainingMs = Math.max(0, COUNTDOWN_MS - elapsed);
 		const seconds = Math.ceil(this.remainingMs / 1000);
 		this.countdown.text = String(seconds);

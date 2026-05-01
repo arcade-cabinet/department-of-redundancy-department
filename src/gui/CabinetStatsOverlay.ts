@@ -1,9 +1,10 @@
-import { Button } from '@babylonjs/gui/2D/controls/button';
+import type { Button } from '@babylonjs/gui/2D/controls/button';
 import { Control } from '@babylonjs/gui/2D/controls/control';
-import { Rectangle } from '@babylonjs/gui/2D/controls/rectangle';
+import type { Rectangle } from '@babylonjs/gui/2D/controls/rectangle';
 import { TextBlock } from '@babylonjs/gui/2D/controls/textBlock';
 import type { QuartersStats } from '../game/quarters';
 import { COLOR_MUTED, COLOR_PAPER, FONT_BODY, FONT_DISPLAY } from './brand';
+import { makeLedgerCloseButton, makeLedgerPanel, makeLedgerTitle } from './ledgerPanel';
 import type { Overlay } from './Overlay';
 
 const PANEL_WIDTH = 540;
@@ -11,21 +12,17 @@ const PANEL_HEIGHT = 360;
 const ROW_HEIGHT = 56;
 const QUARTERS_GOLD = '#FFD55A';
 
-interface StatRow {
-	readonly label: TextBlock;
-	readonly value: TextBlock;
+interface StatSpec {
+	readonly id: string;
+	readonly label: string;
+	readonly value: string;
+	readonly color: string;
 }
 
-function buildStatRow(
-	id: string,
-	label: string,
-	value: string,
-	rowIdx: number,
-	color: string,
-): StatRow {
+function buildStatRow(spec: StatSpec, rowIdx: number): readonly TextBlock[] {
 	const top = -(PANEL_HEIGHT / 2) + 96 + ROW_HEIGHT * rowIdx;
-	const labelBlock = new TextBlock(`cabinet-stats-${id}-label`);
-	labelBlock.text = label;
+	const labelBlock = new TextBlock(`cabinet-stats-${spec.id}-label`);
+	labelBlock.text = spec.label;
 	labelBlock.color = COLOR_MUTED;
 	labelBlock.fontSize = 18;
 	labelBlock.fontFamily = FONT_BODY;
@@ -36,9 +33,9 @@ function buildStatRow(
 	labelBlock.paddingLeft = '40px';
 	labelBlock.top = `${top}px`;
 
-	const valueBlock = new TextBlock(`cabinet-stats-${id}-value`);
-	valueBlock.text = value;
-	valueBlock.color = color;
+	const valueBlock = new TextBlock(`cabinet-stats-${spec.id}-value`);
+	valueBlock.text = spec.value;
+	valueBlock.color = spec.color;
 	valueBlock.fontSize = 32;
 	valueBlock.fontFamily = FONT_DISPLAY;
 	valueBlock.fontWeight = 'bold';
@@ -49,7 +46,7 @@ function buildStatRow(
 	valueBlock.paddingRight = '40px';
 	valueBlock.top = `${top}px`;
 
-	return { label: labelBlock, value: valueBlock };
+	return [labelBlock, valueBlock];
 }
 
 /**
@@ -61,10 +58,7 @@ function buildStatRow(
 export class CabinetStatsOverlay {
 	private readonly panel: Rectangle;
 	private readonly title: TextBlock;
-	private readonly currentBalance: StatRow;
-	private readonly lifetimeEarned: StatRow;
-	private readonly lifetimeSpent: StatRow;
-	private readonly friendBailouts: StatRow;
+	private readonly statBlocks: readonly TextBlock[];
 	private readonly closeButton: Button;
 
 	constructor(
@@ -72,108 +66,50 @@ export class CabinetStatsOverlay {
 		stats: QuartersStats,
 		onClose: () => void,
 	) {
-		this.panel = this.makePanel();
+		this.panel = makeLedgerPanel('cabinet-stats', PANEL_WIDTH, PANEL_HEIGHT);
 		overlay.add(this.panel);
 
-		this.title = this.makeTitle();
+		this.title = makeLedgerTitle('cabinet-stats', 'CABINET STATS', PANEL_WIDTH, PANEL_HEIGHT);
 		overlay.add(this.title);
 
-		this.currentBalance = buildStatRow(
-			'balance',
-			'CURRENT QUARTERS',
-			String(stats.balance),
-			0,
-			QUARTERS_GOLD,
-		);
-		this.lifetimeEarned = buildStatRow(
-			'earned',
-			'LIFETIME EARNED',
-			String(stats.lifetimeEarned),
-			1,
-			COLOR_PAPER,
-		);
-		this.lifetimeSpent = buildStatRow(
-			'spent',
-			'LIFETIME SPENT',
-			String(stats.lifetimeSpent),
-			2,
-			COLOR_PAPER,
-		);
-		this.friendBailouts = buildStatRow(
-			'bailouts',
-			'FRIENDLY BAILOUTS',
-			String(stats.friendBailoutCount),
-			3,
-			COLOR_PAPER,
-		);
+		const specs: readonly StatSpec[] = [
+			{
+				id: 'balance',
+				label: 'CURRENT QUARTERS',
+				value: String(stats.balance),
+				color: QUARTERS_GOLD,
+			},
+			{
+				id: 'earned',
+				label: 'LIFETIME EARNED',
+				value: String(stats.lifetimeEarned),
+				color: COLOR_PAPER,
+			},
+			{
+				id: 'spent',
+				label: 'LIFETIME SPENT',
+				value: String(stats.lifetimeSpent),
+				color: COLOR_PAPER,
+			},
+			{
+				id: 'bailouts',
+				label: 'FRIENDLY BAILOUTS',
+				value: String(stats.friendBailoutCount),
+				color: COLOR_PAPER,
+			},
+		];
+		const blocks = specs.flatMap((spec, idx) => buildStatRow(spec, idx));
+		for (const block of blocks) overlay.add(block);
+		this.statBlocks = blocks;
 
-		for (const row of [
-			this.currentBalance,
-			this.lifetimeEarned,
-			this.lifetimeSpent,
-			this.friendBailouts,
-		]) {
-			overlay.add(row.label);
-			overlay.add(row.value);
-		}
-
-		this.closeButton = this.makeCloseButton(onClose);
+		this.closeButton = makeLedgerCloseButton('cabinet-stats', PANEL_HEIGHT, onClose);
 		overlay.add(this.closeButton);
-	}
-
-	private makePanel(): Rectangle {
-		const r = new Rectangle('cabinet-stats-panel');
-		r.width = `${PANEL_WIDTH}px`;
-		r.height = `${PANEL_HEIGHT}px`;
-		r.thickness = 2;
-		r.color = COLOR_PAPER;
-		r.background = 'rgba(21, 24, 28, 0.92)';
-		r.cornerRadius = 8;
-		return r;
-	}
-
-	private makeTitle(): TextBlock {
-		const t = new TextBlock('cabinet-stats-title');
-		t.text = 'CABINET STATS';
-		t.color = COLOR_PAPER;
-		t.fontSize = 36;
-		t.fontFamily = FONT_DISPLAY;
-		t.fontWeight = 'bold';
-		t.height = '48px';
-		t.width = `${PANEL_WIDTH - 40}px`;
-		t.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
-		t.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
-		t.top = `${-(PANEL_HEIGHT / 2) + 24}px`;
-		return t;
-	}
-
-	private makeCloseButton(onClose: () => void): Button {
-		const b = Button.CreateSimpleButton('cabinet-stats-close', 'BACK');
-		b.width = '180px';
-		b.height = '44px';
-		b.color = COLOR_PAPER;
-		b.background = '#15181C';
-		b.fontSize = 20;
-		b.fontWeight = 'bold';
-		b.thickness = 2;
-		b.cornerRadius = 6;
-		b.top = `${PANEL_HEIGHT / 2 - 22}px`;
-		b.onPointerUpObservable.add(() => onClose());
-		return b;
 	}
 
 	dispose(): void {
 		this.overlay.remove(this.panel);
 		this.overlay.remove(this.title);
-		for (const row of [
-			this.currentBalance,
-			this.lifetimeEarned,
-			this.lifetimeSpent,
-			this.friendBailouts,
-		]) {
-			this.overlay.remove(row.label);
-			this.overlay.remove(row.value);
-		}
+		for (const block of this.statBlocks) this.overlay.remove(block);
 		this.overlay.remove(this.closeButton);
 	}
 }

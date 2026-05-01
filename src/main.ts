@@ -114,11 +114,16 @@ let activeOverlayDispose: (() => void) | null = null;
 let overlayGeneration = 0;
 let hud: HudOverlay | null = null;
 let narrator: NarratorOverlay | null = null;
-let lastTickMs = now();
 
-// Install `?frame=N` deterministic-replay hook before any wall-clock read.
-// No-op outside frame-driven mode.
+// Install `?frame=N` deterministic-replay hook BEFORE the first wall-clock
+// read. Otherwise `lastTickMs` would be captured at virtualMs=0, then
+// installTestHooks would jump virtualMs forward by `?frame=N`, giving the
+// first tick a 64ms-clamped delta — silently breaking frame 1 of replay.
+// In production builds (Vite `import.meta.env.PROD`) this is a no-op stub
+// so the test surface is tree-shaken from the shipped bundle.
 installTestHooks();
+
+let lastTickMs = now();
 
 const settings: Settings = await loadSettings();
 await initQuarters();
@@ -261,11 +266,19 @@ function handleInsertCoin(): void {
 		activeOverlayDispose();
 		activeOverlayDispose = null;
 	}
+	let modalDisposed = false;
+	const disposeOnce = (): void => {
+		if (modalDisposed) return;
+		modalDisposed = true;
+		modal.dispose();
+	};
 	const modal = new FriendModalOverlay(overlay, () => {
 		audioBus?.playStinger('ui/ui-confirm.mp3', 0.7);
-		modal.dispose();
+		disposeOnce();
 		activeOverlayDispose = null;
-		friendModalOpen = false;
+		// Hold `friendModalOpen=true` until the bailout has resolved so a
+		// rapid re-tap of INSERT COIN cannot stack a second modal (and a
+		// second +8 grant) while the first grant is still in flight.
 		grantFriendBailout()
 			.then(() => game.insertCoin(now()))
 			.catch((err) => {
@@ -273,10 +286,13 @@ function handleInsertCoin(): void {
 				// Still let the player play — re-route to insert-coin so they
 				// can tap again or see the modal again with a fresh attempt.
 				game.returnToTitle();
+			})
+			.finally(() => {
+				friendModalOpen = false;
 			});
 	});
 	activeOverlayDispose = () => {
-		modal.dispose();
+		disposeOnce();
 		friendModalOpen = false;
 	};
 }
@@ -815,10 +831,13 @@ canvas.addEventListener('pointerdown', (e) => {
 	const fired = game.tryFire(now());
 	if (!fired) return;
 	const pick = pickAt(e.clientX, e.clientY);
-	// Adaptive difficulty: only enemy hits preserve the hitless-kill streak.
-	// Civilians, health-kit shots, and air all break the streak (wasted
-	// rounds = bad trigger discipline = the director gives less of a discount).
-	director.notifyShotResult(pick.kind === 'enemy');
+	// Adaptive difficulty: enemy hits AND deliberate health-kit pickups
+	// preserve the hitless-kill streak — both are intentional, useful trigger
+	// pulls. Civilian hits and air shots break it (wasted rounds / bad
+	// trigger discipline). The director's discount only erodes on actual
+	// missed shots, taken damage, or arrival at a new dwell position.
+	const shotPreservesStreak = pick.kind === 'enemy' || pick.kind === 'health-kit';
+	director.notifyShotResult(shotPreservesStreak);
 	if (pick.kind === 'enemy' && pick.enemyId && pick.target) {
 		director.hitEnemy(pick.enemyId, pick.target);
 	} else if (pick.kind === 'civilian' && pick.civilianId) {

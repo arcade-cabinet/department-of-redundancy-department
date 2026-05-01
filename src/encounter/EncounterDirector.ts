@@ -260,11 +260,6 @@ export class EncounterDirector {
 		this.listener.onEnemyKill(enemyId);
 	}
 
-	/**
-	 * Notify the director about a player shot outcome. Misses reset the
-	 * adaptive-difficulty streak. Hits are no-ops here — the streak only
-	 * advances when a hit becomes a kill (handled in `killEnemy`).
-	 */
 	notifyShotResult(hit: boolean): void {
 		if (!hit) this.hitlessKills = 0;
 	}

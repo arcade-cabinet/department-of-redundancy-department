@@ -34,12 +34,15 @@ export interface QuartersStats {
 	readonly friendBailoutCount: number;
 }
 
-const ZERO_STATS: QuartersStats = {
+// Frozen at module load so a misbehaving caller cannot mutate the shared
+// pre-init snapshot via the (TS-`readonly`-only) `getLifetimeStats()`
+// return reference and poison every subsequent reader.
+const ZERO_STATS: QuartersStats = Object.freeze({
 	balance: 0,
 	lifetimeEarned: 0,
 	lifetimeSpent: 0,
 	friendBailoutCount: 0,
-};
+});
 
 let cached: QuartersStats | null = null;
 const listeners = new Set<Listener>();
@@ -83,19 +86,19 @@ async function ensureLoaded(): Promise<QuartersStats> {
 		readNumber(KEYS.lifetimeSpent, 0),
 		readNumber(KEYS.friendBailoutCount, 0),
 	]);
-	cached = { balance, lifetimeEarned, lifetimeSpent, friendBailoutCount };
+	cached = Object.freeze({ balance, lifetimeEarned, lifetimeSpent, friendBailoutCount });
 	return cached;
 }
 
 async function update(next: QuartersStats): Promise<void> {
 	// Belt + suspenders: never persist a negative balance even if a caller
 	// computed one through arithmetic on a corrupted prior value.
-	const safe: QuartersStats = {
+	const safe: QuartersStats = Object.freeze({
 		balance: Math.max(0, next.balance),
 		lifetimeEarned: Math.max(0, next.lifetimeEarned),
 		lifetimeSpent: Math.max(0, next.lifetimeSpent),
 		friendBailoutCount: Math.max(0, next.friendBailoutCount),
-	};
+	});
 	cached = safe;
 	await Promise.all([
 		writeNumber(KEYS.balance, safe.balance),
