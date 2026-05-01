@@ -170,18 +170,18 @@ export const FIRE_PATTERNS: Readonly<Record<FirePatternId, FirePattern>> = {
 	// time to react, faster jabs in the more frantic late phases.
 
 	'garrison-burst': {
-		// Security Chief Garrison: three-round burst at a steady cadence.
-		// Per docs/spec/levels/01-lobby.md Phase 1 Normal: "single shot every
-		// 2.0s" — bumping to a 3-shot burst gives the cover-pop spec on Hard a
-		// hook into the same cycle once we tune by difficulty.
+		// Security Chief Garrison phase 1: per docs/spec/levels/01-lobby.md
+		// Normal is a single aimed shot every 2.0s. Difficulty-tier patterns
+		// (3-round burst on Hard, cover-pop + ad spawns on Nightmare) are a
+		// future per-difficulty selector slice — for now this is the shipped
+		// Normal cadence: 800ms windup → fire → ~1.2s recovery → loop = 2s cycle.
 		id: 'garrison-burst',
 		loop: true,
 		events: [
-			{ atMs: 0, verb: 'aim-laser', durationMs: 600 },
-			{ atMs: 600, verb: 'fire-hitscan', damage: 12 },
-			{ atMs: 800, verb: 'fire-hitscan', damage: 12 },
-			{ atMs: 1000, verb: 'fire-hitscan', damage: 12 },
-			{ atMs: 1200, verb: 'idle' },
+			{ atMs: 0, verb: 'aim-laser', durationMs: 800 },
+			{ atMs: 800, verb: 'fire-hitscan', damage: 22 },
+			{ atMs: 900, verb: 'idle' },
+			{ atMs: 2000, verb: 'idle' },
 		],
 	},
 	'whitcomb-throw': {
@@ -232,15 +232,18 @@ export const FIRE_PATTERNS: Readonly<Record<FirePatternId, FirePattern>> = {
 		],
 	},
 	'crawford-charge': {
-		// Phase 2: he abandons cover and rushes — closing distance with a
-		// melee finisher.
+		// Phase 2: he abandons cover and rushes — pistol-into-melee burst,
+		// recovers, then loops so the pressure continues until the player
+		// kills him.
 		id: 'crawford-charge',
-		loop: false,
+		loop: true,
 		events: [
 			{ atMs: 0, verb: 'aim-laser', durationMs: 500 },
 			{ atMs: 500, verb: 'fire-hitscan', damage: 18 },
 			{ atMs: 1000, verb: 'fire-hitscan', damage: 18 },
 			{ atMs: 2200, verb: 'melee-contact', damage: 35, rangeM: 2.0 },
+			{ atMs: 2400, verb: 'idle' },
+			{ atMs: 3600, verb: 'idle' },
 		],
 	},
 	'reaper-scythe-arc': {
@@ -268,12 +271,16 @@ export const FIRE_PATTERNS: Readonly<Record<FirePatternId, FirePattern>> = {
 		],
 	},
 	'reaper-rush': {
-		// Phase 3: scythe charge. Telegraphed sprint into a heavy melee.
+		// Phase 3: scythe charge. Telegraphed sprint into a heavy melee, then
+		// a brief recovery before the next charge. Loops so the boss keeps
+		// pressuring until the player kills it (HP-based, not program-based).
 		id: 'reaper-rush',
-		loop: false,
+		loop: true,
 		events: [
 			{ atMs: 0, verb: 'aim-laser', durationMs: 800 },
 			{ atMs: 800, verb: 'melee-contact', damage: 50, rangeM: 1.8 },
+			{ atMs: 1000, verb: 'idle' },
+			{ atMs: 2400, verb: 'idle' },
 		],
 	},
 };
