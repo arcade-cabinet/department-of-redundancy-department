@@ -681,6 +681,10 @@ function disposeEnemy(enemyId: string): void {
 	mesh?.dispose();
 	enemyMeshes.delete(enemyId);
 	enemySpawnHp.delete(enemyId);
+	// Without this, an enemy that's despawned by anything OTHER than
+	// onEnemyKill / onEnemyCease (e.g. scene tear-down racing the listener)
+	// leaves its last-hit-target entry behind, slowly leaking across runs.
+	enemyLastHitTarget.delete(enemyId);
 }
 
 // ── Main loop ────────────────────────────────────────────────────────────────
