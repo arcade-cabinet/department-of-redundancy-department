@@ -1,6 +1,7 @@
 import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
 import { Engine } from '@babylonjs/core/Engines/engine';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { Scene } from '@babylonjs/core/scene';
 import '@babylonjs/core/Loading/sceneLoader';
@@ -53,6 +54,13 @@ let scene: Scene | null = null;
 let director: EncounterDirector | null = null;
 let currentLevel: Level | null = null;
 let levelHandles: LevelHandles | null = null;
+
+// Per-enemy bookkeeping for the reticle gradient and kill scoring.
+// Mesh refs cached so hit/kill/cease lookups are O(1) instead of scene
+// linear searches via getMeshByName.
+const enemySpawnHp = new Map<string, number>();
+const enemyLastHitTarget = new Map<string, 'head' | 'body' | 'justice'>();
+const enemyMeshes = new Map<string, AbstractMesh>();
 
 const game = new Game();
 const overlay = new Overlay('dord-ui');
@@ -165,6 +173,11 @@ function constructLevel(levelId: LevelId): void {
 		scene.dispose();
 		scene = null;
 		levelHandles = null;
+		enemySpawnHp.clear();
+		enemyLastHitTarget.clear();
+		enemyMeshes.clear();
+		activeCivilians.clear();
+		civilianSeq = 0;
 	}
 	currentLevel = getLevel(levelId);
 	scene = new Scene(engine);
@@ -187,22 +200,31 @@ function constructLevel(levelId: LevelId): void {
 		},
 		onEnemySpawn(enemy: Enemy) {
 			if (!scene) return;
-			// Placeholder enemy visual — a sphere. Replaced when archetype GLBs are wired.
-			const mesh = MeshBuilder.CreateSphere(`enemy-${enemy.id}`, { diameter: 0.8 }, scene);
+			// Placeholder enemy visual — a capsule, taller than wide so head vs body
+			// raycasts have a meaningful split. Replaced when archetype GLBs are wired.
+			const mesh = MeshBuilder.CreateCapsule(
+				`enemy-${enemy.id}`,
+				{ radius: 0.35, height: 1.8 },
+				scene,
+			);
 			mesh.position.copyFrom(enemy.position);
+			mesh.position.y += 0.9; // capsule center; feet at enemy.position.y
 			mesh.metadata = { enemyId: enemy.id };
+			enemySpawnHp.set(enemy.id, enemy.hp);
+			enemyMeshes.set(enemy.id, mesh);
 		},
-		onEnemyHit(enemyId, target, damage) {
-			console.debug('[hit]', enemyId, target, damage);
+		onEnemyHit(enemyId, target, _damage) {
+			enemyLastHitTarget.set(enemyId, target);
 		},
 		onEnemyKill(enemyId) {
-			const mesh = scene?.getMeshByName(`enemy-${enemyId}`);
-			mesh?.dispose();
-			game.hit('body'); // record kill in game state
+			disposeEnemy(enemyId);
+			const target = enemyLastHitTarget.get(enemyId) ?? 'body';
+			game.hit(target);
+			enemyLastHitTarget.delete(enemyId);
 		},
 		onEnemyCease(enemyId) {
-			const mesh = scene?.getMeshByName(`enemy-${enemyId}`);
-			mesh?.dispose();
+			disposeEnemy(enemyId);
+			enemyLastHitTarget.delete(enemyId);
 		},
 		onFireEvent(_enemyId, event: FireEvent) {
 			void event;
@@ -247,11 +269,83 @@ function handleCueAction(action: CueAction): void {
 			// fade/oscillate handled in a later commit when we wire animations
 			return;
 		}
-		// audio-stinger / ambience-fade / narrator / civilian-spawn / prop-anim / boss-spawn
+		case 'civilian-spawn': {
+			spawnCivilian(action.railId);
+			return;
+		}
+		// audio-stinger / ambience-fade / narrator / prop-anim / boss-spawn
 		// are handled by their respective subsystems in subsequent commits.
 		default:
 			return;
 	}
+}
+
+function disposeEnemy(enemyId: string): void {
+	const mesh = enemyMeshes.get(enemyId);
+	mesh?.dispose();
+	enemyMeshes.delete(enemyId);
+	enemySpawnHp.delete(enemyId);
+}
+
+// ── Civilians ────────────────────────────────────────────────────────────────
+// Civilians are placeholder cyan capsules that lerp along their authored path.
+// They're not director-tracked — main.ts owns their lifecycle and ticks them.
+
+interface ActiveCivilian {
+	readonly id: string;
+	readonly path: readonly Vector3[];
+	readonly speed: number;
+	readonly mesh: AbstractMesh;
+	t: number; // arc-length traveled, meters
+}
+
+const activeCivilians = new Map<string, ActiveCivilian>();
+let civilianSeq = 0;
+
+function spawnCivilian(railId: string): void {
+	if (!scene || !currentLevel) return;
+	const rail = currentLevel.civilianRails.find((r) => r.id === railId);
+	const head = rail?.path[0];
+	if (!rail || !head || rail.path.length < 2) return;
+	const id = `civ-${++civilianSeq}`;
+	const mesh = MeshBuilder.CreateCapsule(`civilian-${id}`, { radius: 0.35, height: 1.8 }, scene);
+	mesh.position.copyFrom(head);
+	mesh.position.y += 0.9;
+	mesh.metadata = { civilianId: id };
+	activeCivilians.set(id, { id, path: rail.path, speed: rail.speed, mesh, t: 0 });
+}
+
+function tickCivilians(dtMs: number): void {
+	const dtS = dtMs / 1000;
+	for (const civ of activeCivilians.values()) {
+		civ.t += civ.speed * dtS;
+		const { position, finished } = sampleCivilianPath(civ);
+		civ.mesh.position.x = position.x;
+		civ.mesh.position.y = position.y + 0.9;
+		civ.mesh.position.z = position.z;
+		if (finished) {
+			civ.mesh.dispose();
+			activeCivilians.delete(civ.id);
+		}
+	}
+}
+
+function sampleCivilianPath(civ: ActiveCivilian): { position: Vector3; finished: boolean } {
+	let remaining = civ.t;
+	let last: Vector3 | undefined;
+	for (let i = 0; i < civ.path.length - 1; i++) {
+		const a = civ.path[i];
+		const b = civ.path[i + 1];
+		if (!a || !b) break;
+		last = b;
+		const seg = Vector3.Distance(a, b);
+		if (remaining <= seg) {
+			const u = seg > 0 ? remaining / seg : 0;
+			return { position: Vector3.Lerp(a, b, u), finished: false };
+		}
+		remaining -= seg;
+	}
+	return { position: last ?? civ.path[0] ?? Vector3.Zero(), finished: true };
 }
 
 // ── Main loop ────────────────────────────────────────────────────────────────
@@ -262,11 +356,61 @@ function tick(): void {
 	lastTickMs = now;
 
 	const state = game.getState();
-	if (state.phase === 'playing' && director && !director.isFinished) {
-		director.tick(dtMs);
+	if (state.phase === 'playing') {
+		if (director && !director.isFinished) director.tick(dtMs);
+		tickCivilians(dtMs);
 	}
 
 	scene?.render();
+}
+
+// ── Hit-test: reticle hover + fire ───────────────────────────────────────────
+
+interface PickResult {
+	readonly kind: 'enemy' | 'civilian' | 'air';
+	readonly enemyId?: string;
+	readonly civilianId?: string;
+	readonly target?: 'head' | 'body';
+}
+
+function pickAt(xPx: number, yPx: number): PickResult {
+	if (!scene) return { kind: 'air' };
+	const pick = scene.pick(xPx, yPx);
+	if (!pick?.hit || !pick.pickedMesh) return { kind: 'air' };
+	const meta = pick.pickedMesh.metadata as
+		| { enemyId?: string; civilianId?: string }
+		| null
+		| undefined;
+	if (meta?.enemyId) {
+		// Headshot if the picked point is in the top quarter of the capsule.
+		const meshY = pick.pickedMesh.position.y;
+		const halfH = 0.9; // capsule half-height
+		const hitY = pick.pickedPoint?.y ?? meshY;
+		const fromTop = meshY + halfH - hitY;
+		const target: 'head' | 'body' = fromTop < halfH * 0.5 ? 'head' : 'body';
+		return { kind: 'enemy', enemyId: meta.enemyId, target };
+	}
+	if (meta?.civilianId) {
+		return { kind: 'civilian', civilianId: meta.civilianId };
+	}
+	return { kind: 'air' };
+}
+
+function reticleColorFor(pick: PickResult): 'green' | 'orange' | 'red' | 'blue' {
+	if (pick.kind === 'civilian') return 'blue';
+	if (pick.kind !== 'enemy' || !pick.enemyId || !director) return 'green';
+	const enemy = director.getEnemy(pick.enemyId);
+	const spawn = enemySpawnHp.get(pick.enemyId);
+	if (!enemy || !spawn || spawn <= 0) return 'green';
+	const frac = enemy.hp / spawn;
+	// Reticle gradient maps to "how dangerous is this thing right now" — full
+	// HP is red (commit), mid is orange, low is green-ish-armed. Spec says
+	// green→orange→red as the windup advances. For a hover baseline we treat
+	// the highest-HP enemy as the most-active threat: red when fresh, orange
+	// at half, green-armed near death.
+	if (frac > 0.66) return 'red';
+	if (frac > 0.33) return 'orange';
+	return 'green';
 }
 
 // Start.
@@ -282,9 +426,24 @@ reticle.setPosition(window.innerWidth / 2, window.innerHeight / 2);
 
 canvas.addEventListener('pointermove', (e) => {
 	reticle.setPosition(e.clientX, e.clientY);
+	if (game.getState().phase !== 'playing') return;
+	const pick = pickAt(e.clientX, e.clientY);
+	reticle.setColor(reticleColorFor(pick));
 });
-canvas.addEventListener('pointerdown', () => {
-	director?.emitAlert();
+canvas.addEventListener('pointerdown', (e) => {
+	if (game.getState().phase !== 'playing' || !director) return;
+	const pick = pickAt(e.clientX, e.clientY);
+	if (pick.kind === 'enemy' && pick.enemyId && pick.target) {
+		director.hitEnemy(pick.enemyId, pick.target);
+	} else if (pick.kind === 'civilian' && pick.civilianId) {
+		game.hitCivilian();
+		const civ = activeCivilians.get(pick.civilianId);
+		civ?.mesh.dispose();
+		activeCivilians.delete(pick.civilianId);
+	}
+	// Any actual shot — at an enemy or a civilian — wakes pre-aggro enemies.
+	// Air shots are no-ops and don't alert (no ammo cost either; reload slice).
+	if (pick.kind !== 'air') director.emitAlert();
 });
 
 engine.runRenderLoop(tick);

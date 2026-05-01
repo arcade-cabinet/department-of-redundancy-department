@@ -35,6 +35,7 @@ public/wasm/
 # Agent runtime state (per ~/.claude/CLAUDE.md "Durable state" — local working memory only)
 .agent-state/
 .claude/state/
+.claude/scheduled_tasks.lock
 
 # OS
 Thumbs.db
