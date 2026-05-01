@@ -385,6 +385,11 @@ export class EncounterDirector {
 			if (shouldFire) {
 				fired.add(cue.id);
 				this.fireCue(cue);
+				// `fireCue` may stamp additional keys into `state.firedCueIds`
+				// (e.g. `setBossPhase` stamps the auto-emit key so HP-driven
+				// re-emission can't double-fire). Merge those into our local
+				// set so the final write at end of loop doesn't clobber them.
+				for (const k of this.state.firedCueIds) fired.add(k);
 			}
 		}
 		this.state = { ...this.state, firedCueIds: fired };
@@ -503,7 +508,15 @@ export class EncounterDirector {
 			nextFireEventIdx: 0,
 			hp: refreshedHp,
 		});
-		this.state = { ...this.state, enemies: updated };
+		// Stamp the auto-emit key so a subsequent HP-threshold crossing won't
+		// re-fire setBossPhase for the same phase. Without this, a level
+		// authoring `boss-phase` AND the auto-emitter would BOTH fire when
+		// HP later drops below the fraction × phase-1 max — second pass
+		// resets fire-program cursor (elapsedMs:0, nextFireEventIdx:0) and
+		// erases damage taken during the transition window.
+		const fired = new Set(this.state.firedCueIds);
+		fired.add(`boss-phase-auto-${bossId}-${phase}`);
+		this.state = { ...this.state, enemies: updated, firedCueIds: fired };
 	}
 
 	private spawnEnemy(

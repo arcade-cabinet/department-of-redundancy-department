@@ -972,7 +972,7 @@ function applyLightTween(
 		light.intensity = Math.floor(phase) % 2 === 0 ? tween.minIntensity : tween.maxIntensity;
 		return;
 	}
-	if (light.diffuse) {
+	if (tween.kind === 'colour-shift' && light.diffuse) {
 		const [fr, fg, fb] = tween.fromColor;
 		const [tr, tg, tb] = tween.toColor;
 		light.diffuse.set(fr + (tr - fr) * t, fg + (tg - fg) * t, fb + (tb - fb) * t);
@@ -999,6 +999,12 @@ function tickFireAlarm(nowMs: number): void {
 	const phaseMs = ((nowMs - fireAlarmStartedMs) * FIRE_ALARM_FLICKER_HZ) / 500;
 	const dim = Math.floor(phaseMs) % 2 === 0;
 	for (const [id, light] of levelHandles.lights) {
+		// Cue-driven lighting tweens win over the alarm flicker. Without
+		// this guard, a `lighting` cue authored to fade or colour-shift a
+		// light during the alarm window would be silently clobbered every
+		// frame — `tickLightTweens` runs first and writes the interpolated
+		// value, then `tickFireAlarm` overwrites it.
+		if (lightTweens.has(id)) continue;
 		const base = fireAlarmBaseIntensity.get(id) ?? light.intensity;
 		light.intensity = dim ? base * 0.15 : base;
 	}
