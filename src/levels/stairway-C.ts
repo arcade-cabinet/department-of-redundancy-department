@@ -495,6 +495,13 @@ const cues: Cue[] = [
 		},
 	},
 	{
+		// Open the service door before its rush spawns; otherwise the
+		// middle-manager would clip through a closed door.
+		id: 'p3-door-service',
+		trigger: { kind: 'on-arrive', railNodeId: 'pos-3-ad-rush' },
+		action: { verb: 'door', doorId: 'door-mid-2-S', to: 'open' },
+	},
+	{
 		id: 'p3-rush-2',
 		trigger: { kind: 'on-arrive', railNodeId: 'pos-3-ad-rush' },
 		action: {
