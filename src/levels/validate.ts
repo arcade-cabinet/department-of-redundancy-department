@@ -1,3 +1,4 @@
+import { BOSSES } from '../encounter/Boss';
 import type { Cue, CueAction } from '../encounter/cues';
 import { ARCHETYPES } from '../encounter/Enemy';
 import { FIRE_PATTERNS } from '../encounter/firePatterns';
@@ -214,6 +215,40 @@ const CUE_CHECKERS: Readonly<Partial<Record<CueAction['verb'], CheckerEntry>>> =
 		if (a.verb !== 'prop-anim') return;
 		if (!index.propIds.has(a.propId))
 			log.warn('CUE_DANGLING_PROP', `cue '${cue.id}' targets unknown prop '${a.propId}'`);
+	},
+	'boss-spawn': (cue, a, index, log) => {
+		if (a.verb !== 'boss-spawn') return;
+		const def = BOSSES[a.bossId];
+		if (!def) {
+			log.err('CUE_UNKNOWN_BOSS', `cue '${cue.id}' uses unknown bossId '${a.bossId}'`);
+			return;
+		}
+		if (!def.fireProgramByPhase[a.phase]) {
+			log.err(
+				'CUE_BOSS_PHASE_UNDEFINED',
+				`cue '${cue.id}' boss '${a.bossId}' has no phase ${a.phase} fire program`,
+			);
+		}
+		if (!index.spawnRailIds.has(def.railIdConvention)) {
+			log.err(
+				'CUE_BOSS_RAIL_MISSING',
+				`cue '${cue.id}' boss '${a.bossId}' requires spawnRail '${def.railIdConvention}'`,
+			);
+		}
+	},
+	'boss-phase': (cue, a, _index, log) => {
+		if (a.verb !== 'boss-phase') return;
+		const def = BOSSES[a.bossId];
+		if (!def) {
+			log.err('CUE_UNKNOWN_BOSS', `cue '${cue.id}' uses unknown bossId '${a.bossId}'`);
+			return;
+		}
+		if (!def.fireProgramByPhase[a.phase]) {
+			log.err(
+				'CUE_BOSS_PHASE_UNDEFINED',
+				`cue '${cue.id}' boss '${a.bossId}' has no phase ${a.phase} fire program`,
+			);
+		}
 	},
 	transition: (cue, a, _index, log) => {
 		if (a.verb !== 'transition') return;
