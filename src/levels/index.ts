@@ -1,4 +1,5 @@
 import { lobbyLevel } from './lobby';
+import { stairwayALevel } from './stairway-A';
 import type { Level, LevelId } from './types';
 
 export type { AmbienceLayer, CivilianRail, Level, LevelId, Primitive, SpawnRail } from './types';
@@ -7,12 +8,12 @@ export type { AmbienceLayer, CivilianRail, Level, LevelId, Primitive, SpawnRail 
  * Level registry — one entry per LevelId. The runtime looks up a level by id
  * on `transition` cue and constructs it.
  *
- * NOTE: For v1 boot, only the Lobby is implemented. Subsequent levels are
- * authored from their respective canon docs and added here. Each new level
- * is a content task — the engine and types are already in place.
+ * Each level is authored from its canon doc in docs/spec/levels/. Levels are
+ * added here as their data files land; missing levels throw on transition.
  */
 export const LEVELS: Readonly<Partial<Record<LevelId, Level>>> = {
 	lobby: lobbyLevel,
+	'stairway-A': stairwayALevel,
 };
 
 export function getLevel(id: LevelId): Level {
