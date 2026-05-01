@@ -7,12 +7,9 @@ import type { CueAction } from './cues';
  * and drained once handles arrive — without this, an early cue that
  * references e.g. a door silently no-ops because `levelHandles` is null.
  *
- * Verbs absent from this set (transition, civilian-spawn, audio-stinger,
- * ambience-fade, narrator, camera-shake, enemy-spawn, boss-spawn, boss-
- * phase) have no `levelHandles` dependency and run immediately.
- *
- * Centralized here so unit tests can pin the classification without
- * having to boot the runtime, and so runtime + tests can never disagree.
+ * Verbs not in this set run immediately; see the `CueAction['verb']`
+ * union in `cues.ts` for the full vocabulary. Centralized here so
+ * runtime + tests share one source of truth.
  */
 export const HANDLES_DEPENDENT_VERBS: ReadonlySet<CueAction['verb']> = new Set([
 	'door',
@@ -24,4 +21,16 @@ export const HANDLES_DEPENDENT_VERBS: ReadonlySet<CueAction['verb']> = new Set([
 
 export function isHandlesDependent(action: CueAction): boolean {
 	return HANDLES_DEPENDENT_VERBS.has(action.verb);
+}
+
+/**
+ * Snapshot-then-clear drain: returns the queued actions in insertion order
+ * and empties the input array atomically. The caller dispatches each
+ * returned action via the runtime's `handleCueAction`. Snapshot semantics
+ * matter — a handler may push another action onto the queue (re-entrancy
+ * is rare but possible if a queued prop-anim cue triggers a cue chain),
+ * and that pushback must not be drained in the same pass.
+ */
+export function drainPendingCues<T>(queue: T[]): T[] {
+	return queue.splice(0, queue.length);
 }

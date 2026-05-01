@@ -19,7 +19,7 @@ import {
 	type Enemy,
 	type FireEvent,
 } from './encounter';
-import { isHandlesDependent } from './encounter/pendingCueQueue';
+import { drainPendingCues, isHandlesDependent } from './encounter/pendingCueQueue';
 import { now } from './engine/clock';
 import { rand } from './engine/rng';
 import { Game } from './game/Game';
@@ -291,6 +291,9 @@ function constructLevel(levelId: LevelId): void {
 		activeCivilians.clear();
 		civilianSeq = 0;
 		activePropAnims.clear();
+		// Discard — the level is gone, queued cues for it are obsolete.
+		// Distinct from the drain in `buildLevel(...).then`, which captures
+		// a snapshot before re-dispatching.
 		pendingCueActions.length = 0;
 	}
 	currentLevel = getLevel(levelId);
@@ -316,11 +319,11 @@ function constructLevel(levelId: LevelId): void {
 			healthKitMeshes.set(id, mesh);
 		}
 		// Drain any cues that fired before handles arrived. Snapshot + clear
-		// first so handlers can't re-enqueue into the same array we're
-		// iterating; the second-pass queue is empty by construction since
-		// handles is now non-null.
-		const drained = pendingCueActions.splice(0, pendingCueActions.length);
-		for (const action of drained) handleCueAction(action);
+		// first so re-entrant pushes into the queue (rare) aren't iterated
+		// in the same pass.
+		for (const action of drainPendingCues(pendingCueActions)) {
+			handleCueAction(action);
+		}
 	});
 
 	const listener: EncounterListener = {
