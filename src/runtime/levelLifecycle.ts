@@ -107,22 +107,24 @@ export function buildTitleScene(engine: Engine, sharedBrdf: BaseTexture): Scene 
  * Cross-module dependencies that the EncounterListener needs to read or
  * mutate. The Maps are passed by reference — the listener mutates them
  * in-place. `getScene` reads the live `scene` let (the active gameplay
- * scene); `getCamera` reads the per-level camera the listener was built
- * with.
+ * scene); `camera` is captured at construction (`const` in `constructLevel`).
+ *
+ * `applyDamage` is wired by main.ts to its own `IS_DEV`-gated handler so the
+ * `__dordGod` cheat read stays at a Vite compile-time-constant call site
+ * and tree-shakes from production bundles.
  */
 export interface EncounterListenerHost {
 	readonly capsuleHeight: number;
 	readonly capsuleRadius: number;
-	readonly capsuleHalfHeight: number;
 	readonly enemyMeshes: Map<string, AbstractMesh>;
 	readonly enemySpawnHp: Map<string, number>;
 	readonly enemyLastHitTarget: Map<string, 'head' | 'body' | 'justice'>;
 	readonly game: Game;
-	readonly isDev: boolean;
+	readonly camera: FreeCamera;
 	getScene(): Scene | null;
-	getCamera(): FreeCamera | null;
 	disposeEnemy(enemyId: string): void;
 	handleCueAction(action: CueAction): void;
+	applyDamage(damage: number): void;
 }
 
 /**
@@ -146,7 +148,7 @@ export function createEncounterListener(host: EncounterListenerHost): EncounterL
 				scene,
 			);
 			mesh.position.copyFrom(enemy.position);
-			mesh.position.y += host.capsuleHalfHeight;
+			mesh.position.y += host.capsuleHeight / 2;
 			// Placeholder material so the capsule reads as a threat until
 			// archetype GLBs land. Without this, the capsule has no material
 			// and renders as a near-invisible default-shaded silhouette,
@@ -184,7 +186,7 @@ export function createEncounterListener(host: EncounterListenerHost): EncounterL
 			const mesh = host.enemyMeshes.get(enemyId);
 			if (!mesh) return;
 			mesh.position.copyFrom(position);
-			mesh.position.y += host.capsuleHalfHeight;
+			mesh.position.y += host.capsuleHeight / 2;
 		},
 		onEnemyHit(enemyId, target, _damage) {
 			host.enemyLastHitTarget.set(enemyId, target);
@@ -213,17 +215,14 @@ export function createEncounterListener(host: EncounterListenerHost): EncounterL
 			void event;
 		},
 		onPlayerDamage(damage) {
-			// `isDev` is a Vite compile-time constant in main.ts — this entire
-			// branch tree-shakes in production builds, so the `__dordGod`
-			// cheat surface never ships.
-			if (host.isDev && (globalThis as { __dordGod?: boolean }).__dordGod) return;
-			host.game.takeDamage(damage);
+			// `applyDamage` carries the `IS_DEV`-gated `__dordGod` check at its
+			// definition site in main.ts, where `IS_DEV` is a Vite compile-time
+			// constant. The whole cheat surface tree-shakes in prod builds.
+			host.applyDamage(damage);
 		},
 		onCameraUpdate(position, lookAt) {
-			const camera = host.getCamera();
-			if (!camera) return;
-			camera.position.copyFrom(position);
-			camera.setTarget(lookAt);
+			host.camera.position.copyFrom(position);
+			host.camera.setTarget(lookAt);
 		},
 	};
 }

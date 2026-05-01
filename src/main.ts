@@ -551,16 +551,21 @@ function constructLevel(levelId: LevelId): void {
 	const listener = createEncounterListener({
 		capsuleHeight: CAPSULE_HEIGHT,
 		capsuleRadius: CAPSULE_RADIUS,
-		capsuleHalfHeight: CAPSULE_HALF_HEIGHT,
 		enemyMeshes,
 		enemySpawnHp,
 		enemyLastHitTarget,
 		game,
-		isDev: IS_DEV,
+		camera,
 		getScene: () => scene,
-		getCamera: () => camera,
 		disposeEnemy,
 		handleCueAction,
+		// `IS_DEV` is a Vite compile-time constant — this whole branch
+		// (including the `globalThis.__dordGod` read) folds to nothing in
+		// prod bundles, so the cheat surface never ships.
+		applyDamage: (damage) => {
+			if (IS_DEV && (globalThis as { __dordGod?: boolean }).__dordGod) return;
+			game.takeDamage(damage);
+		},
 	});
 
 	director = new EncounterDirector({
