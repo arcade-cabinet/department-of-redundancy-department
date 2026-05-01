@@ -9,9 +9,16 @@ import type { Level, Primitive } from './types';
  * Vertical level. Rail enters at the lobby elevator and climbs +Y while the
  * camera tilts up 25°. Two combat positions: mid-stair (introduces the
  * crawler-from-below beat) and the landing-door wave (introduces the
- * synchronized 4-pop and the policeman archetype).
+ * synchronized 4-pop and the first Office Security Guard).
  *
  * Target time on Normal: 60s.
+ *
+ * Authoring rule applied: each enemy gets its own spawnRail. Two enemies
+ * sharing a rail at the same trigger time spawn at the same point and
+ * fight for the same path — they end up overlapping visually until the
+ * first one falls off the rail's `atEnd`. So the four landing-wave
+ * spawns each have a dedicated lane, and the mid-stair second wave is
+ * wall-clock-staggered onto a separate rail.
  */
 
 const cameraRail: RailGraph = {
@@ -76,12 +83,13 @@ const primitives: Primitive[] = [
 		pbr: 'laminate',
 	},
 
-	// Shaft walls (concrete-tinted drywall stand-ins).
+	// Shaft walls (concrete-tinted drywall stand-ins). Yaw faces inward
+	// toward the shaft center so the visible side is the one the camera sees.
 	{
 		id: 'wall-shaft-W',
 		kind: 'wall',
 		origin: new Vector3(-2, 0, 4),
-		yaw: 0,
+		yaw: Math.PI / 2,
 		width: 12,
 		height: 9,
 		pbr: 'drywall',
@@ -90,7 +98,7 @@ const primitives: Primitive[] = [
 		id: 'wall-shaft-E',
 		kind: 'wall',
 		origin: new Vector3(2, 0, 4),
-		yaw: Math.PI,
+		yaw: -Math.PI / 2,
 		width: 12,
 		height: 9,
 		pbr: 'drywall',
@@ -121,7 +129,7 @@ const primitives: Primitive[] = [
 		texture: 'T_Door_Metal_05.png',
 		swing: 'inward',
 		state: 'closed',
-		spawnRailId: 'rail-spawn-top-left',
+		spawnRailId: 'rail-spawn-top-left-A',
 	},
 	{
 		id: 'door-top-right',
@@ -134,7 +142,7 @@ const primitives: Primitive[] = [
 		texture: 'T_Door_Metal_06.png',
 		swing: 'inward',
 		state: 'closed',
-		spawnRailId: 'rail-spawn-top-right',
+		spawnRailId: 'rail-spawn-top-right-A',
 	},
 	{
 		id: 'door-exit-open-plan',
@@ -197,12 +205,23 @@ const cues: Cue[] = [
 		},
 	},
 	{
-		id: 'flicker-shaft',
+		id: 'flicker-shaft-A',
 		trigger: { kind: 'wall-clock', atMs: 200 },
 		action: {
 			verb: 'lighting',
 			lightId: 'light-flicker-A',
 			tween: { kind: 'flicker', minIntensity: 0.4, maxIntensity: 0.7, hz: 6, durationMs: 60000 },
+		},
+	},
+	{
+		// Slightly out-of-phase second flicker — both lights flicker through
+		// the climb, asymmetrically so the shaft never feels like a strobe.
+		id: 'flicker-shaft-B',
+		trigger: { kind: 'wall-clock', atMs: 350 },
+		action: {
+			verb: 'lighting',
+			lightId: 'light-flicker-B',
+			tween: { kind: 'flicker', minIntensity: 0.45, maxIntensity: 0.75, hz: 5, durationMs: 60000 },
 		},
 	},
 
@@ -238,11 +257,14 @@ const cues: Cue[] = [
 		action: { verb: 'narrator', text: 'ENEMIES CAN COME FROM BELOW', durationMs: 2500 },
 	},
 	{
+		// Second wave fires at +14s into the dwell so it doesn't collide with
+		// p1-spawn-door on the same rail; uses a sibling rail with a slight
+		// path offset so the two enemies don't overlap visually.
 		id: 'p1-spawn-cover',
-		trigger: { kind: 'on-arrive', railNodeId: 'pos-mid' },
+		trigger: { kind: 'wall-clock', atMs: 18000 },
 		action: {
 			verb: 'enemy-spawn',
-			railId: 'rail-spawn-mid-landing',
+			railId: 'rail-spawn-mid-landing-cover',
 			archetype: 'middle-manager',
 			fireProgram: 'pistol-cover-pop',
 		},
@@ -264,7 +286,7 @@ const cues: Cue[] = [
 		trigger: { kind: 'on-arrive', railNodeId: 'pos-landing-wave' },
 		action: {
 			verb: 'enemy-spawn',
-			railId: 'rail-spawn-top-left',
+			railId: 'rail-spawn-top-left-A',
 			archetype: 'middle-manager',
 			fireProgram: 'pistol-pop-aim',
 		},
@@ -274,7 +296,7 @@ const cues: Cue[] = [
 		trigger: { kind: 'on-arrive', railNodeId: 'pos-landing-wave' },
 		action: {
 			verb: 'enemy-spawn',
-			railId: 'rail-spawn-top-left',
+			railId: 'rail-spawn-top-left-B',
 			archetype: 'middle-manager',
 			fireProgram: 'pistol-pop-aim',
 		},
@@ -284,7 +306,7 @@ const cues: Cue[] = [
 		trigger: { kind: 'on-arrive', railNodeId: 'pos-landing-wave' },
 		action: {
 			verb: 'enemy-spawn',
-			railId: 'rail-spawn-top-right',
+			railId: 'rail-spawn-top-right-A',
 			archetype: 'middle-manager',
 			fireProgram: 'pistol-pop-aim',
 		},
@@ -294,7 +316,7 @@ const cues: Cue[] = [
 		trigger: { kind: 'on-arrive', railNodeId: 'pos-landing-wave' },
 		action: {
 			verb: 'enemy-spawn',
-			railId: 'rail-spawn-top-right',
+			railId: 'rail-spawn-top-right-B',
 			archetype: 'security-guard',
 			fireProgram: 'pistol-pop-aim',
 		},
@@ -309,7 +331,13 @@ const cues: Cue[] = [
 		},
 	},
 
-	// Exit.
+	// Exit — open the door 2s before the transition so the player sees it
+	// swing open and the transition feels like a follow-through, not a cut.
+	{
+		id: 'p2-exit-door-open',
+		trigger: { kind: 'wall-clock', atMs: 58000 },
+		action: { verb: 'door', doorId: 'door-exit-open-plan', to: 'open' },
+	},
 	{
 		id: 'transition',
 		trigger: { kind: 'wall-clock', atMs: 60000 },
@@ -322,12 +350,22 @@ export const stairwayALevel: Level = {
 	displayName: 'Stairway A — Floors 1→2',
 	primitives,
 	spawnRails: [
+		// Mid-stair: door-spawn rail used for the on-arrive manager.
 		{
 			id: 'rail-spawn-mid-landing',
 			path: [new Vector3(0, 3, 6), new Vector3(0, 3, 5), new Vector3(0, 3, 4.5)],
 			speed: 2.0,
 			loop: false,
 		},
+		// Mid-stair: cover-pop rail (offset right so the second manager
+		// doesn't overlap the first while it's still alive).
+		{
+			id: 'rail-spawn-mid-landing-cover',
+			path: [new Vector3(0.6, 3, 6), new Vector3(0.6, 3, 5), new Vector3(0.6, 3, 4.5)],
+			speed: 2.0,
+			loop: false,
+		},
+		// Mid-stair: crawler from below.
 		{
 			id: 'rail-spawn-mid-crawler',
 			path: [
@@ -339,15 +377,29 @@ export const stairwayALevel: Level = {
 			speed: 1.5,
 			loop: false,
 		},
+		// Landing-wave: four lanes, two per door, lateral offsets so the
+		// synchronized 4-pop reads as four distinct enemies.
 		{
-			id: 'rail-spawn-top-left',
-			path: [new Vector3(-1, 6, 10), new Vector3(-1, 6, 9), new Vector3(-1, 6, 8)],
+			id: 'rail-spawn-top-left-A',
+			path: [new Vector3(-1.4, 6, 10), new Vector3(-1.4, 6, 9), new Vector3(-1.4, 6, 8)],
 			speed: 2.5,
 			loop: false,
 		},
 		{
-			id: 'rail-spawn-top-right',
-			path: [new Vector3(1, 6, 10), new Vector3(1, 6, 9), new Vector3(1, 6, 8)],
+			id: 'rail-spawn-top-left-B',
+			path: [new Vector3(-0.6, 6, 10), new Vector3(-0.6, 6, 9), new Vector3(-0.6, 6, 8)],
+			speed: 2.5,
+			loop: false,
+		},
+		{
+			id: 'rail-spawn-top-right-A',
+			path: [new Vector3(0.6, 6, 10), new Vector3(0.6, 6, 9), new Vector3(0.6, 6, 8)],
+			speed: 2.5,
+			loop: false,
+		},
+		{
+			id: 'rail-spawn-top-right-B',
+			path: [new Vector3(1.4, 6, 10), new Vector3(1.4, 6, 9), new Vector3(1.4, 6, 8)],
 			speed: 2.5,
 			loop: false,
 		},
