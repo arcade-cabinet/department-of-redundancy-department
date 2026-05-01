@@ -96,6 +96,7 @@ export const DIFFICULTY_TABLE: Readonly<Record<Difficulty, DifficultyParams>> = 
 export interface EncounterListener {
 	onCueFire(cue: Cue, action: CueAction): void;
 	onEnemySpawn(enemy: Enemy): void;
+	onEnemyMove(enemyId: string, position: Vector3): void;
 	onEnemyHit(enemyId: string, target: 'head' | 'body' | 'justice', damage: number): void;
 	onEnemyKill(enemyId: string): void;
 	onEnemyCease(enemyId: string): void;
@@ -167,6 +168,13 @@ export class EncounterDirector {
 			const stepped = this.tickEnemy(enemy, dtMs);
 			if (stepped.state === 'dead') continue;
 			updatedEnemies.set(id, stepped);
+			// Emit movement updates while the enemy is still moving. Gate on the
+			// PREVIOUS atEnd state so the final tick (which transitions from
+			// sliding → atEnd:true) still fires once and the mesh snaps to the
+			// last waypoint instead of stopping a frame short.
+			if (!enemy.rail.atEnd) {
+				this.listener.onEnemyMove(id, stepped.position);
+			}
 		}
 
 		this.state = {
