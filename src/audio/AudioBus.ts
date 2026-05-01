@@ -1,4 +1,5 @@
 import { Sound } from '@babylonjs/core/Audio/sound';
+import type { Observable } from '@babylonjs/core/Misc/observable';
 import type { Scene } from '@babylonjs/core/scene';
 import type { Settings } from '../preferences';
 
@@ -21,18 +22,58 @@ import type { Settings } from '../preferences';
  *   - `loop` is honored — non-looping ambience plays once and frees on end.
  */
 
-const AUDIO_BASE = '/assets/audio/';
+export const AUDIO_BASE = '/assets/audio/';
+
+// Defense-in-depth: every current caller passes a hard-coded TS literal, but
+// the public surface accepts `string`. Reject anything that could escape the
+// asset root (absolute URLs, leading slashes, parent-dir traversal) before it
+// reaches Babylon's URL fetcher.
+const AUDIO_FILE_RE = /^[a-z0-9_\-./]+\.(ogg|mp3|wav|m4a)$/i;
+function assertSafeAudioPath(audioFile: string): void {
+	if (!AUDIO_FILE_RE.test(audioFile) || audioFile.includes('..') || audioFile.startsWith('/')) {
+		throw new Error(`AudioBus: refused unsafe audio path "${audioFile}"`);
+	}
+}
+
+/** Minimum surface AudioBus needs from a Babylon Sound — lets tests inject a fake. */
+export interface SoundLike {
+	setVolume(volume: number, time?: number): void;
+	dispose(): void;
+	metadata: { targetVolume?: number } | null;
+	readonly onEndedObservable: Observable<unknown>;
+}
+
+export interface SoundConstructOptions {
+	loop: boolean;
+	autoplay: boolean;
+	volume: number;
+	streaming: boolean;
+}
+
+export type SoundFactory = (
+	name: string,
+	url: string,
+	scene: Scene,
+	options: SoundConstructOptions,
+) => SoundLike;
+
+const defaultSoundFactory: SoundFactory = (name, url, scene, options) => {
+	return new Sound(name, url, scene, () => {}, options) as unknown as SoundLike;
+};
 
 export class AudioBus {
-	private readonly ambience = new Map<string, Sound>();
-	private readonly oneShots = new Set<Sound>();
+	private readonly ambience = new Map<string, SoundLike>();
+	private readonly oneShots = new Set<SoundLike>();
 	private settings: Settings;
+	private readonly soundFactory: SoundFactory;
 
 	constructor(
 		private readonly scene: Scene,
 		settings: Settings,
+		soundFactory: SoundFactory = defaultSoundFactory,
 	) {
 		this.settings = settings;
+		this.soundFactory = soundFactory;
 	}
 
 	updateSettings(settings: Settings): void {
@@ -48,8 +89,9 @@ export class AudioBus {
 	 */
 	startAmbience(id: string, audioFile: string, volume: number, loop: boolean): void {
 		if (this.ambience.has(id)) return;
+		assertSafeAudioPath(audioFile);
 		const url = `${AUDIO_BASE}${audioFile}`;
-		const sound = new Sound(`ambience-${id}`, url, this.scene, () => {}, {
+		const sound = this.soundFactory(`ambience-${id}`, url, this.scene, {
 			loop,
 			autoplay: true,
 			volume: this.scaledMusicVolume(volume),
@@ -75,8 +117,10 @@ export class AudioBus {
 
 	/** One-shot stinger; disposes when finished. Cue-authored volume optional. */
 	playStinger(audioFile: string, volume = 1): void {
+		assertSafeAudioPath(audioFile);
 		const url = `${AUDIO_BASE}${audioFile}`;
-		const sound = new Sound(`stinger-${audioFile}`, url, this.scene, () => {}, {
+		const sound = this.soundFactory(`stinger-${audioFile}`, url, this.scene, {
+			loop: false,
 			autoplay: true,
 			volume: this.scaledSfxVolume(volume),
 			streaming: false,
@@ -86,6 +130,20 @@ export class AudioBus {
 			sound.dispose();
 			this.oneShots.delete(sound);
 		});
+	}
+
+	/** Test introspection — public surface so tests can pin Map state. */
+	hasAmbience(id: string): boolean {
+		return this.ambience.has(id);
+	}
+
+	getAmbienceTargetVolume(id: string): number | null {
+		const sound = this.ambience.get(id);
+		return sound?.metadata?.targetVolume ?? null;
+	}
+
+	activeStingerCount(): number {
+		return this.oneShots.size;
 	}
 
 	private scaledMusicVolume(layerVolume: number): number {
