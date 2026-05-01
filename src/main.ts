@@ -37,6 +37,7 @@ import {
 	ContinueOverlay,
 	FriendModalOverlay,
 	GameOverOverlay,
+	HighScoresOverlay,
 	HudOverlay,
 	InsertCoinOverlay,
 	NarratorOverlay,
@@ -49,9 +50,10 @@ import { applyDoorOpen, applyShutterState, buildLevel, type LevelHandles } from 
 import type { Door, LevelId, Light, Shutter } from './levels/types';
 import {
 	loadHighScore,
+	loadHighScores,
 	loadSettings,
+	recordHighScore,
 	type Settings,
-	saveHighScoreIfBetter,
 	saveSettings,
 } from './preferences';
 
@@ -148,8 +150,20 @@ function routeOverlay(state: GameState): void {
 	hud?.render(state);
 	switch (state.phase) {
 		case 'insert-coin': {
-			const coin = new InsertCoinOverlay(overlay, () => handleInsertCoin());
+			const coin = new InsertCoinOverlay(
+				overlay,
+				() => handleInsertCoin(),
+				() => game.openHighScores(),
+			);
 			activeOverlayDispose = () => coin.dispose();
+			break;
+		}
+		case 'high-scores': {
+			void loadHighScores().then((scores) => {
+				if (game.getState().phase !== 'high-scores') return;
+				const panel = new HighScoresOverlay(overlay, scores, () => game.closeHighScores());
+				activeOverlayDispose = () => panel.dispose();
+			});
 			break;
 		}
 		case 'playing': {
@@ -248,11 +262,12 @@ async function emitGameOver(state: GameState, score: number, cleared: boolean): 
 	const run = state.run;
 	if (!run) return;
 	const utcDate = new Date().toISOString().slice(0, 10);
-	const newHighScore = await saveHighScoreIfBetter({
-		score,
-		clearedRun: cleared,
-		utcDate,
-	});
+	// recordHighScore inserts into the persistent top-N table AND syncs the
+	// legacy single-best key. `rank === 1` means the run took the #1 slot;
+	// the GameOver banner historically gates on "is this the new best,"
+	// which is equivalent to rank=1.
+	const rank = await recordHighScore({ score, clearedRun: cleared, utcDate });
+	const newHighScore = rank === 1;
 	const summary = {
 		score,
 		newHighScore,

@@ -35,7 +35,10 @@ export const DEFAULT_SETTINGS: Settings = {
 const KEYS = {
 	settings: 'dord:settings:v1',
 	highScore: 'dord:high-score:v1',
+	highScoresTop: 'dord:high-scores:top:v1',
 } as const;
+
+export const HIGH_SCORE_TABLE_SIZE = 10;
 
 export async function loadSettings(): Promise<Settings> {
 	const { value } = await Preferences.get({ key: KEYS.settings });
@@ -67,4 +70,52 @@ export async function saveHighScoreIfBetter(score: HighScore): Promise<boolean> 
 	if (existing && existing.score >= score.score) return false;
 	await Preferences.set({ key: KEYS.highScore, value: JSON.stringify(score) });
 	return true;
+}
+
+/**
+ * Load the persisted top-N high-score table, sorted descending by score.
+ * Returns an empty array on missing or corrupted storage. Always
+ * normalized: clamps to HIGH_SCORE_TABLE_SIZE entries, drops malformed
+ * rows.
+ */
+export async function loadHighScores(): Promise<readonly HighScore[]> {
+	const { value } = await Preferences.get({ key: KEYS.highScoresTop });
+	if (!value) return [];
+	try {
+		const parsed = JSON.parse(value);
+		if (!Array.isArray(parsed)) return [];
+		const rows = parsed.filter(
+			(r): r is HighScore =>
+				typeof r === 'object' &&
+				r !== null &&
+				typeof r.score === 'number' &&
+				Number.isFinite(r.score) &&
+				typeof r.clearedRun === 'boolean' &&
+				typeof r.utcDate === 'string',
+		);
+		return rows
+			.slice()
+			.sort((a, b) => b.score - a.score)
+			.slice(0, HIGH_SCORE_TABLE_SIZE);
+	} catch {
+		return [];
+	}
+}
+
+/**
+ * Insert a score into the top-N table if it qualifies. Returns the rank
+ * (1-indexed) the new score landed at, or null if it did not make the
+ * cut. Updates the persistent best (loadHighScore) as a side effect.
+ */
+export async function recordHighScore(score: HighScore): Promise<number | null> {
+	const existing = await loadHighScores();
+	const merged = [...existing, score].sort((a, b) => b.score - a.score);
+	const top = merged.slice(0, HIGH_SCORE_TABLE_SIZE);
+	const rank = top.indexOf(score);
+	if (rank === -1) return null;
+	await Preferences.set({ key: KEYS.highScoresTop, value: JSON.stringify(top) });
+	// Keep the legacy single-best key in sync so saveHighScoreIfBetter and
+	// the GameOver "NEW HIGH" banner remain authoritative.
+	await saveHighScoreIfBetter(score);
+	return rank + 1;
 }
