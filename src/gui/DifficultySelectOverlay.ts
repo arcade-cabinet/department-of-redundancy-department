@@ -3,8 +3,18 @@ import { Control } from '@babylonjs/gui/2D/controls/control';
 import { Grid } from '@babylonjs/gui/2D/controls/grid';
 import { TextBlock } from '@babylonjs/gui/2D/controls/textBlock';
 import type { Difficulty } from '../encounter';
+import { type DailyModifierDef, selectDailyModifier } from '../game/dailyChallenge';
+import type { GameMode } from '../game/GameState';
 import type { Lives } from '../preferences';
-import { COLOR_DIM, COLOR_INK, COLOR_MUTED, COLOR_PAPER, FONT_BODY, FONT_DISPLAY } from './brand';
+import {
+	COLOR_DIM,
+	COLOR_HP_LOW,
+	COLOR_INK,
+	COLOR_MUTED,
+	COLOR_PAPER,
+	FONT_BODY,
+	FONT_DISPLAY,
+} from './brand';
 import type { Overlay } from './Overlay';
 
 /**
@@ -35,10 +45,18 @@ export class DifficultySelectOverlay {
 	private readonly footnote: TextBlock;
 	private readonly buttons: Button[] = [];
 
+	private readonly dailyButton: Button;
+	private readonly dailyLabel: TextBlock;
+
 	constructor(
 		private readonly overlay: Overlay,
 		unlocked: readonly Difficulty[],
-		onChoose: (difficulty: Difficulty, lives: Lives) => void,
+		onChoose: (
+			difficulty: Difficulty,
+			lives: Lives,
+			mode: GameMode,
+			dailyModifier: DailyModifierDef | null,
+		) => void,
 	) {
 		this.title = new TextBlock('diffsel-title', 'CHOOSE YOUR FATE');
 		this.title.color = COLOR_PAPER;
@@ -79,7 +97,7 @@ export class DifficultySelectOverlay {
 				btn.cornerRadius = 6;
 				btn.isEnabled = isUnlocked;
 				if (isUnlocked) {
-					btn.onPointerUpObservable.add(() => onChoose(difficulty, lives.id));
+					btn.onPointerUpObservable.add(() => onChoose(difficulty, lives.id, 'standard', null));
 				}
 				this.grid.addControl(btn, row, col);
 				this.buttons.push(btn);
@@ -87,13 +105,46 @@ export class DifficultySelectOverlay {
 		}
 		this.overlay.add(this.grid);
 
+		// Today's daily-challenge — fixed Normal difficulty + one modifier
+		// chosen deterministically from the UTC date. Resets at midnight UTC.
+		// The label captures the modifier at construction; the click handler
+		// re-reads `selectDailyModifier()` so a session that crosses midnight
+		// UTC starts the run on the new day's modifier rather than yesterday's.
+		const labelMod = selectDailyModifier();
+		this.dailyButton = Button.CreateSimpleButton(
+			'diffsel-daily',
+			`★ TODAY'S CHALLENGE: ${labelMod.title}`,
+		);
+		this.dailyButton.height = '64px';
+		this.dailyButton.width = '560px';
+		this.dailyButton.color = COLOR_PAPER;
+		this.dailyButton.background = COLOR_HP_LOW;
+		this.dailyButton.thickness = 2;
+		this.dailyButton.fontSize = 22;
+		this.dailyButton.fontFamily = FONT_DISPLAY;
+		this.dailyButton.fontWeight = 'bold';
+		this.dailyButton.cornerRadius = 8;
+		this.dailyButton.top = '260px';
+		this.dailyButton.onPointerUpObservable.add(() =>
+			onChoose('normal', 'three-lives', 'daily-challenge', selectDailyModifier()),
+		);
+		this.overlay.add(this.dailyButton);
+
+		this.dailyLabel = new TextBlock('diffsel-daily-tag', labelMod.tagline);
+		this.dailyLabel.color = COLOR_PAPER;
+		this.dailyLabel.fontSize = 14;
+		this.dailyLabel.fontFamily = FONT_BODY;
+		this.dailyLabel.top = '310px';
+		this.dailyLabel.height = '20px';
+		this.overlay.add(this.dailyLabel);
+
 		this.footnote = new TextBlock('diffsel-footnote');
 		this.footnote.text = 'CLEAR A LEVEL TO UNLOCK THE NEXT TIER';
 		this.footnote.color = COLOR_MUTED;
-		this.footnote.fontSize = 16;
+		this.footnote.fontSize = 14;
 		this.footnote.fontFamily = FONT_BODY;
-		this.footnote.top = '280px';
-		this.footnote.height = '24px';
+		this.footnote.top = '345px';
+		this.footnote.height = '20px';
 		this.overlay.add(this.footnote);
 	}
 
@@ -102,9 +153,13 @@ export class DifficultySelectOverlay {
 		this.buttons.length = 0;
 		this.overlay.remove(this.title);
 		this.overlay.remove(this.grid);
+		this.overlay.remove(this.dailyButton);
+		this.overlay.remove(this.dailyLabel);
 		this.overlay.remove(this.footnote);
 		this.title.dispose();
 		this.grid.dispose();
+		this.dailyButton.dispose();
+		this.dailyLabel.dispose();
 		this.footnote.dispose();
 	}
 }

@@ -1,6 +1,7 @@
 import type { Difficulty } from '../encounter';
 import type { LevelId } from '../levels/types';
 import type { Lives } from '../preferences';
+import type { DailyModifierId } from './dailyChallenge';
 
 /**
  * Top-level game state machine — drives which screen is shown and what the
@@ -54,6 +55,9 @@ export interface RunState {
 	readonly difficulty: Difficulty;
 	readonly lives: Lives;
 	readonly mode: GameMode;
+	// Active daily-challenge modifier when mode === 'daily-challenge'.
+	// null in standard runs.
+	readonly dailyModifier: DailyModifierId | null;
 	readonly currentLevelId: LevelId;
 	readonly playerHp: number;
 	readonly maxPlayerHp: number;
@@ -91,6 +95,7 @@ export function startRun(
 	lives: Lives,
 	mode: GameMode,
 	nowMs: number,
+	dailyModifier: DailyModifierId | null = null,
 ): GameState {
 	const livesCount = lives === 'permadeath' ? 1 : 3;
 	return {
@@ -99,6 +104,7 @@ export function startRun(
 			difficulty,
 			lives,
 			mode,
+			dailyModifier,
 			currentLevelId: 'lobby',
 			playerHp: PLAYER_BASE_HP,
 			maxPlayerHp: PLAYER_BASE_HP,
