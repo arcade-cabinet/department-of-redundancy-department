@@ -1,3 +1,4 @@
+export { CabinetStatsOverlay } from './CabinetStatsOverlay';
 export { ContinueOverlay } from './ContinueOverlay';
 export { FriendModalOverlay } from './FriendModalOverlay';
 export { GameOverOverlay, type GameOverSummary } from './GameOverOverlay';

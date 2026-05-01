@@ -20,13 +20,14 @@ import {
 	type FireEvent,
 } from './encounter';
 import { drainPendingCues, isHandlesDependent } from './encounter/pendingCueQueue';
-import { now } from './engine/clock';
+import { installTestHooks, now } from './engine/clock';
 import { rand } from './engine/rng';
 import { Game } from './game/Game';
 import type { GameState } from './game/GameState';
 import {
 	awardQuarters,
 	getBalance,
+	getLifetimeStats,
 	grantFriendBailout,
 	initQuarters,
 	rollBossDrop,
@@ -34,6 +35,7 @@ import {
 	subscribe as subscribeQuarters,
 } from './game/quarters';
 import {
+	CabinetStatsOverlay,
 	ContinueOverlay,
 	FriendModalOverlay,
 	GameOverOverlay,
@@ -112,7 +114,11 @@ let activeOverlayDispose: (() => void) | null = null;
 let overlayGeneration = 0;
 let hud: HudOverlay | null = null;
 let narrator: NarratorOverlay | null = null;
-let lastTickMs = performance.now();
+let lastTickMs = now();
+
+// Install `?frame=N` deterministic-replay hook before any wall-clock read.
+// No-op outside frame-driven mode.
+installTestHooks();
 
 const settings: Settings = await loadSettings();
 await initQuarters();
@@ -160,6 +166,7 @@ function routeOverlay(state: GameState): void {
 				overlay,
 				() => handleInsertCoin(),
 				() => game.openHighScores(),
+				() => game.openCabinetStats(),
 			);
 			activeOverlayDispose = () => coin.dispose();
 			break;
@@ -175,6 +182,14 @@ function routeOverlay(state: GameState): void {
 				const panel = new HighScoresOverlay(overlay, scores, () => game.closeHighScores());
 				activeOverlayDispose = () => panel.dispose();
 			});
+			break;
+		}
+		case 'cabinet-stats': {
+			// Synchronous read — getLifetimeStats() returns the cached snapshot
+			// that initQuarters() populated at boot, so no async race window.
+			const stats = getLifetimeStats();
+			const panel = new CabinetStatsOverlay(overlay, stats, () => game.closeCabinetStats());
+			activeOverlayDispose = () => panel.dispose();
 			break;
 		}
 		case 'playing': {
@@ -229,11 +244,16 @@ let friendModalOpen = false;
 
 function handleInsertCoin(): void {
 	if (getBalance() > 0) {
+		audioBus?.playStinger('ui/ui-confirm.mp3', 0.7);
 		game.insertCoin(now());
 		return;
 	}
 	if (friendModalOpen) return;
 	friendModalOpen = true;
+	// Friend bailout sting — cheery pickup-style cue announces the modal.
+	// Reused from the inventory pickup library per docs/spec/06-economy.md
+	// audio polish item.
+	audioBus?.playStinger('inventory/pickup-coffee.ogg', 0.9);
 	// Zero balance → friend modal, then auto-start the run. Caller is
 	// always in 'insert-coin' phase; dispose the InsertCoinOverlay so the
 	// modal sits alone on the screen.
@@ -242,6 +262,7 @@ function handleInsertCoin(): void {
 		activeOverlayDispose = null;
 	}
 	const modal = new FriendModalOverlay(overlay, () => {
+		audioBus?.playStinger('ui/ui-confirm.mp3', 0.7);
 		modal.dispose();
 		activeOverlayDispose = null;
 		friendModalOpen = false;
@@ -709,7 +730,7 @@ function sampleCivilianPath(civ: ActiveCivilian): { position: Vector3; finished:
 // ── Main loop ────────────────────────────────────────────────────────────────
 
 function tick(): void {
-	const tickT = performance.now();
+	const tickT = now();
 	const dtMs = Math.min(64, tickT - lastTickMs);
 	lastTickMs = tickT;
 
@@ -794,6 +815,10 @@ canvas.addEventListener('pointerdown', (e) => {
 	const fired = game.tryFire(now());
 	if (!fired) return;
 	const pick = pickAt(e.clientX, e.clientY);
+	// Adaptive difficulty: only enemy hits preserve the hitless-kill streak.
+	// Civilians, health-kit shots, and air all break the streak (wasted
+	// rounds = bad trigger discipline = the director gives less of a discount).
+	director.notifyShotResult(pick.kind === 'enemy');
 	if (pick.kind === 'enemy' && pick.enemyId && pick.target) {
 		director.hitEnemy(pick.enemyId, pick.target);
 	} else if (pick.kind === 'civilian' && pick.civilianId) {

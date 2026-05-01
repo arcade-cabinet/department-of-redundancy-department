@@ -27,12 +27,19 @@ export const FRIEND_BAILOUT_GRANT = 8;
 
 type Listener = (balance: number) => void;
 
-interface QuartersStats {
+export interface QuartersStats {
 	readonly balance: number;
 	readonly lifetimeEarned: number;
 	readonly lifetimeSpent: number;
 	readonly friendBailoutCount: number;
 }
+
+const ZERO_STATS: QuartersStats = {
+	balance: 0,
+	lifetimeEarned: 0,
+	lifetimeSpent: 0,
+	friendBailoutCount: 0,
+};
 
 let cached: QuartersStats | null = null;
 const listeners = new Set<Listener>();
@@ -108,6 +115,14 @@ export async function initQuarters(): Promise<number> {
 /** Synchronous read of the cached balance. Returns 0 before initQuarters resolves. */
 export function getBalance(): number {
 	return cached?.balance ?? 0;
+}
+
+/**
+ * Synchronous read of the full lifetime stats snapshot. Returns all-zeros
+ * before initQuarters resolves. Powers the Cabinet Stats screen.
+ */
+export function getLifetimeStats(): QuartersStats {
+	return cached ?? ZERO_STATS;
 }
 
 export function subscribe(listener: Listener): () => void {
