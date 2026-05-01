@@ -1,5 +1,5 @@
 import type { Scene } from '@babylonjs/core/scene';
-import { ARCHETYPES, type EncounterDirector } from '../encounter';
+import { ARCHETYPES, type EncounterDirector, JUSTICE_TARGETS } from '../encounter';
 
 export interface PickResult {
 	readonly kind: 'enemy' | 'civilian' | 'health-kit' | 'air';
@@ -8,24 +8,6 @@ export interface PickResult {
 	readonly healthKitId?: string;
 	readonly target?: 'head' | 'body' | 'justice';
 }
-
-/**
- * Y-fraction of the capsule (measured from top, range [0, 1]) where each
- * archetype's `justiceShotTarget` sub-region centers. The picker considers
- * a hit "on target" if `fromTop / capsuleHeight` lands in `[center − tol,
- * center + tol]`. Spec: docs/spec/02-encounter-vocabulary.md `:78,261`.
- *
- * `tie-knot` sits high (collar). `weapon-hand` sits at hip. `scythe-shaft`
- * runs the full vertical of the Reaper's pose so we widen the band rather
- * than picking a single point.
- */
-const JUSTICE_TARGET_BAND_BY_KIND: Readonly<
-	Record<'weapon-hand' | 'tie-knot' | 'scythe-shaft', { center: number; tol: number }>
-> = {
-	'tie-knot': { center: 0.2, tol: 0.1 },
-	'weapon-hand': { center: 0.65, tol: 0.15 },
-	'scythe-shaft': { center: 0.5, tol: 0.4 },
-};
 
 /**
  * Hit-test against the gameplay scene. Reads enemy/civilian/health-kit ids
@@ -67,8 +49,8 @@ export function pickAt(
 		if (director?.isJusticeWindowOpen(meta.enemyId)) {
 			const enemy = director.getEnemy(meta.enemyId);
 			if (enemy) {
-				const band = JUSTICE_TARGET_BAND_BY_KIND[ARCHETYPES[enemy.archetypeId].justiceShotTarget];
-				if (Math.abs(fromTopFrac - band.center) <= band.tol) {
+				const band = JUSTICE_TARGETS[ARCHETYPES[enemy.archetypeId].justiceShotTarget];
+				if (Math.abs(fromTopFrac - band.bandCenter) <= band.bandTol) {
 					return { kind: 'enemy', enemyId: meta.enemyId, target: 'justice' };
 				}
 			}

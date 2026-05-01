@@ -16,7 +16,16 @@ export {
 	type EncounterDirectorConfig,
 	type EncounterListener,
 } from './EncounterDirector';
-export { ARCHETYPES, type Archetype, type ArchetypeId, type Enemy, type EnemyState } from './Enemy';
+export {
+	ARCHETYPES,
+	type Archetype,
+	type ArchetypeId,
+	type Enemy,
+	type EnemyState,
+	JUSTICE_TARGETS,
+	type JusticeTarget,
+	type JusticeTargetKind,
+} from './Enemy';
 export type { FireEvent, FirePattern, FirePatternId } from './FirePattern';
 export { FIRE_PATTERNS, getFirePattern } from './firePatterns';
 export {

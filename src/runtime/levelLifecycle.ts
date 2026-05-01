@@ -17,6 +17,7 @@ import {
 	type EncounterListener,
 	type Enemy,
 	type FireEvent,
+	JUSTICE_TARGETS,
 } from '../encounter';
 import type { Game } from '../game/Game';
 import { awardQuarters, rollBossDrop } from '../game/quarters';
@@ -138,22 +139,6 @@ export interface EncounterListenerHost {
 }
 
 /**
- * Local Y offset (in the capsule's frame, where 0 is capsule center, +halfHeight
- * is the top) where each archetype's `justiceShotTarget` glint billboard
- * sits. Mirrors the band centers in `picking.JUSTICE_TARGET_BAND_BY_KIND`:
- *   tie-knot     center fromTop = 0.2 → localY = halfHeight * (1 - 2*0.2) = +0.6 * halfHeight
- *   weapon-hand  center fromTop = 0.65 → localY = halfHeight * (1 - 1.3) = -0.3 * halfHeight
- *   scythe-shaft center fromTop = 0.5 → localY = 0
- */
-const JUSTICE_GLINT_LOCAL_Y_FRACTION: Readonly<
-	Record<'weapon-hand' | 'tie-knot' | 'scythe-shaft', number>
-> = {
-	'tie-knot': 0.6,
-	'weapon-hand': -0.3,
-	'scythe-shaft': 0.0,
-};
-
-/**
  * Build an EncounterListener wired to the given host. Called once per
  * level inside `constructLevel`. The listener holds no internal state
  * beyond what the host exposes — the host's mutable Maps ARE the per-
@@ -213,7 +198,8 @@ export function createEncounterListener(host: EncounterListenerHost): EncounterL
 					scene,
 				);
 				glint.parent = mesh;
-				glint.position.y = (host.capsuleHeight / 2) * JUSTICE_GLINT_LOCAL_Y_FRACTION[targetKind];
+				glint.position.y =
+					(host.capsuleHeight / 2) * JUSTICE_TARGETS[targetKind].glintLocalYFraction;
 				const glintMat = new StandardMaterial(`mat-glint-${enemy.id}`, scene);
 				glintMat.diffuseColor = new Color3(1.0, 0.85, 0.25);
 				glintMat.emissiveColor = new Color3(1.0, 0.85, 0.25);

@@ -14,15 +14,47 @@ import type { SpawnRailState } from './SpawnRail';
  */
 export type ArchetypeId = 'security-guard' | 'middle-manager' | 'hitman' | 'swat' | 'reaper';
 
+export type JusticeTargetKind = 'weapon-hand' | 'tie-knot' | 'scythe-shaft';
+
 export interface Archetype {
 	readonly id: ArchetypeId;
 	readonly glb: string;
 	readonly hp: number;
 	readonly weakpoint: 'head' | 'scythe-jewel' | 'body';
-	readonly justiceShotTarget: 'weapon-hand' | 'tie-knot' | 'scythe-shaft';
+	readonly justiceShotTarget: JusticeTargetKind;
 	readonly bodyDamage: number;
 	readonly headDamage: number;
 }
+
+/**
+ * Per-archetype justice-shot geometry. Single source of truth for both the
+ * picker (band test) AND the glint VFX placement — keeping them in two
+ * tables drifted easily, so they're unified here next to the archetypes.
+ *
+ * `bandCenter` / `bandTol` are y-fractions measured from the top of the
+ * capsule (range [0, 1]). The picker tests `|fromTop/height − center| ≤ tol`.
+ *
+ * `glintLocalYFraction` is derived from `bandCenter`: in the capsule's frame
+ * (center = 0, top = +halfHeight, bottom = −halfHeight), the local Y of a
+ * point at `fromTop = bandCenter * height` is `halfHeight * (1 - 2 * bandCenter)`.
+ * Stored as that multiplier so `glint.position.y = halfHeight * fraction`
+ * is one line at the call site.
+ */
+export interface JusticeTarget {
+	readonly bandCenter: number;
+	readonly bandTol: number;
+	readonly glintLocalYFraction: number;
+}
+
+function makeTarget(bandCenter: number, bandTol: number): JusticeTarget {
+	return { bandCenter, bandTol, glintLocalYFraction: 1 - 2 * bandCenter };
+}
+
+export const JUSTICE_TARGETS: Readonly<Record<JusticeTargetKind, JusticeTarget>> = {
+	'tie-knot': makeTarget(0.2, 0.1),
+	'weapon-hand': makeTarget(0.65, 0.15),
+	'scythe-shaft': makeTarget(0.5, 0.4),
+};
 
 export const ARCHETYPES: Readonly<Record<ArchetypeId, Archetype>> = {
 	'security-guard': {

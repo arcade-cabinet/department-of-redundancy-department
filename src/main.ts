@@ -172,6 +172,11 @@ const IS_DEV = !(import.meta?.env?.PROD ?? false);
 // machine + engine handle so the audit harness can drive overlays without
 // pointer-event flakiness. Stripped from production by `IS_DEV`.
 if (IS_DEV) {
+	// Sentinel marker the `assert-no-cheats-in-bundle.mjs` post-build script
+	// greps for. Lives inside the IS_DEV block so it tree-shakes in prod;
+	// if it ever appears in dist/, the entire dev surface (including
+	// `__dord.hitEnemy`) shipped and the build must fail.
+	(globalThis as { __DORD_DEV_SURFACE_MARKER__?: true }).__DORD_DEV_SURFACE_MARKER__ = true;
 	(globalThis as { __dord?: unknown }).__dord = {
 		game,
 		engine,
