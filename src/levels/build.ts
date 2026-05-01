@@ -120,10 +120,15 @@ function buildWall(scene: Scene, wall: Wall, handles: LevelHandles): Mesh {
 	mesh.position.copyFrom(wall.origin);
 	mesh.position.y += wall.height / 2; // origin is base; plane centers
 	mesh.rotation.y = wall.yaw;
-	mesh.material = pbrMaterial(scene, wall.pbr, `mat-wall-${wall.id}`, {
+	const wallMat = pbrMaterial(scene, wall.pbr, `mat-wall-${wall.id}`, {
 		width: wall.width,
 		height: wall.height,
 	});
+	// Walls are single-sided planes; if a level author gets the yaw wrong
+	// the whole wall vanishes. Render both sides so geometry never shows
+	// through to clear-color.
+	wallMat.backFaceCulling = false;
+	mesh.material = wallMat;
 	if (wall.overlay) {
 		// Overlay rendered as a thin parented plane in front of the wall.
 		const overlay = MeshBuilder.CreatePlane(
@@ -184,10 +189,17 @@ function buildFloor(scene: Scene, floor: Floor): Mesh {
 	);
 	mesh.position.copyFrom(floor.origin);
 	mesh.rotation.y = floor.yaw;
-	mesh.material = pbrMaterial(scene, floor.pbr, `mat-floor-${floor.id}`, {
+	const mat = pbrMaterial(scene, floor.pbr, `mat-floor-${floor.id}`, {
 		width: floor.width,
 		height: floor.depth,
 	});
+	// Stairway levels have multiple floor slabs at different Y heights; the
+	// camera ascends and looks UP at slabs that are above it. Default
+	// backface-cull would render those upward slabs as transparent
+	// (revealing clear-color void). Show both sides so the underside reads
+	// as ceiling-tile-equivalent.
+	mat.backFaceCulling = false;
+	mesh.material = mat;
 	return mesh;
 }
 
@@ -201,10 +213,13 @@ function buildCeiling(scene: Scene, ceiling: Ceiling): Mesh {
 	mesh.position.y = ceiling.height;
 	mesh.rotation.x = Math.PI; // flip ground to face down
 	mesh.rotation.y = ceiling.yaw;
-	mesh.material = pbrMaterial(scene, ceiling.pbr, `mat-ceiling-${ceiling.id}`, {
+	const ceilMat = pbrMaterial(scene, ceiling.pbr, `mat-ceiling-${ceiling.id}`, {
 		width: ceiling.width,
 		height: ceiling.depth,
 	});
+	// Same reasoning as floors/walls — guard against authoring errors.
+	ceilMat.backFaceCulling = false;
+	mesh.material = ceilMat;
 
 	// Emissive cutouts: small downward-facing planes with emissive material.
 	if (ceiling.emissiveCutouts) {

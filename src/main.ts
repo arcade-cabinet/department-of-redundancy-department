@@ -8,6 +8,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { Scene } from '@babylonjs/core/scene';
 import '@babylonjs/core/Loading/sceneLoader';
 import '@babylonjs/core/Audio/audioEngine';
+import '@babylonjs/core/Culling/ray'; // side-effect: enables scene.pick / pickWithRay
 import '@babylonjs/loaders/glTF';
 
 import { AudioBus } from './audio/AudioBus';

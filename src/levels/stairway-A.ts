@@ -106,6 +106,33 @@ const primitives: Primitive[] = [
 		// without continuing. Positioned at eye level on the east shaft wall.
 		healthKit: { id: 'kit-stairway-A-shaft', hp: 35, offset: [0, 1.5] },
 	},
+	// Shaft end-caps so the camera doesn't see void clear-color past the
+	// stairwell. South wall closes off the entrance behind, north wall sits
+	// just past the exit door.
+	{
+		// Camera is at z>-1 looking generally +Z; we want this wall's
+		// front face to point toward the interior (+Z). Plane normal is
+		// -Z by default; yaw=π flips it to +Z.
+		id: 'wall-shaft-S',
+		kind: 'wall',
+		origin: new Vector3(0, 0, -1),
+		yaw: Math.PI,
+		width: 4,
+		height: 9,
+		pbr: 'drywall',
+	},
+	{
+		// Camera at z<12 looking +Z toward this wall; we want the front
+		// face to point toward camera (-Z). Default plane normal IS -Z;
+		// yaw=0 keeps it that way.
+		id: 'wall-shaft-N',
+		kind: 'wall',
+		origin: new Vector3(0, 0, 12),
+		yaw: 0,
+		width: 4,
+		height: 9,
+		pbr: 'drywall',
+	},
 
 	// Doors — metal stairwell doors.
 	{
@@ -160,6 +187,18 @@ const primitives: Primitive[] = [
 		state: 'closed',
 	},
 
+	// Hemispheric fill so the enclosed shaft isn't pitch-black between
+	// point-light pools. Matches the lobby's `light-fluorescent-fill`
+	// pattern at a similar low intensity so PBR materials read.
+	{
+		id: 'light-fill',
+		kind: 'light',
+		origin: new Vector3(0, 6, 5),
+		yaw: 0,
+		light: 'hemispheric',
+		color: [1.0, 1.0, 1.0],
+		intensity: 0.9,
+	},
 	// Ceiling-mounted lights (flicker/snap on cue).
 	{
 		id: 'light-flicker-A',
@@ -192,6 +231,18 @@ const primitives: Primitive[] = [
 		range: 8,
 		direction: new Vector3(0, 0, 1),
 		conicalAngle: 0.9,
+	},
+	// Ceiling at Y=9 closes off the shaft. Without it the camera sees the
+	// dark-blue clear color past the lights as it rises through the stair.
+	{
+		id: 'ceiling-shaft',
+		kind: 'ceiling',
+		origin: new Vector3(0, 0, 5),
+		yaw: 0,
+		width: 4,
+		depth: 14,
+		pbr: 'ceiling-tile',
+		height: 9,
 	},
 ];
 
