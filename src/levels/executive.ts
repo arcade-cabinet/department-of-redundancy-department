@@ -1,6 +1,7 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Cue } from '../encounter/cues';
 import type { RailGraph } from '../rail/RailNode';
+import { ceiling, floor, wall } from './builders';
 import type { Level, Primitive } from './types';
 
 /**
@@ -63,50 +64,21 @@ const cameraRail: RailGraph = {
 
 const primitives: Primitive[] = [
 	// Floors — mahogany-tinted laminate stand-ins.
-	{
-		id: 'floor-reception',
-		kind: 'floor',
-		origin: new Vector3(0, 0, 4),
-		yaw: 0,
-		width: 8,
-		depth: 8,
-		pbr: 'laminate',
-	},
-	{
-		id: 'floor-lounge',
-		kind: 'floor',
-		origin: new Vector3(0, 0, 12),
-		yaw: 0,
-		width: 12,
-		depth: 8,
-		pbr: 'laminate',
-	},
-	{
-		id: 'floor-crawford-office',
-		kind: 'floor',
-		// Origin shifted to z=24 with depth 12 so the slab spans z=18..30
-		// (no gap to the lounge floor and Crawford's spawn at z=30 stands
-		// on geometry, not air).
-		origin: new Vector3(0, 0, 24),
-		yaw: 0,
-		width: 12,
-		depth: 12,
-		pbr: 'laminate',
-	},
+	floor({ id: 'floor-reception', origin: new Vector3(0, 0, 4), width: 8, depth: 8 }),
+	floor({ id: 'floor-lounge', origin: new Vector3(0, 0, 12), width: 12, depth: 8 }),
+	// Crawford's slab origin z=24 with depth 12 spans z=18..30 — no gap to
+	// the lounge floor and Crawford's spawn at z=30 stands on geometry.
+	floor({ id: 'floor-crawford-office', origin: new Vector3(0, 0, 24), width: 12, depth: 12 }),
 
 	// Executive ceiling — 12 emissive cutouts; panic-strobe overlay tint
-	// driven by the lighting cue rather than per-cutout color.
-	{
+	// driven by the lighting cue rather than per-cutout color. Center at
+	// z=15 with depth 36 spans z=-3..33 and covers all three floor slabs.
+	ceiling({
 		id: 'ceiling-exec',
-		kind: 'ceiling',
-		// Center shifted to z=15 with depth 36 so the ceiling spans z=-3..33
-		// and covers all three floor slabs without gaps.
 		origin: new Vector3(0, 3, 15),
-		yaw: 0,
 		width: 12,
 		depth: 36,
 		height: 3,
-		pbr: 'ceiling-tile',
 		emissiveCutouts: [
 			{ width: 0.6, depth: 1.0, offset: [-3, -10], intensity: 0.5, color: [1.0, 0.95, 0.85] },
 			{ width: 0.6, depth: 1.0, offset: [3, -10], intensity: 0.5, color: [1.0, 0.95, 0.85] },
@@ -121,53 +93,45 @@ const primitives: Primitive[] = [
 			{ width: 0.6, depth: 1.0, offset: [-3, 10], intensity: 0.5, color: [1.0, 0.95, 0.85] },
 			{ width: 0.6, depth: 1.0, offset: [3, 10], intensity: 0.5, color: [1.0, 0.95, 0.85] },
 		],
-	},
+	}),
 
 	// Side walls + frosted-glass partition into the lounge + Crawford end-wall.
-	{
+	wall({
 		id: 'wall-N',
-		kind: 'wall',
 		origin: new Vector3(-6, 0, 14),
 		yaw: Math.PI / 2,
 		width: 32,
 		height: 3,
-		pbr: 'drywall',
 		// Pre-Crawford kit. Crawford's desk-bunker phase is the last big
 		// HP burn before the boss elevator to the Boardroom. Authored on
 		// the long north wall mid-suite, before the lounge frosted glass.
 		healthKit: { id: 'kit-executive-N', hp: 35, offset: [-6, 1.4] },
-	},
-	{
+	}),
+	wall({
 		id: 'wall-S',
-		kind: 'wall',
 		origin: new Vector3(6, 0, 14),
 		yaw: -Math.PI / 2,
 		width: 32,
 		height: 3,
-		pbr: 'drywall',
-	},
-	{
+	}),
+	wall({
 		id: 'wall-lounge-frosted',
-		kind: 'wall',
 		origin: new Vector3(0, 0, 18),
 		yaw: 0,
 		width: 12,
 		height: 3,
-		pbr: 'drywall',
 		overlay: { texture: 'T_Window_GlassBricks_01.png' },
-	},
-	{
+	}),
+	wall({
+		// Wall overlays load from /textures/retro/windows/, so we pick a
+		// wood-grain window plate that reads as a "DIRECTOR OF OPS" plaque.
 		id: 'wall-end-crawford',
-		kind: 'wall',
 		origin: new Vector3(0, 0, 30),
 		yaw: 0,
 		width: 12,
 		height: 3,
-		pbr: 'drywall',
-		// Wall overlays load from /textures/retro/windows/, so we pick a
-		// wood-grain window plate that reads as a "DIRECTOR OF OPS" plaque.
 		overlay: { texture: 'T_Window_Wood_Painted_028.png' },
-	},
+	}),
 
 	// Doors — reception flanks, lounge sides, ceiling vent (metal grate),
 	// and Crawford's office at the far end.

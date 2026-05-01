@@ -1,6 +1,7 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Cue } from '../encounter/cues';
 import type { RailGraph } from '../rail/RailNode';
+import { ceiling, floor, wall } from './builders';
 import type { Level, Primitive } from './types';
 
 /**
@@ -56,24 +57,19 @@ const cameraRail: RailGraph = {
 const primitives: Primitive[] = [
 	// Floor / ceiling — beige carpet swallowing footsteps; tile ceiling with
 	// 8 emissive cutouts (every other one will flicker via cue lighting).
-	{
+	floor({
 		id: 'floor-corridor',
-		kind: 'floor',
 		origin: new Vector3(0, 0, 12),
-		yaw: 0,
 		width: 6,
 		depth: 24,
 		pbr: 'carpet',
-	},
-	{
+	}),
+	ceiling({
 		id: 'ceiling-flicker',
-		kind: 'ceiling',
 		origin: new Vector3(0, 3, 12),
-		yaw: 0,
 		width: 6,
 		depth: 24,
 		height: 3,
-		pbr: 'ceiling-tile',
 		emissiveCutouts: [
 			{ width: 0.6, depth: 1.2, offset: [0, -9], intensity: 0.6, color: [1.0, 1.0, 0.95] },
 			{ width: 0.6, depth: 1.2, offset: [0, -6], intensity: 0.6, color: [1.0, 1.0, 0.95] },
@@ -84,41 +80,35 @@ const primitives: Primitive[] = [
 			{ width: 0.6, depth: 1.2, offset: [0, 9], intensity: 0.6, color: [1.0, 1.0, 0.95] },
 			{ width: 0.6, depth: 1.2, offset: [0, 12], intensity: 0.6, color: [1.0, 1.0, 0.95] },
 		],
-	},
+	}),
 
 	// Side walls (drywall) and end wall with HR DEPARTMENT signage overlay.
-	{
+	wall({
 		id: 'wall-east',
-		kind: 'wall',
 		origin: new Vector3(3, 0, 12),
 		yaw: -Math.PI / 2,
 		width: 24,
 		height: 3,
-		pbr: 'drywall',
 		// HR-corridor mid-pass kit. Phelps's frosted-glass cover game eats
 		// HP fast — this is the pre-boss insurance shot. Mounted on the east
 		// wall ahead of the Phelps spawn.
 		healthKit: { id: 'kit-hr-corridor-east', hp: 35, offset: [-4, 1.4] },
-	},
-	{
+	}),
+	wall({
 		id: 'wall-west',
-		kind: 'wall',
 		origin: new Vector3(-3, 0, 12),
 		yaw: Math.PI / 2,
 		width: 24,
 		height: 3,
-		pbr: 'drywall',
-	},
-	{
+	}),
+	wall({
 		id: 'wall-end',
-		kind: 'wall',
 		origin: new Vector3(0, 0, 24),
 		yaw: 0,
 		width: 6,
 		height: 3,
-		pbr: 'drywall',
 		overlay: { texture: 'T_Window_Vinyl_002.png' },
-	},
+	}),
 
 	// Frosted-glass doors flanking the corridor — silhouettes visible through
 	// glass-bricks textures (used here as a stand-in for frosted glass).

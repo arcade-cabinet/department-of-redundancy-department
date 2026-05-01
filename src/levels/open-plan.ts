@@ -1,6 +1,7 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Cue } from '../encounter/cues';
 import type { RailGraph } from '../rail/RailNode';
+import { ceiling, floor, wall } from './builders';
 import type { Level, Primitive } from './types';
 
 /**
@@ -55,69 +56,55 @@ const cameraRail: RailGraph = {
 
 const primitives: Primitive[] = [
 	// Floor + perimeter walls.
-	{
+	floor({
 		id: 'floor-cubicle-field',
-		kind: 'floor',
 		origin: new Vector3(0, 0, 12),
-		yaw: 0,
 		width: 24,
 		depth: 24,
 		pbr: 'carpet',
-	},
-	{
+	}),
+	wall({
 		id: 'wall-east',
-		kind: 'wall',
 		origin: new Vector3(12, 0, 12),
 		yaw: -Math.PI / 2,
 		width: 24,
 		height: 3,
-		pbr: 'drywall',
-	},
-	{
+	}),
+	wall({
 		id: 'wall-west',
-		kind: 'wall',
 		origin: new Vector3(-12, 0, 12),
 		yaw: Math.PI / 2,
 		width: 24,
 		height: 3,
-		pbr: 'drywall',
 		// Authored health kit on the west wall — picked up between the
 		// office-cluster ambushes per docs/spec/06-economy.md pacing.
 		healthKit: { id: 'kit-open-plan-west', hp: 35, offset: [4, 1.4] },
-	},
-	{
+	}),
+	wall({
 		id: 'wall-end-glass',
-		kind: 'wall',
 		origin: new Vector3(0, 0, 24),
 		yaw: 0,
 		width: 24,
 		height: 3,
-		pbr: 'drywall',
 		overlay: { texture: 'T_Window_Wood_018.png' },
-	},
+	}),
 	// Entry-side wall closes the south end of the cubicle field. Without
 	// this the camera looking back at entry sees void.
-	{
+	wall({
 		id: 'wall-entry',
-		kind: 'wall',
 		origin: new Vector3(0, 0, 0),
 		yaw: Math.PI,
 		width: 24,
 		height: 3,
-		pbr: 'drywall',
-	},
-	// Ceiling. Open-plan offices are flat 3m drop-ceiling tile. The spec
-	// calls for a 6×6 grid of cool-white emissive cutouts per
-	// docs/spec/levels/03-open-plan.md §"Floors / ceiling" so the field
-	// reads as fluorescent-lit, not a dark cavern.
-	{
+	}),
+	// Open-plan ceiling — flat 3m drop-tile with a 6×6 grid of cool-white
+	// emissive cutouts per docs/spec/levels/03-open-plan.md §"Floors /
+	// ceiling" so the field reads as fluorescent-lit, not a dark cavern.
+	ceiling({
 		id: 'ceiling-cubicle-field',
-		kind: 'ceiling',
 		origin: new Vector3(0, 0, 12),
-		yaw: 0,
 		width: 24,
 		depth: 24,
-		pbr: 'ceiling-tile',
 		height: 3,
 		emissiveCutouts: [
 			{ width: 1.2, depth: 1.2, offset: [-8, -8], intensity: 0.7, color: [1, 1, 0.95] },
@@ -146,7 +133,7 @@ const primitives: Primitive[] = [
 			{ width: 1.2, depth: 1.2, offset: [4, 8], intensity: 0.7, color: [1, 1, 0.95] },
 			{ width: 1.2, depth: 1.2, offset: [8, 8], intensity: 0.7, color: [1, 1, 0.95] },
 		],
-	},
+	}),
 	{
 		id: 'light-fill',
 		kind: 'light',

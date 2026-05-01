@@ -1,6 +1,7 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Cue } from '../encounter/cues';
 import type { RailGraph } from '../rail/RailNode';
+import { floor, wall } from './builders';
 import type { Level, Primitive } from './types';
 
 /**
@@ -58,42 +59,10 @@ const cameraRail: RailGraph = {
 
 const primitives: Primitive[] = [
 	// Floors / landings — laminate (walnut-tinted stand-in).
-	{
-		id: 'floor-bottom',
-		kind: 'floor',
-		origin: new Vector3(0, 0, 0),
-		yaw: 0,
-		width: 4,
-		depth: 4,
-		pbr: 'laminate',
-	},
-	{
-		id: 'floor-mid-1',
-		kind: 'floor',
-		origin: new Vector3(0, 3, 5),
-		yaw: 0,
-		width: 6,
-		depth: 4,
-		pbr: 'laminate',
-	},
-	{
-		id: 'floor-mid-2',
-		kind: 'floor',
-		origin: new Vector3(0, 6, 10),
-		yaw: 0,
-		width: 6,
-		depth: 4,
-		pbr: 'laminate',
-	},
-	{
-		id: 'floor-top',
-		kind: 'floor',
-		origin: new Vector3(0, 9, 14),
-		yaw: 0,
-		width: 6,
-		depth: 4,
-		pbr: 'laminate',
-	},
+	floor({ id: 'floor-bottom', origin: new Vector3(0, 0, 0), width: 4, depth: 4 }),
+	floor({ id: 'floor-mid-1', origin: new Vector3(0, 3, 5), width: 6, depth: 4 }),
+	floor({ id: 'floor-mid-2', origin: new Vector3(0, 6, 10), width: 6, depth: 4 }),
+	floor({ id: 'floor-top', origin: new Vector3(0, 9, 14), width: 6, depth: 4 }),
 
 	// Atrium ceiling with chandelier emissive cutout.
 	{
@@ -111,80 +80,66 @@ const primitives: Primitive[] = [
 	},
 
 	// Side walls with walnut wainscoting (drywall stand-in).
-	{
+	wall({
 		id: 'wall-N',
-		kind: 'wall',
 		origin: new Vector3(-3, 0, 7),
 		yaw: Math.PI / 2,
 		width: 18,
 		height: 13,
-		pbr: 'drywall',
 		// Last kit before Executive Suites + the final Reaper push. Mounted
 		// at the head of the long oppressive walnut hallway — psychological
 		// breath of "the cabinet is letting you live for now."
 		healthKit: { id: 'kit-stairway-C-N', hp: 35, offset: [-4, 1.6] },
-	},
-	{
+	}),
+	wall({
 		id: 'wall-S',
-		kind: 'wall',
 		origin: new Vector3(3, 0, 7),
 		yaw: -Math.PI / 2,
 		width: 18,
 		height: 13,
-		pbr: 'drywall',
-	},
+	}),
 
 	// Oil-painting hallway portraits (walnut-frame textures as overlays).
-	{
+	wall({
 		id: 'wall-portrait-1',
-		kind: 'wall',
 		origin: new Vector3(-3, 1.5, 9),
 		yaw: Math.PI / 2,
 		width: 2,
 		height: 1.5,
-		pbr: 'drywall',
 		overlay: { texture: 'T_Window_Wood_005.png' },
-	},
-	{
+	}),
+	wall({
 		id: 'wall-portrait-2',
-		kind: 'wall',
 		origin: new Vector3(3, 1.5, 9),
 		yaw: -Math.PI / 2,
 		width: 2,
 		height: 1.5,
-		pbr: 'drywall',
 		overlay: { texture: 'T_Window_Wood_006.png' },
-	},
-	{
+	}),
+	wall({
 		id: 'wall-portrait-3',
-		kind: 'wall',
 		origin: new Vector3(-3, 1.5, 11),
 		yaw: Math.PI / 2,
 		width: 2,
 		height: 1.5,
-		pbr: 'drywall',
 		overlay: { texture: 'T_Window_Wood_007.png' },
-	},
-	{
+	}),
+	wall({
 		id: 'wall-portrait-4',
-		kind: 'wall',
 		origin: new Vector3(3, 1.5, 11),
 		yaw: -Math.PI / 2,
 		width: 2,
 		height: 1.5,
-		pbr: 'drywall',
 		overlay: { texture: 'T_Window_Wood_008.png' },
-	},
-	{
+	}),
+	wall({
 		id: 'wall-portrait-blank',
-		kind: 'wall',
 		origin: new Vector3(-3, 1.5, 13),
 		yaw: Math.PI / 2,
 		width: 2,
 		height: 1.5,
-		pbr: 'drywall',
 		overlay: { texture: 'T_Window_Wood_009.png' },
-	},
+	}),
 
 	// Hidden-door-painting at lower flight (signature beat — painting hinges
 	// outward to reveal a hitman).
