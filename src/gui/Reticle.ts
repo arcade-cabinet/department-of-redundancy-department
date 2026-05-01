@@ -2,19 +2,22 @@ import { Control } from '@babylonjs/gui/2D/controls/control';
 import { Ellipse } from '@babylonjs/gui/2D/controls/ellipse';
 import type { Overlay } from './Overlay';
 
-export type ReticleColor = 'green' | 'orange' | 'red' | 'blue';
+export type ReticleColor = 'green' | 'orange' | 'red' | 'blue' | 'gold';
 
 const COLOUR_HEX: Readonly<Record<ReticleColor, string>> = {
 	green: '#3FFF7F',
 	orange: '#FFA040',
 	red: '#FF3030',
 	blue: '#3FA0FF',
+	// `gold` signals an open justice-glint window — precision-shot bonus
+	// available. Wins over HP-band coloring per `picking.reticleColorFor`.
+	gold: '#FFD440',
 };
 
 /**
- * Virtua-Cop 3-state reticle (green / orange / red), plus blue for civilians.
- * HUD signal only — does NOT gate aiming. Reticle is rendered at the player's
- * tap/drag position each frame.
+ * Virtua-Cop 3-state reticle (green / orange / red), plus blue for civilians
+ * and gold for justice-shot opportunities. HUD signal only — does NOT gate
+ * aiming. Reticle is rendered at the player's tap/drag position each frame.
  */
 export class Reticle {
 	private readonly outer: Ellipse;

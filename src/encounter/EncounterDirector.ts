@@ -256,6 +256,39 @@ export class EncounterDirector {
 		return this.state.enemies.get(enemyId);
 	}
 
+	/**
+	 * True when the enemy is mid-`justice-glint` aim window — i.e. between
+	 * the `aim-laser` event start and the subsequent `fire-hitscan` event.
+	 * The picker reads this to route a hit on the archetype's
+	 * `justiceShotTarget` sub-region to `target: 'justice'`.
+	 *
+	 * Outside the window, justice picks degrade to body — the disarm is
+	 * meant to be a precision-timed bonus, not a free shot.
+	 */
+	isJusticeWindowOpen(enemyId: string): boolean {
+		const enemy = this.state.enemies.get(enemyId);
+		if (!enemy) return false;
+		if (enemy.fireProgramId !== 'justice-glint') return false;
+		const pattern = getFirePattern('justice-glint');
+		// Find the `aim-laser` event and the next `fire-hitscan` event after
+		// it; the window is `[aim.atMs, fire.atMs)` against `enemy.elapsedMs`.
+		// Difficulty multiplier applies to aim duration but not start time, so
+		// reading raw atMs here is correct (the aim CAN end early under low
+		// windupMultiplier, but the `fire-hitscan` event still fires at its
+		// authored atMs, which is the closing edge we care about).
+		let aimAtMs: number | null = null;
+		let fireAtMs: number | null = null;
+		for (const ev of pattern.events) {
+			if (ev.verb === 'aim-laser' && aimAtMs === null) aimAtMs = ev.atMs;
+			else if (ev.verb === 'fire-hitscan' && aimAtMs !== null && fireAtMs === null) {
+				fireAtMs = ev.atMs;
+				break;
+			}
+		}
+		if (aimAtMs === null || fireAtMs === null) return false;
+		return enemy.elapsedMs >= aimAtMs && enemy.elapsedMs < fireAtMs;
+	}
+
 	hitEnemy(enemyId: string, target: 'head' | 'body' | 'justice'): void {
 		const enemy = this.state.enemies.get(enemyId);
 		if (!enemy) return;

@@ -41,6 +41,7 @@ export interface DordRunState {
 	remainingLives: number;
 	score: number;
 	enemiesKilled: number;
+	justiceShots: number;
 }
 
 export interface DordGameState {
@@ -71,6 +72,8 @@ export interface DordSurface {
 	levelHandlesReady: () => boolean;
 	now: () => number;
 	enemySnapshots: () => DordEnemySnapshot[];
+	hitEnemy: (enemyId: string, target: 'head' | 'body' | 'justice') => void;
+	isJusticeWindowOpen: (enemyId: string) => boolean;
 }
 
 declare global {
@@ -85,6 +88,7 @@ export interface DordState {
 	remainingLives: number;
 	score: number;
 	enemiesKilled: number;
+	justiceShots: number;
 }
 
 export async function gotoApp(page: Page): Promise<void> {
@@ -104,6 +108,7 @@ export async function readState(page: Page): Promise<DordState> {
 			remainingLives: s.run?.remainingLives ?? 0,
 			score: s.run?.score ?? 0,
 			enemiesKilled: s.run?.enemiesKilled ?? 0,
+			justiceShots: s.run?.justiceShots ?? 0,
 		};
 	});
 }

@@ -151,6 +151,7 @@ let audioBus: AudioBus | null = null;
 const enemySpawnHp = new Map<string, number>();
 const enemyLastHitTarget = new Map<string, 'head' | 'body' | 'justice'>();
 const enemyMeshes = new Map<string, AbstractMesh>();
+const enemyGlintMeshes = new Map<string, AbstractMesh>();
 const healthKitMeshes = new Map<string, AbstractMesh>();
 // Cue actions whose handlers read `levelHandles` are queued here when they
 // fire before `buildLevel(...)` resolves. Drained on handles-ready. Cleared
@@ -205,6 +206,18 @@ if (IS_DEV) {
 		// reticle pickray). Used by the e2e fire→kill test to drive the
 		// real shooting pipeline (pickAt → director.hitEnemy → onEnemyKill)
 		// without faking enemy positions or bypassing pointer wiring.
+		// Drive a hit directly through the director, bypassing the pickray.
+		// Used by the justice-shot e2e to assert score routing without having
+		// to time pointer events to the 0.3s aim window through the canvas.
+		// Dev-only — strips in prod with the rest of `__dord`.
+		hitEnemy: (enemyId: string, target: 'head' | 'body' | 'justice') => {
+			director?.hitEnemy(enemyId, target);
+		},
+		// Whether the named enemy currently has an open justice-glint window.
+		// Lets the e2e wait for the window to open before driving `hitEnemy`.
+		isJusticeWindowOpen: (enemyId: string): boolean => {
+			return director?.isJusticeWindowOpen(enemyId) ?? false;
+		},
 		enemySnapshots: (): Array<{ id: string; clientX: number; clientY: number; hp: number }> => {
 			if (!scene?.activeCamera || !director) return [];
 			const cam = scene.activeCamera;
@@ -313,6 +326,7 @@ function routeOverlay(state: GameState): void {
 				enemySpawnHp.clear();
 				enemyLastHitTarget.clear();
 				enemyMeshes.clear();
+				enemyGlintMeshes.clear();
 				healthKitMeshes.clear();
 				runtime.civilians.clear();
 				runtime.propAnims.clear();
@@ -505,6 +519,7 @@ function constructLevel(levelId: LevelId): void {
 		enemySpawnHp.clear();
 		enemyLastHitTarget.clear();
 		enemyMeshes.clear();
+		enemyGlintMeshes.clear();
 		healthKitMeshes.clear();
 		runtime.civilians.clear();
 		runtime.propAnims.clear();
@@ -554,6 +569,7 @@ function constructLevel(levelId: LevelId): void {
 		enemyMeshes,
 		enemySpawnHp,
 		enemyLastHitTarget,
+		enemyGlintMeshes,
 		game,
 		camera,
 		getScene: () => scene,
@@ -681,6 +697,9 @@ function disposeEnemy(enemyId: string): void {
 	mesh?.dispose();
 	enemyMeshes.delete(enemyId);
 	enemySpawnHp.delete(enemyId);
+	// The glint mesh is parented to the capsule, so capsule.dispose() cascades.
+	// We only need to clear the map entry to avoid the leak class C.5 fixed.
+	enemyGlintMeshes.delete(enemyId);
 	// Without this, an enemy that's despawned by anything OTHER than
 	// onEnemyKill / onEnemyCease (e.g. scene tear-down racing the listener)
 	// leaves its last-hit-target entry behind, slowly leaking across runs.
@@ -728,10 +747,10 @@ function tick(): void {
 // ── Hit-test: reticle hover + fire ───────────────────────────────────────────
 
 function pickAt(xPx: number, yPx: number): PickResult {
-	return pickAtImpl(scene, xPx, yPx, CAPSULE_HALF_HEIGHT);
+	return pickAtImpl(scene, xPx, yPx, CAPSULE_HALF_HEIGHT, director);
 }
 
-function reticleColorFor(pick: PickResult): 'green' | 'orange' | 'red' | 'blue' {
+function reticleColorFor(pick: PickResult): 'green' | 'orange' | 'red' | 'blue' | 'gold' {
 	return reticleColorForImpl(pick, director, enemySpawnHp);
 }
 
