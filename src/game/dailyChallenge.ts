@@ -122,6 +122,7 @@ export interface DailyModifierFlags {
 	readonly glassCannon: boolean;
 	readonly ironMan: boolean;
 	readonly justiceOnly: boolean;
+	readonly forcePermadeath: boolean;
 }
 
 export const DAILY_FLAGS_INERT: DailyModifierFlags = {
@@ -133,6 +134,7 @@ export const DAILY_FLAGS_INERT: DailyModifierFlags = {
 	glassCannon: false,
 	ironMan: false,
 	justiceOnly: false,
+	forcePermadeath: false,
 };
 
 export function dailyModifierFlags(id: DailyModifierId | null): DailyModifierFlags {
@@ -154,11 +156,12 @@ export function dailyModifierFlags(id: DailyModifierId | null): DailyModifierFla
 			return { ...DAILY_FLAGS_INERT, ironMan: true };
 		case 'justice-only':
 			return { ...DAILY_FLAGS_INERT, justiceOnly: true };
+		case 'permadeath':
+			return { ...DAILY_FLAGS_INERT, forcePermadeath: true };
 		// Modifiers below ship in v1 as no-ops at the flag layer — they need
 		// content-system changes (level routing, density tables, score model)
 		// that don't reduce to a per-tick boolean. Tracked in the directive.
 		case 'speed-run':
-		case 'permadeath':
 		case 'civilian-rush':
 		case 'spray-and-pray':
 		case 'reaper-friends':
