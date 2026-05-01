@@ -6,8 +6,8 @@ import type { Level, Primitive } from './types';
 /**
  * Level 07 — Executive Suites. Mirrors docs/spec/levels/07-executive-suites.md.
  *
- * Top-floor executive level. Three combat positions: outer reception (mass-pop +
- * shutter-cabinet), executive lounge (first pre-aggro beat — enemies visible
+ * Top-floor executive level. Three combat positions: outer reception (flank
+ * door-burst + panic-charge), executive lounge (first pre-aggro beat — enemies visible
  * before alert + first ceiling-vent drop), and Director-of-Ops Crawford
  * (silent boss with shotgun, two-phase desk-flip mechanic). Panic alarm
  * strobes red globally. Boardroom is foreshadowed through frosted glass.
@@ -43,7 +43,10 @@ const cameraRail: RailGraph = {
 			kind: 'combat',
 			position: new Vector3(0, 1.6, 20),
 			lookAt: new Vector3(0, 1.6, 26),
-			dwellMs: 22000,
+			// Extended dwell so Phase 2 + ad drops at 60-65s land while the
+			// camera is parked on Crawford. 18 (pos-1) + 22 (pos-2) + 35
+			// (pos-3) ≈ 75s level budget.
+			dwellMs: 35000,
 		},
 		{
 			id: 'exit',
@@ -77,10 +80,13 @@ const primitives: Primitive[] = [
 	{
 		id: 'floor-crawford-office',
 		kind: 'floor',
-		origin: new Vector3(0, 0, 22),
+		// Origin shifted to z=24 with depth 12 so the slab spans z=18..30
+		// (no gap to the lounge floor and Crawford's spawn at z=30 stands
+		// on geometry, not air).
+		origin: new Vector3(0, 0, 24),
 		yaw: 0,
 		width: 12,
-		depth: 8,
+		depth: 12,
 		pbr: 'laminate',
 	},
 
@@ -89,10 +95,12 @@ const primitives: Primitive[] = [
 	{
 		id: 'ceiling-exec',
 		kind: 'ceiling',
-		origin: new Vector3(0, 3, 12),
+		// Center shifted to z=15 with depth 36 so the ceiling spans z=-3..33
+		// and covers all three floor slabs without gaps.
+		origin: new Vector3(0, 3, 15),
 		yaw: 0,
 		width: 12,
-		depth: 32,
+		depth: 36,
 		height: 3,
 		pbr: 'ceiling-tile',
 		emissiveCutouts: [
@@ -148,7 +156,9 @@ const primitives: Primitive[] = [
 		width: 12,
 		height: 3,
 		pbr: 'drywall',
-		overlay: { texture: 'T_Door_Wood_Painted_026.png' },
+		// Wall overlays load from /textures/retro/windows/, so we pick a
+		// wood-grain window plate that reads as a "DIRECTOR OF OPS" plaque.
+		overlay: { texture: 'T_Window_Wood_Painted_028.png' },
 	},
 
 	// Doors — reception flanks, lounge sides, ceiling vent (metal grate),
@@ -187,7 +197,7 @@ const primitives: Primitive[] = [
 		width: 1,
 		height: 2.2,
 		family: 'wood',
-		texture: 'T_Door_Wood_018.png',
+		texture: 'T_Door_Wood_013.png',
 		swing: 'inward',
 		state: 'closed',
 		spawnRailId: 'rail-spawn-lounge-1',
@@ -200,7 +210,7 @@ const primitives: Primitive[] = [
 		width: 1,
 		height: 2.2,
 		family: 'wood',
-		texture: 'T_Door_Wood_022.png',
+		texture: 'T_Door_Wood_014.png',
 		swing: 'inward',
 		state: 'closed',
 		spawnRailId: 'rail-spawn-lounge-2',
@@ -208,7 +218,10 @@ const primitives: Primitive[] = [
 	{
 		id: 'door-vent-ceiling',
 		kind: 'door',
-		origin: new Vector3(0, 3, 12),
+		// `buildDoor` offsets the mesh by height/2 from origin.y, so
+		// origin.y = 2.2 puts the 0.8-tall vent grate at y=2.2..3.0
+		// flush against the underside of the ceiling at y=3.
+		origin: new Vector3(0, 2.2, 12),
 		yaw: 0,
 		width: 0.8,
 		height: 0.8,
@@ -219,9 +232,26 @@ const primitives: Primitive[] = [
 		spawnRailId: 'rail-spawn-vent-drop',
 	},
 	{
+		id: 'door-vent-crawford',
+		kind: 'door',
+		// Second ceiling vent over Crawford's office for the Phase 2 ad drop.
+		origin: new Vector3(0, 2.2, 25),
+		yaw: 0,
+		width: 0.8,
+		height: 0.8,
+		family: 'metal',
+		texture: 'T_Door_Metal_04.png',
+		swing: 'inward',
+		state: 'closed',
+		spawnRailId: 'rail-spawn-crawford-ad-vent',
+	},
+	{
 		id: 'door-crawford-office',
 		kind: 'door',
-		origin: new Vector3(0, 0, 18),
+		// Pulled forward of wall-lounge-frosted (z=18) to z=21 so the door
+		// reads as the entry into Crawford's office, not as a coplanar
+		// overlap with the partition.
+		origin: new Vector3(0, 0, 21),
 		yaw: 0,
 		width: 1.2,
 		height: 2.2,
@@ -328,7 +358,7 @@ const cues: Cue[] = [
 	},
 
 	// Position 2 — executive lounge. First pre-aggro beat (hitman visible at
-	// the bar before alert), 2-door mass-pop, ceiling-vent drop at 51s.
+	// the bar before alert), 2-door mass-pop, ceiling-vent drop at 38s.
 	{
 		id: 'p2-pre-aggro',
 		trigger: { kind: 'on-arrive', railNodeId: 'pos-2-lounge' },
@@ -409,7 +439,9 @@ const cues: Cue[] = [
 	{
 		id: 'p3-rack',
 		trigger: { kind: 'on-arrive', railNodeId: 'pos-3-crawford' },
-		action: { verb: 'audio-stinger', audio: 'stinger/stinger-boss-cleared.mp3' },
+		// Reveal stinger, not the cleared/victory cue. There's no shipped
+		// `stinger-shotgun-rack.mp3` so we substitute the bright stinger.
+		action: { verb: 'audio-stinger', audio: 'stinger/stinger-bright.mp3' },
 	},
 	{
 		id: 'p3-amb-up',
@@ -437,6 +469,11 @@ const cues: Cue[] = [
 		action: { verb: 'boss-phase', bossId: 'crawford', phase: 2 },
 	},
 	{
+		id: 'p3-ad-vent-open',
+		trigger: { kind: 'wall-clock', atMs: 61800 },
+		action: { verb: 'door', doorId: 'door-vent-crawford', to: 'open' },
+	},
+	{
 		id: 'p3-ad-vent',
 		trigger: { kind: 'wall-clock', atMs: 62000 },
 		action: {
@@ -460,7 +497,9 @@ const cues: Cue[] = [
 	// Transition to Boardroom (final boss).
 	{
 		id: 'transition',
-		trigger: { kind: 'wall-clock', atMs: 75000 },
+		// Transition fires once Crawford's position clears so longer fights
+		// on Hard+ don't get cut off mid-combat.
+		trigger: { kind: 'on-clear', railNodeId: 'pos-3-crawford' },
 		action: { verb: 'transition', toLevelId: 'boardroom' },
 	},
 ];
