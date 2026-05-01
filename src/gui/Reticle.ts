@@ -43,6 +43,9 @@ export class Reticle {
 		this.inner.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
 		this.inner.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
 		this.overlay.add(this.inner);
+		// Hidden by default; main.ts shows it only during the 'playing' phase.
+		this.outer.isVisible = false;
+		this.inner.isVisible = false;
 	}
 
 	setPosition(xPx: number, yPx: number): void {
@@ -50,6 +53,11 @@ export class Reticle {
 		this.outer.top = `${yPx - 32}px`;
 		this.inner.left = `${xPx - 4}px`;
 		this.inner.top = `${yPx - 4}px`;
+	}
+
+	setVisible(visible: boolean): void {
+		this.outer.isVisible = visible;
+		this.inner.isVisible = visible;
 	}
 
 	setColor(color: ReticleColor): void {

@@ -1,16 +1,21 @@
-import type { Button } from '@babylonjs/gui/2D/controls/button';
 import { Control } from '@babylonjs/gui/2D/controls/control';
 import type { Rectangle } from '@babylonjs/gui/2D/controls/rectangle';
 import { TextBlock } from '@babylonjs/gui/2D/controls/textBlock';
 import type { QuartersStats } from '../game/quarters';
 import { COLOR_MUTED, COLOR_PAPER, FONT_BODY, FONT_DISPLAY } from './brand';
-import { makeLedgerCloseButton, makeLedgerPanel, makeLedgerTitle } from './ledgerPanel';
+import {
+	LEDGER_FOOTER_HEIGHT,
+	LEDGER_TITLE_HEIGHT,
+	makeLedgerCloseButton,
+	makeLedgerPanel,
+	makeLedgerTitle,
+} from './ledgerPanel';
 import type { Overlay } from './Overlay';
 
 const PANEL_WIDTH = 540;
-const PANEL_HEIGHT = 360;
 const ROW_HEIGHT = 56;
 const QUARTERS_GOLD = '#FFD55A';
+const ROW_PADDING_X = 40;
 
 interface StatSpec {
 	readonly id: string;
@@ -19,32 +24,31 @@ interface StatSpec {
 	readonly color: string;
 }
 
-function buildStatRow(spec: StatSpec, rowIdx: number): readonly TextBlock[] {
-	const top = -(PANEL_HEIGHT / 2) + 96 + ROW_HEIGHT * rowIdx;
+function buildStatRow(spec: StatSpec, rowTopPx: number): readonly TextBlock[] {
 	const labelBlock = new TextBlock(`cabinet-stats-${spec.id}-label`);
 	labelBlock.text = spec.label;
 	labelBlock.color = COLOR_MUTED;
 	labelBlock.fontSize = 18;
 	labelBlock.fontFamily = FONT_BODY;
 	labelBlock.height = `${ROW_HEIGHT}px`;
-	labelBlock.width = `${PANEL_WIDTH - 80}px`;
+	labelBlock.width = `${PANEL_WIDTH - ROW_PADDING_X * 2}px`;
 	labelBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
 	labelBlock.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
-	labelBlock.paddingLeft = '40px';
-	labelBlock.top = `${top}px`;
+	labelBlock.paddingLeft = `${ROW_PADDING_X}px`;
+	labelBlock.top = `${rowTopPx}px`;
 
 	const valueBlock = new TextBlock(`cabinet-stats-${spec.id}-value`);
 	valueBlock.text = spec.value;
 	valueBlock.color = spec.color;
-	valueBlock.fontSize = 32;
+	valueBlock.fontSize = 28;
 	valueBlock.fontFamily = FONT_DISPLAY;
 	valueBlock.fontWeight = 'bold';
 	valueBlock.height = `${ROW_HEIGHT}px`;
-	valueBlock.width = `${PANEL_WIDTH - 80}px`;
+	valueBlock.width = `${PANEL_WIDTH - ROW_PADDING_X * 2}px`;
 	valueBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
 	valueBlock.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
-	valueBlock.paddingRight = '40px';
-	valueBlock.top = `${top}px`;
+	valueBlock.paddingRight = `${ROW_PADDING_X}px`;
+	valueBlock.top = `${rowTopPx}px`;
 
 	return [labelBlock, valueBlock];
 }
@@ -57,21 +61,12 @@ function buildStatRow(spec: StatSpec, rowIdx: number): readonly TextBlock[] {
  */
 export class CabinetStatsOverlay {
 	private readonly panel: Rectangle;
-	private readonly title: TextBlock;
-	private readonly statBlocks: readonly TextBlock[];
-	private readonly closeButton: Button;
 
 	constructor(
 		private readonly overlay: Overlay,
 		stats: QuartersStats,
 		onClose: () => void,
 	) {
-		this.panel = makeLedgerPanel('cabinet-stats', PANEL_WIDTH, PANEL_HEIGHT);
-		overlay.add(this.panel);
-
-		this.title = makeLedgerTitle('cabinet-stats', 'CABINET STATS', PANEL_WIDTH, PANEL_HEIGHT);
-		overlay.add(this.title);
-
 		const specs: readonly StatSpec[] = [
 			{
 				id: 'balance',
@@ -98,18 +93,22 @@ export class CabinetStatsOverlay {
 				color: COLOR_PAPER,
 			},
 		];
-		const blocks = specs.flatMap((spec, idx) => buildStatRow(spec, idx));
-		for (const block of blocks) overlay.add(block);
-		this.statBlocks = blocks;
+		const panelHeight = LEDGER_TITLE_HEIGHT + ROW_HEIGHT * specs.length + LEDGER_FOOTER_HEIGHT;
 
-		this.closeButton = makeLedgerCloseButton('cabinet-stats', PANEL_HEIGHT, onClose);
-		overlay.add(this.closeButton);
+		this.panel = makeLedgerPanel('cabinet-stats', PANEL_WIDTH, panelHeight);
+		overlay.add(this.panel);
+
+		this.panel.addControl(makeLedgerTitle('cabinet-stats', 'CABINET STATS', PANEL_WIDTH));
+
+		const blocks = specs.flatMap((spec, idx) =>
+			buildStatRow(spec, LEDGER_TITLE_HEIGHT + ROW_HEIGHT * idx),
+		);
+		for (const block of blocks) this.panel.addControl(block);
+
+		this.panel.addControl(makeLedgerCloseButton('cabinet-stats', onClose));
 	}
 
 	dispose(): void {
 		this.overlay.remove(this.panel);
-		this.overlay.remove(this.title);
-		for (const block of this.statBlocks) this.overlay.remove(block);
-		this.overlay.remove(this.closeButton);
 	}
 }
