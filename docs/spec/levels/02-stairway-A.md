@@ -130,8 +130,8 @@ sequenceDiagram
 
     Note over Rail: t=10s — second wave
     LeftDoor->>Player: cover-pop (manager)
-    RightDoor->>Player: cover-pop (office security guard) — first cop seen!
-    Note over Player: Cop wears Lobby-style security uniform<br/>(reskin: navy blue + brass)
+    RightDoor->>Player: cover-pop (office security guard) — first OSG seen!
+    Note over Player: Office Security Guard wears Lobby-style uniform<br/>(reskin: navy blue + brass)
 
     Note over Rail: t=18s — Position cleared, exit door above
 ```

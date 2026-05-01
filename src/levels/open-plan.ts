@@ -292,7 +292,7 @@ const cues: Cue[] = [
 		action: { verb: 'prop-anim', propId: 'prop-printer-dolly', animId: 'roll-in' },
 	},
 	{
-		id: 'p2-spawn-pol-A',
+		id: 'p2-spawn-guard-A',
 		trigger: { kind: 'on-arrive', railNodeId: 'pos-2' },
 		action: {
 			verb: 'enemy-spawn',
@@ -302,7 +302,7 @@ const cues: Cue[] = [
 		},
 	},
 	{
-		id: 'p2-spawn-pol-B',
+		id: 'p2-spawn-guard-B',
 		trigger: { kind: 'on-arrive', railNodeId: 'pos-2' },
 		action: {
 			verb: 'enemy-spawn',
@@ -351,7 +351,9 @@ const cues: Cue[] = [
 	{
 		id: 'p3-stinger',
 		trigger: { kind: 'on-arrive', railNodeId: 'pos-3' },
-		action: { verb: 'audio-stinger', audio: 'stinger/whitcomb-intro.ogg' },
+		// Bespoke whitcomb-intro.ogg is a future asset slice; fall back to a
+		// shipped bright stinger so the cue actually plays at runtime.
+		action: { verb: 'audio-stinger', audio: 'stinger/stinger-bright.mp3' },
 	},
 	{
 		id: 'p3-spotlight',
@@ -377,7 +379,9 @@ const cues: Cue[] = [
 	{
 		id: 'exit-stinger',
 		trigger: { kind: 'on-clear', railNodeId: 'pos-3' },
-		action: { verb: 'audio-stinger', audio: 'stinger/whitcomb-down.ogg' },
+		// Bespoke whitcomb-down.ogg is a future asset slice; reuse the
+		// shipped boss-cleared stinger so the cue plays at runtime.
+		action: { verb: 'audio-stinger', audio: 'stinger/stinger-boss-cleared.mp3' },
 	},
 	{
 		id: 'transition',
