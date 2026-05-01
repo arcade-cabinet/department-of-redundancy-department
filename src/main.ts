@@ -17,6 +17,7 @@ import {
 	type Enemy,
 	type FireEvent,
 } from './encounter';
+import { rand } from './engine/rng';
 import { Game } from './game/Game';
 import type { GameState } from './game/GameState';
 import {
@@ -25,13 +26,14 @@ import {
 	GameOverOverlay,
 	HudOverlay,
 	InsertCoinOverlay,
+	NarratorOverlay,
 	Overlay,
 	Reticle,
 	SettingsOverlay,
 } from './gui';
 import { getLevel, type Level } from './levels';
-import { applyDoorOpen, buildLevel, type LevelHandles } from './levels/build';
-import type { Door, LevelId } from './levels/types';
+import { applyDoorOpen, applyShutterState, buildLevel, type LevelHandles } from './levels/build';
+import type { Door, LevelId, Light, Shutter } from './levels/types';
 import {
 	loadHighScore,
 	loadSettings,
@@ -63,6 +65,7 @@ const CAPSULE_HALF_HEIGHT = CAPSULE_HEIGHT / 2;
 
 const engine = new Engine(canvas, true, { stencil: true, preserveDrawingBuffer: false });
 let scene: Scene | null = null;
+let currentCamera: FreeCamera | null = null;
 let director: EncounterDirector | null = null;
 let currentLevel: Level | null = null;
 let levelHandles: LevelHandles | null = null;
@@ -81,6 +84,7 @@ const reticle = new Reticle(overlay);
 
 let activeOverlayDispose: (() => void) | null = null;
 let hud: HudOverlay | null = null;
+let narrator: NarratorOverlay | null = null;
 // Bumped on every routeOverlay call so stale async overlay constructors no-op.
 let overlayRouteToken = 0;
 let lastTickMs = performance.now();
@@ -111,9 +115,12 @@ function routeOverlay(state: GameState): void {
 	const wantsHud = state.phase === 'playing' || state.phase === 'continue-prompt';
 	if (wantsHud && !hud) {
 		hud = new HudOverlay(overlay);
+		narrator = new NarratorOverlay(overlay);
 	} else if (!wantsHud && hud) {
 		hud.dispose();
 		hud = null;
+		narrator?.dispose();
+		narrator = null;
 	}
 	hud?.render(state);
 	switch (state.phase) {
@@ -204,6 +211,10 @@ function constructLevel(levelId: LevelId): void {
 	if (scene) {
 		scene.dispose();
 		scene = null;
+		currentCamera = null;
+		cameraShake = null;
+		lastShakeDx = 0;
+		lastShakeDy = 0;
 		levelHandles = null;
 		audioBus = null;
 		enemySpawnHp.clear();
@@ -223,6 +234,7 @@ function constructLevel(levelId: LevelId): void {
 	camera.minZ = 0.05;
 	camera.fov = 1.2; // ~70°
 	scene.activeCamera = camera;
+	currentCamera = camera;
 
 	const builtScene = scene;
 	const builtLevel = currentLevel;
@@ -296,15 +308,9 @@ function handleCueAction(action: CueAction): void {
 			constructLevel(action.toLevelId);
 			game.transitionLevel(action.toLevelId);
 			return;
-		case 'door': {
-			const mesh = levelHandles?.doors.get(action.doorId);
-			if (!mesh || !currentLevel) return;
-			const doorPrim = currentLevel.primitives.find(
-				(p): p is Door => p.kind === 'door' && p.id === action.doorId,
-			);
-			if (doorPrim && action.to === 'open') applyDoorOpen(mesh, doorPrim);
+		case 'door':
+			handleDoorCue(action.doorId, action.to);
 			return;
-		}
 		case 'lighting': {
 			const light = levelHandles?.lights.get(action.lightId);
 			if (!light) return;
@@ -324,11 +330,107 @@ function handleCueAction(action: CueAction): void {
 			audioBus?.fadeAmbience(action.layerId, action.toVolume, action.durationMs);
 			return;
 		}
-		// narrator / prop-anim / boss-spawn
+		case 'narrator': {
+			narrator?.show(action.text, action.durationMs);
+			return;
+		}
+		case 'camera-shake': {
+			beginCameraShake(action.intensity, action.durationMs);
+			return;
+		}
+		case 'shutter':
+			handleShutterCue(action.shutterId, action.to);
+			return;
+		case 'level-event':
+			handleLevelEvent(action.event);
+			return;
+		// prop-anim / boss-spawn / boss-phase / enemy-spawn
 		// are handled by their respective subsystems in subsequent commits.
 		default:
 			return;
 	}
+}
+
+function handleDoorCue(doorId: string, to: 'open' | 'closed'): void {
+	const mesh = levelHandles?.doors.get(doorId);
+	if (!mesh || !currentLevel) return;
+	const doorPrim = currentLevel.primitives.find(
+		(p): p is Door => p.kind === 'door' && p.id === doorId,
+	);
+	if (doorPrim && to === 'open') applyDoorOpen(mesh, doorPrim);
+}
+
+function handleShutterCue(shutterId: string, to: 'down' | 'up' | 'half'): void {
+	const mesh = levelHandles?.shutters.get(shutterId);
+	if (!mesh || !currentLevel) return;
+	const shutterPrim = currentLevel.primitives.find(
+		(p): p is Shutter => p.kind === 'shutter' && p.id === shutterId,
+	);
+	if (shutterPrim) applyShutterState(mesh, shutterPrim, to);
+}
+
+function handleLevelEvent(
+	event: 'fire-alarm' | 'power-out' | 'lights-restored' | 'elevator-ding',
+): void {
+	if (!levelHandles || !currentLevel) return;
+	if (event === 'power-out') {
+		for (const light of levelHandles.lights.values()) light.intensity = 0;
+		return;
+	}
+	if (event === 'lights-restored') {
+		for (const prim of currentLevel.primitives) {
+			if (prim.kind !== 'light') continue;
+			const lightPrim = prim as Light;
+			const bl = levelHandles.lights.get(lightPrim.id);
+			if (bl) bl.intensity = lightPrim.intensity;
+		}
+		return;
+	}
+	// fire-alarm + elevator-ding are pure audio cues — emitted via separate
+	// audio-stinger cues in the level data. No render side-effect here.
+}
+
+// ── Camera shake ─────────────────────────────────────────────────────────────
+// Decaying random per-axis offset added to the camera's authored rail position
+// each tick. Owned by main.ts so cues from any director can drive it.
+
+interface CameraShake {
+	readonly intensity: number;
+	readonly startMs: number;
+	readonly endMs: number;
+}
+let cameraShake: CameraShake | null = null;
+// Previously-applied shake offset. Undone at the start of each apply so the
+// camera's authoritative rail position is restored before adding the new
+// offset — guards against frames where the director did not write a fresh
+// onCameraUpdate (e.g., director.isFinished).
+let lastShakeDx = 0;
+let lastShakeDy = 0;
+
+function beginCameraShake(intensity: number, durationMs: number): void {
+	const startMs = performance.now();
+	cameraShake = { intensity, startMs, endMs: startMs + durationMs };
+}
+
+function applyCameraShake(camera: FreeCamera): void {
+	camera.position.x -= lastShakeDx;
+	camera.position.y -= lastShakeDy;
+	lastShakeDx = 0;
+	lastShakeDy = 0;
+	if (!cameraShake) return;
+	const now = performance.now();
+	if (now >= cameraShake.endMs) {
+		cameraShake = null;
+		return;
+	}
+	const totalMs = cameraShake.endMs - cameraShake.startMs;
+	const remainingMs = cameraShake.endMs - now;
+	const t = totalMs > 0 ? remainingMs / totalMs : 0;
+	const amp = cameraShake.intensity * t;
+	lastShakeDx = (rand() - 0.5) * 2 * amp;
+	lastShakeDy = (rand() - 0.5) * 2 * amp;
+	camera.position.x += lastShakeDx;
+	camera.position.y += lastShakeDy;
 }
 
 function disposeEnemy(enemyId: string): void {
@@ -413,6 +515,7 @@ function tick(): void {
 	if (state.phase === 'playing') {
 		if (director && !director.isFinished) director.tick(dtMs);
 		tickCivilians(dtMs);
+		if (currentCamera) applyCameraShake(currentCamera);
 	}
 
 	scene?.render();

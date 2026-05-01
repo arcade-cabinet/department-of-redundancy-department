@@ -3,6 +3,7 @@ export { DifficultySelectOverlay } from './DifficultySelectOverlay';
 export { GameOverOverlay, type GameOverSummary } from './GameOverOverlay';
 export { HudOverlay } from './HudOverlay';
 export { InsertCoinOverlay } from './InsertCoinOverlay';
+export { NarratorOverlay } from './NarratorOverlay';
 export { Overlay } from './Overlay';
 export { Reticle, type ReticleColor } from './Reticle';
 export { SettingsOverlay } from './SettingsOverlay';

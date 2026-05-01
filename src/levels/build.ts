@@ -226,13 +226,19 @@ function buildShutter(scene: Scene, shutter: Shutter, handles: LevelHandles): Me
 		shutter.texture,
 		`mat-shutter-${shutter.id}`,
 	);
-	if (shutter.state === 'up') {
-		mesh.position.y += shutter.height;
-	} else if (shutter.state === 'half') {
-		mesh.position.y += shutter.height / 2;
-	}
+	applyShutterState(mesh, shutter, shutter.state);
 	handles.shutters.set(shutter.id, mesh);
 	return mesh;
+}
+
+export function applyShutterState(
+	mesh: AbstractMesh,
+	shutter: Shutter,
+	to: 'down' | 'up' | 'half',
+): void {
+	const baseY = shutter.origin.y + shutter.height / 2;
+	const lift = to === 'up' ? shutter.height : to === 'half' ? shutter.height / 2 : 0;
+	mesh.position.y = baseY + lift;
 }
 
 function buildWhiteboard(scene: Scene, wb: Whiteboard, handles: LevelHandles): Mesh {
