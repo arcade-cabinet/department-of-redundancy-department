@@ -1,6 +1,7 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Cue } from '../encounter/cues';
 import type { RailGraph } from '../rail/RailNode';
+import { floor, wall } from './builders';
 import type { Level, Primitive } from './types';
 
 /**
@@ -55,84 +56,35 @@ const cameraRail: RailGraph = {
 
 const primitives: Primitive[] = [
 	// Floor / landings — concrete-tinted laminate stand-ins.
-	{
-		id: 'floor-bottom',
-		kind: 'floor',
-		origin: new Vector3(0, 0, 0),
-		yaw: 0,
-		width: 4,
-		depth: 4,
-		pbr: 'laminate',
-	},
-	{
-		id: 'floor-mid-landing',
-		kind: 'floor',
-		origin: new Vector3(0, 3, 4),
-		yaw: 0,
-		width: 4,
-		depth: 4,
-		pbr: 'laminate',
-	},
-	{
-		id: 'floor-top-landing',
-		kind: 'floor',
-		origin: new Vector3(0, 6, 8),
-		yaw: 0,
-		width: 4,
-		depth: 4,
-		pbr: 'laminate',
-	},
+	floor({ id: 'floor-bottom', origin: new Vector3(0, 0, 0), width: 4, depth: 4 }),
+	floor({ id: 'floor-mid-landing', origin: new Vector3(0, 3, 4), width: 4, depth: 4 }),
+	floor({ id: 'floor-top-landing', origin: new Vector3(0, 6, 8), width: 4, depth: 4 }),
 
 	// Shaft walls (concrete-tinted drywall stand-ins). Yaw faces inward
 	// toward the shaft center so the visible side is the one the camera sees.
-	{
+	wall({
 		id: 'wall-shaft-W',
-		kind: 'wall',
 		origin: new Vector3(-2, 0, 4),
 		yaw: Math.PI / 2,
 		width: 12,
 		height: 9,
-		pbr: 'drywall',
-	},
-	{
+	}),
+	wall({
 		id: 'wall-shaft-E',
-		kind: 'wall',
 		origin: new Vector3(2, 0, 4),
 		yaw: -Math.PI / 2,
 		width: 12,
 		height: 9,
-		pbr: 'drywall',
 		// Shaft mid-climb beat — rewards the player who survived Lobby
 		// without continuing. Positioned at eye level on the east shaft wall.
 		healthKit: { id: 'kit-stairway-A-shaft', hp: 35, offset: [0, 1.5] },
-	},
+	}),
 	// Shaft end-caps so the camera doesn't see void clear-color past the
 	// stairwell. South wall closes off the entrance behind, north wall sits
-	// just past the exit door.
-	{
-		// Camera is at z>-1 looking generally +Z; we want this wall's
-		// front face to point toward the interior (+Z). Plane normal is
-		// -Z by default; yaw=π flips it to +Z.
-		id: 'wall-shaft-S',
-		kind: 'wall',
-		origin: new Vector3(0, 0, -1),
-		yaw: Math.PI,
-		width: 4,
-		height: 9,
-		pbr: 'drywall',
-	},
-	{
-		// Camera at z<12 looking +Z toward this wall; we want the front
-		// face to point toward camera (-Z). Default plane normal IS -Z;
-		// yaw=0 keeps it that way.
-		id: 'wall-shaft-N',
-		kind: 'wall',
-		origin: new Vector3(0, 0, 12),
-		yaw: 0,
-		width: 4,
-		height: 9,
-		pbr: 'drywall',
-	},
+	// just past the exit door. South face points +Z (yaw=π flips default -Z
+	// normal toward interior); north keeps default -Z normal toward camera.
+	wall({ id: 'wall-shaft-S', origin: new Vector3(0, 0, -1), yaw: Math.PI, width: 4, height: 9 }),
+	wall({ id: 'wall-shaft-N', origin: new Vector3(0, 0, 12), yaw: 0, width: 4, height: 9 }),
 
 	// Doors — metal stairwell doors.
 	{

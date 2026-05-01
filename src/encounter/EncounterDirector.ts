@@ -498,7 +498,8 @@ export class EncounterDirector {
 		const baseMaxHp =
 			def.hpByPhase?.[phase] ??
 			archetype.hp * def.hpMultiplier * this.difficultyParams.enemyHpMultiplier;
-		const enemy: Enemy = {
+		this.bossPhaseOneMaxHp.set(bossId, baseMaxHp);
+		this.addEnemy({
 			id,
 			archetypeId: def.archetype,
 			fireProgramId: fireProgram,
@@ -510,19 +511,7 @@ export class EncounterDirector {
 			position: spawnRailPosition(railState),
 			ceaseAfterMs: null,
 			alerted: true,
-		};
-		this.bossPhaseOneMaxHp.set(bossId, baseMaxHp);
-		const updated = new Map(this.state.enemies);
-		updated.set(id, enemy);
-		const dwell = new Set(this.state.currentDwellEnemyIds);
-		dwell.add(id);
-		this.state = {
-			...this.state,
-			enemies: updated,
-			currentDwellEnemyIds: dwell,
-			currentDwellHadSpawn: true,
-		};
-		this.listener.onEnemySpawn(enemy);
+		});
 	}
 
 	private setBossPhase(bossId: BossId, phase: number): void {
@@ -578,9 +567,8 @@ export class EncounterDirector {
 		}
 		const archetype = ARCHETYPES[archetypeId];
 		const railState = createSpawnRailState(railGraph);
-		const id = `${archetypeId}-${this.nextEnemySerial++}`;
-		const enemy: Enemy = {
-			id,
+		this.addEnemy({
+			id: `${archetypeId}-${this.nextEnemySerial++}`,
 			archetypeId,
 			fireProgramId,
 			rail: railState,
@@ -591,11 +579,23 @@ export class EncounterDirector {
 			position: spawnRailPosition(railState),
 			ceaseAfterMs: ceaseAfterMs ?? null,
 			alerted: false,
-		};
+		});
+	}
+
+	/**
+	 * Shared body for spawnBoss + spawnEnemy: install the enemy in the
+	 * state map, register it as a member of the current dwell, mark the
+	 * dwell as having had a spawn, and fire the listener spawn event.
+	 *
+	 * Boss-specific concerns (hpByPhase capture, alerted-on-spawn) live at
+	 * the call site since they're decisions about HOW to construct the
+	 * Enemy, not what happens after it's constructed.
+	 */
+	private addEnemy(enemy: Enemy): void {
 		const updated = new Map(this.state.enemies);
-		updated.set(id, enemy);
+		updated.set(enemy.id, enemy);
 		const dwell = new Set(this.state.currentDwellEnemyIds);
-		dwell.add(id);
+		dwell.add(enemy.id);
 		this.state = {
 			...this.state,
 			enemies: updated,

@@ -1,6 +1,7 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Cue } from '../encounter/cues';
 import type { RailGraph } from '../rail/RailNode';
+import { floor, wall } from './builders';
 import type { Level, Primitive } from './types';
 
 /**
@@ -48,81 +49,46 @@ const cameraRail: RailGraph = {
 
 const primitives: Primitive[] = [
 	// Floors / landings.
-	{
-		id: 'floor-bottom',
-		kind: 'floor',
-		origin: new Vector3(0, 0, 0),
-		yaw: 0,
-		width: 4,
-		depth: 4,
-		pbr: 'laminate',
-	},
-	{
-		id: 'floor-mid-landing',
-		kind: 'floor',
-		origin: new Vector3(0, 3, 5),
-		yaw: 0,
-		width: 6,
-		depth: 4,
-		pbr: 'laminate',
-	},
-	{
-		id: 'floor-top-landing',
-		kind: 'floor',
-		origin: new Vector3(0, 6, 10),
-		yaw: 0,
-		width: 6,
-		depth: 4,
-		pbr: 'laminate',
-	},
+	floor({ id: 'floor-bottom', origin: new Vector3(0, 0, 0), width: 4, depth: 4 }),
+	floor({ id: 'floor-mid-landing', origin: new Vector3(0, 3, 5), width: 6, depth: 4 }),
+	floor({ id: 'floor-top-landing', origin: new Vector3(0, 6, 10), width: 6, depth: 4 }),
 
-	// Shaft walls — south wall carries the chalk-arrow graffiti.
-	{
+	// Shaft walls — south wall is unadorned (chalk-arrow "AUDITOR ↑" graffiti
+	// decal pending; no chalk-arrow PNG yet in retro library).
+	wall({
 		id: 'wall-shaft-N',
-		kind: 'wall',
 		origin: new Vector3(-3, 0, 5),
 		yaw: Math.PI / 2,
 		width: 14,
 		height: 9,
-		pbr: 'drywall',
 		// Mid-shaft kit on the north wall — pacing beat between the Open
-		// Plan boss clear and the HR Corridor. The wall is unadorned per
-		// spec (chalk-arrow pending), so the kit is the visual anchor.
+		// Plan boss clear and the HR Corridor. Visual anchor on otherwise
+		// bare wall.
 		healthKit: { id: 'kit-stairway-B-shaft', hp: 35, offset: [-2, 1.6] },
-	},
-	{
-		// Spec calls for a chalk-arrow "AUDITOR ↑" graffiti decal on this
-		// wall. No chalk-arrow PNG exists yet in the retro library — once a
-		// chalk-arrow texture lands, set `overlay: { texture: '...' }`.
+	}),
+	wall({
 		id: 'wall-shaft-S',
-		kind: 'wall',
 		origin: new Vector3(3, 0, 5),
 		yaw: -Math.PI / 2,
 		width: 14,
 		height: 9,
-		pbr: 'drywall',
-	},
-	// End-cap walls so the shaft reads as enclosed. yaw values picked so
-	// each wall's front face points INWARD toward the shaft interior
-	// (camera always inside).
-	{
+	}),
+	// End-cap walls so the shaft reads as enclosed. yaw picked so each
+	// front face points inward toward shaft interior.
+	wall({
 		id: 'wall-shaft-bottom-end',
-		kind: 'wall',
 		origin: new Vector3(0, 0, -2),
 		yaw: Math.PI,
 		width: 6,
 		height: 9,
-		pbr: 'drywall',
-	},
-	{
+	}),
+	wall({
 		id: 'wall-shaft-top-end',
-		kind: 'wall',
 		origin: new Vector3(0, 0, 12),
 		yaw: 0,
 		width: 6,
 		height: 9,
-		pbr: 'drywall',
-	},
+	}),
 
 	// Doors.
 	{

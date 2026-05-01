@@ -1,6 +1,7 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Cue } from '../encounter/cues';
 import type { RailGraph } from '../rail/RailNode';
+import { ceiling, floor, wall } from './builders';
 import type { Level, Primitive } from './types';
 
 /**
@@ -42,24 +43,13 @@ const cameraRail: RailGraph = {
 
 const primitives: Primitive[] = [
 	// Arena floor + ceiling.
-	{
-		id: 'floor-boardroom',
-		kind: 'floor',
-		origin: new Vector3(0, 0, 12),
-		yaw: 0,
-		width: 24,
-		depth: 24,
-		pbr: 'laminate',
-	},
-	{
+	floor({ id: 'floor-boardroom', origin: new Vector3(0, 0, 12), width: 24, depth: 24 }),
+	ceiling({
 		id: 'ceiling-boardroom',
-		kind: 'ceiling',
 		origin: new Vector3(0, 6, 12),
-		yaw: 0,
 		width: 24,
 		depth: 24,
 		height: 6,
-		pbr: 'ceiling-tile',
 		emissiveCutouts: [
 			// chandelier centerpiece
 			{ width: 1.5, depth: 1.5, offset: [0, 0], intensity: 0.6, color: [1.0, 0.95, 0.85] },
@@ -70,51 +60,43 @@ const primitives: Primitive[] = [
 			{ width: 0.6, depth: 0.6, offset: [-3, 4], intensity: 0, color: [1.0, 1.0, 1.0] },
 			{ width: 0.6, depth: 0.6, offset: [3, 4], intensity: 0, color: [1.0, 1.0, 1.0] },
 		],
-	},
+	}),
 
 	// Side walls — clerestory window band overlays.
-	{
+	wall({
 		id: 'wall-N',
-		kind: 'wall',
 		origin: new Vector3(-12, 0, 12),
 		yaw: Math.PI / 2,
 		width: 24,
 		height: 6,
-		pbr: 'drywall',
 		overlay: { texture: 'T_Window_Wood_Painted_028.png' },
-	},
-	{
+	}),
+	wall({
 		id: 'wall-S',
-		kind: 'wall',
 		origin: new Vector3(12, 0, 12),
 		yaw: -Math.PI / 2,
 		width: 24,
 		height: 6,
-		pbr: 'drywall',
 		overlay: { texture: 'T_Window_Wood_Painted_028.png' },
-	},
+	}),
 	// Skyline backlit window at the far end.
-	{
+	wall({
 		id: 'wall-end-skyline',
-		kind: 'wall',
 		origin: new Vector3(0, 0, 24),
 		yaw: 0,
 		width: 24,
 		height: 6,
-		pbr: 'drywall',
 		overlay: { texture: 'T_Window_GlassBricks_01.png' },
-	},
+	}),
 	// Back wall — the 20-foot mahogany doors visible behind the player.
-	{
+	wall({
 		id: 'wall-back',
-		kind: 'wall',
 		origin: new Vector3(0, 0, 0),
 		yaw: Math.PI,
 		width: 24,
 		height: 6,
-		pbr: 'drywall',
 		overlay: { texture: 'T_Door_Wood_Painted_028.png' },
-	},
+	}),
 
 	// Boardroom whiteboards bookending the arena.
 	{

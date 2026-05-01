@@ -1,6 +1,7 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Cue } from '../encounter/cues';
 import type { RailGraph } from '../rail/RailNode';
+import { ceiling, floor, pillar, wall } from './builders';
 import type { Level, Primitive } from './types';
 
 const PI_2 = Math.PI / 2;
@@ -220,24 +221,12 @@ const cues: readonly Cue[] = [
 // Primitive plane normals are -Z by default; yaw rotates around +Y.
 const primitives: readonly Primitive[] = [
 	// Floor + ceiling
-	{
-		kind: 'floor',
-		id: 'floor-marble',
-		origin: new Vector3(0, 0, 12),
-		yaw: 0,
-		width: 12,
-		depth: 24,
-		pbr: 'laminate',
-	},
-	{
-		kind: 'ceiling',
+	floor({ id: 'floor-marble', origin: new Vector3(0, 0, 12), width: 12, depth: 24 }),
+	ceiling({
 		id: 'ceiling-atrium',
 		origin: new Vector3(0, 0, 12),
-		yaw: 0,
 		width: 12,
 		depth: 24,
-		pbr: 'ceiling-tile',
-		height: 6,
 		emissiveCutouts: [
 			{ width: 1.5, depth: 1.5, offset: [-3, -8], intensity: 0.7, color: [1, 1, 0.95] },
 			{ width: 1.5, depth: 1.5, offset: [3, -8], intensity: 0.7, color: [1, 1, 0.95] },
@@ -246,80 +235,59 @@ const primitives: readonly Primitive[] = [
 			{ width: 1.5, depth: 1.5, offset: [-3, 8], intensity: 0.7, color: [1, 1, 0.95] },
 			{ width: 1.5, depth: 1.5, offset: [3, 8], intensity: 0.7, color: [1, 1, 0.95] },
 		],
-	},
+	}),
 
 	// Walls (east faces -X, west faces +X, end faces -Z)
-	{
-		kind: 'wall',
+	wall({
 		id: 'wall-east-1',
 		origin: new Vector3(6, 0, 4),
 		yaw: -PI_2,
 		width: 8,
-		height: 6,
-		pbr: 'drywall',
 		overlay: { texture: 'T_Window_GlassBricks_00.png' },
-	},
-	{
-		kind: 'wall',
+	}),
+	wall({
 		id: 'wall-east-2',
 		origin: new Vector3(6, 0, 12),
 		yaw: -PI_2,
 		width: 8,
-		height: 6,
-		pbr: 'drywall',
 		overlay: { texture: 'T_Window_GlassBricks_01.png' },
-	},
-	{
-		kind: 'wall',
+	}),
+	wall({
 		id: 'wall-east-3',
 		origin: new Vector3(6, 0, 20),
 		yaw: -PI_2,
 		width: 8,
-		height: 6,
-		pbr: 'drywall',
 		// Authored health kit at the east-corridor wall — pacing beat between
 		// the second wave and the boss elevator. Per docs/spec/06-economy.md.
 		healthKit: { id: 'kit-lobby-east', hp: 35, offset: [0, 1.4] },
-	},
-	{
-		kind: 'wall',
+	}),
+	wall({
 		id: 'wall-west-1',
 		origin: new Vector3(-6, 0, 4),
 		yaw: PI_2,
 		width: 8,
-		height: 6,
-		pbr: 'drywall',
 		overlay: { texture: 'T_Window_Wood_012.png' },
-	},
-	{
-		kind: 'wall',
+	}),
+	wall({
 		id: 'wall-west-2',
 		origin: new Vector3(-6, 0, 12),
 		yaw: PI_2,
 		width: 8,
-		height: 6,
-		pbr: 'drywall',
 		overlay: { texture: 'T_Window_Wood_018.png' },
-	},
-	{
-		kind: 'wall',
+	}),
+	wall({
 		id: 'wall-west-3',
 		origin: new Vector3(-6, 0, 20),
 		yaw: PI_2,
 		width: 8,
-		height: 6,
-		pbr: 'drywall',
-	},
-	{
-		kind: 'wall',
+	}),
+	wall({
 		id: 'wall-end',
 		origin: new Vector3(0, 0, 24),
 		yaw: Math.PI,
 		width: 12,
-		height: 6,
-		pbr: 'drywall',
 		overlay: { texture: 'T_Window_Wood_019.png' },
-	},
+	}),
 
 	// Doors
 	{
@@ -430,26 +398,8 @@ const primitives: readonly Primitive[] = [
 	},
 
 	// Pillars
-	{
-		kind: 'pillar',
-		id: 'pillar-N-1',
-		origin: new Vector3(-3, 0, 16),
-		yaw: 0,
-		shape: 'round',
-		size: 0.6,
-		height: 6,
-		pbr: 'drywall',
-	},
-	{
-		kind: 'pillar',
-		id: 'pillar-N-2',
-		origin: new Vector3(3, 0, 16),
-		yaw: 0,
-		shape: 'round',
-		size: 0.6,
-		height: 6,
-		pbr: 'drywall',
-	},
+	pillar({ id: 'pillar-N-1', origin: new Vector3(-3, 0, 16), shape: 'round' }),
+	pillar({ id: 'pillar-N-2', origin: new Vector3(3, 0, 16), shape: 'round' }),
 
 	// Props (only those whose GLBs exist)
 	{
