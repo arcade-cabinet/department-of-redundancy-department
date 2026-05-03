@@ -58,6 +58,7 @@ import {
 	buildTitleScene as buildTitleSceneImpl,
 	createEncounterListener,
 } from './runtime/levelLifecycle';
+import { configureStatusBar, hideSplash, triggerHapticOnFire } from './runtime/nativeBoot';
 import {
 	type PickResult,
 	pickAt as pickAtImpl,
@@ -159,6 +160,16 @@ const healthKitMeshes = new Map<string, AbstractMesh>();
 const pendingCueActions: CueAction[] = [];
 
 const game = new Game();
+
+// Native plugin boot. Status-bar config is fire-and-forget (the user
+// doesn't see the boot sequence, and we don't want to gate engine
+// startup on a plugin call). The web stubs no-op cleanly.
+void configureStatusBar();
+
+// Set true on the first level's `buildLevel(...)` resolution so the
+// native splash is hidden exactly once. Subsequent transitions skip
+// the call (no flicker, no double-hide).
+let splashHidden = false;
 
 // Module-level dev/prod constant. Vite inlines `import.meta.env.PROD` at
 // build time, so `IS_DEV` is a compile-time constant. Every `if (IS_DEV)`
@@ -580,6 +591,13 @@ function constructLevel(levelId: LevelId): void {
 		for (const action of drainPendingCues(pendingCueActions)) {
 			handleCueAction(action);
 		}
+		// First level ready — hide native splash. Subsequent level builds
+		// are no-ops since `splashHidden` flips on the first call. Web
+		// stub no-ops too.
+		if (!splashHidden) {
+			splashHidden = true;
+			void hideSplash();
+		}
 	});
 
 	const listener = createEncounterListener({
@@ -818,6 +836,10 @@ canvas.addEventListener('pointerdown', (e) => {
 	// not it lands). Generated synth pop in `sfx/player-fire.wav` — see
 	// `scripts/generate-player-fire-sfx.mjs`.
 	audioBus?.playStinger('sfx/player-fire.wav', 0.6);
+	// Tactile feedback for arcade-trigger feel on native shells. Web
+	// stub no-ops; fire-and-forget so haptics latency doesn't gate the
+	// next pickAt + draw call.
+	triggerHapticOnFire();
 	const pick = pickAt(e.clientX, e.clientY);
 	// Adaptive difficulty: enemy hits AND deliberate health-kit pickups
 	// preserve the hitless-kill streak — both are intentional, useful trigger
