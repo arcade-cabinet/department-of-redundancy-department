@@ -165,6 +165,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Sync MARKETING_VERSION + CURRENT_PROJECT_VERSION in pbxproj
+      # to package.json (which release-please bumps). Must run before
+      # xcodebuild archive so the .ipa carries the right version.
+      - name: Sync iOS version from package.json
+        run: node scripts/sync-ios-version.mjs
+
       - name: Build native web bundle
         run: pnpm build:native
 

@@ -7,8 +7,14 @@ android {
         applicationId "cabinet.arcade.dord"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // versionName is bumped by release-please's generic updater (see
+        // release-please-config.json `extra-files`). versionCode is
+        // derived from versionName at gradle-eval time:
+        //   1.2.3 → 1*10000 + 2*100 + 3 = 10203
+        // Monotonically-increasing as long as no minor/patch exceeds 99,
+        // which matches store conventions for normal releases.
+        versionName "1.0.0" // x-release-please-version
+        versionCode versionName.split('\\.').with { (it[0].toInteger() * 10000) + (it[1].toInteger() * 100) + it[2].toInteger() }
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
