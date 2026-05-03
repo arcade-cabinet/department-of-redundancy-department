@@ -8,6 +8,23 @@
 	"engines": {
 		"node": ">=22"
 	},
+	"pnpm": {
+		"overrides": {
+			"vitest": "$vitest"
+		},
+		"onlyBuiltDependencies": [
+			"@biomejs/biome",
+			"esbuild",
+			"sharp"
+		],
+		"packageExtensions": {
+			"@capacitor/assets@*": {
+				"dependencies": {
+					"kleur": "^4.1.5"
+				}
+			}
+		}
+	},
 	"scripts": {
 		"dev": "vite",
 		"start": "vite",
@@ -26,6 +43,8 @@
 		"test:e2e:ui": "playwright test --ui",
 		"test:all": "pnpm test:node && pnpm test:audio && pnpm test:e2e",
 		"assets:check": "node scripts/check-asset-manifest.mjs",
+		"cap:icon": "node scripts/generate-app-icon.mjs",
+		"cap:resources": "pnpm cap:icon && capacitor-assets generate --android --ios",
 		"cap:sync": "pnpm build:native && cap sync"
 	},
 	"dependencies": {
@@ -41,6 +60,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.4.13",
+		"@capacitor/assets": "^3.0.5",
 		"@playwright/test": "^1.59.1",
 		"@size-limit/file": "^12.1.0",
 		"@types/node": "^25.6.0",
@@ -48,7 +68,9 @@
 		"@vitest/browser": "^4.1.5",
 		"@vitest/browser-playwright": "^4.1.5",
 		"cross-env": "^10.1.0",
+		"kleur": "^4.1.5",
 		"playwright": "^1.59.1",
+		"sharp": "^0.34.5",
 		"size-limit": "^12.1.0",
 		"typescript": "~6.0.3",
 		"vite": "^8.0.10",
@@ -59,10 +81,5 @@
 			"path": "dist/assets/*.js",
 			"limit": "1000 KB"
 		}
-	],
-	"pnpm": {
-		"overrides": {
-			"vitest": "$vitest"
-		}
-	}
+	]
 }
