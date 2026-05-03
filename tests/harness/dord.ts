@@ -42,6 +42,7 @@ export interface DordRunState {
 	score: number;
 	enemiesKilled: number;
 	justiceShots: number;
+	civilianHits: number;
 }
 
 export interface DordGameState {
@@ -56,6 +57,8 @@ export interface DordGame {
 	continueRun: () => void;
 	transitionLevel: (id: DordLevelId) => void;
 	endRun: (toGameOver: boolean) => void;
+	hitCivilian: () => void;
+	collectHealthKit: (hp?: number) => void;
 }
 
 export interface DordEnemySnapshot {
