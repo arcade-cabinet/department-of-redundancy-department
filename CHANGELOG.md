@@ -2,6 +2,13 @@
 
 All notable changes to this project. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [SemVer](https://semver.org/).
 
+## [1.1.2](https://github.com/arcade-cabinet/department-of-redundancy-department/compare/v1.1.1...v1.1.2) (2026-05-03)
+
+
+### Bug Fixes
+
+* **ci:** pin Xcode 15.4 (Swift 5.10) for capacitor plugin compat ([#111](https://github.com/arcade-cabinet/department-of-redundancy-department/issues/111)) ([b39bd93](https://github.com/arcade-cabinet/department-of-redundancy-department/commit/b39bd9313378bf80bb79c9b3376aaf3ce9a8d867))
+
 ## [1.1.1](https://github.com/arcade-cabinet/department-of-redundancy-department/compare/v1.1.0...v1.1.1) (2026-05-03)
 
 
