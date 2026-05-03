@@ -156,6 +156,12 @@ jobs:
     if: needs.release-please.outputs.release_created == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: macos-14
     timeout-minutes: 60
+    # iOS shipping requires Apple Developer credentials AND a
+    # Capacitor plugin set that compiles cleanly against core 8.3.1.
+    # Until both land, treat iOS as best-effort: the job runs to
+    # surface drift but does not fail the release pipeline. Web
+    # bundle + Android .aab continue to ship from the same workflow.
+    continue-on-error: true
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
