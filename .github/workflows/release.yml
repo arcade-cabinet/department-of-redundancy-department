@@ -78,7 +78,7 @@ jobs:
         with: { version: 10.33.0 }
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with: { node-version: 22, cache: pnpm }
-      - uses: actions/setup-java@3a4f6e1af504cf6a31855fa4c4392c7639697b04 # v5.0.0
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with: { java-version: '17', distribution: 'temurin' }
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
 
@@ -158,10 +158,12 @@ jobs:
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with: { node-version: 22, cache: pnpm }
 
-      # macos-14 ships with Xcode 16+. Pin so a runner image refresh
-      # doesn't silently shift the SDK out from under us.
+      # macos-14 ships with Xcode 16.1 and 16.2 (no 16.0). Pin to 16.2 so
+      # a runner image refresh doesn't silently shift the SDK out from
+      # under us. Verified path against actions/runner-images macos-14
+      # readme on 2026-05-03.
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.0.app
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app
 
       - run: pnpm install --frozen-lockfile
 
