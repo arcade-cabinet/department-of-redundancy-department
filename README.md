@@ -21,6 +21,7 @@
 - **Paper playtest:** [`docs/spec/playtest-2026-04-30.md`](./docs/spec/playtest-2026-04-30.md)
 - **Architecture:** [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
 - **Testing:** [`docs/TESTING.md`](./docs/TESTING.md)
+- **Privacy policy:** [`docs/privacy-policy.md`](./docs/privacy-policy.md) — required for App Store / Play Store listings; DORD collects nothing
 
 ## Quick start
 
