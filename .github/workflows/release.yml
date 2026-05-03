@@ -36,13 +36,16 @@ jobs:
 
   build-release:
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    # Fire on either: (a) release-please created a new release this run, or
+    # (b) manual workflow_dispatch with an explicit ref (e.g. to rebuild
+    # artifacts for an existing tag after a CI infra fix).
+    if: needs.release-please.outputs.release_created == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
+          ref: ${{ needs.release-please.outputs.tag_name || inputs.ref }}
           lfs: true
 
       - uses: pnpm/action-setup@903f9c1a6ebcba6cf41d87230be49611ac97822e # v6.0.3
@@ -60,18 +63,19 @@ jobs:
 
       - uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v2
         with:
-          tag_name: ${{ needs.release-please.outputs.tag_name }}
+          tag_name: ${{ needs.release-please.outputs.tag_name || inputs.ref }}
           files: department-of-redundancy-department-web.tar.gz
 
   build-android:
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    # See build-release gate above for rationale.
+    if: needs.release-please.outputs.release_created == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
+          ref: ${{ needs.release-please.outputs.tag_name || inputs.ref }}
           lfs: true
 
       - uses: pnpm/action-setup@903f9c1a6ebcba6cf41d87230be49611ac97822e # v6.0.3
@@ -135,22 +139,23 @@ jobs:
             exit 1
           fi
           mkdir -p artifacts
-          cp "$AAB" "artifacts/dord-${{ needs.release-please.outputs.tag_name }}.aab"
+          cp "$AAB" "artifacts/dord-${{ needs.release-please.outputs.tag_name || inputs.ref }}.aab"
 
       - uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v2
         with:
-          tag_name: ${{ needs.release-please.outputs.tag_name }}
+          tag_name: ${{ needs.release-please.outputs.tag_name || inputs.ref }}
           files: artifacts/*.aab
 
   build-ios:
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    # See build-release gate above for rationale.
+    if: needs.release-please.outputs.release_created == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: macos-14
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
+          ref: ${{ needs.release-please.outputs.tag_name || inputs.ref }}
           lfs: true
 
       - uses: pnpm/action-setup@903f9c1a6ebcba6cf41d87230be49611ac97822e # v6.0.3
@@ -289,12 +294,12 @@ jobs:
             exit 1
           fi
           mkdir -p artifacts
-          cp "$IPA" "artifacts/dord-${{ needs.release-please.outputs.tag_name }}.ipa"
+          cp "$IPA" "artifacts/dord-${{ needs.release-please.outputs.tag_name || inputs.ref }}.ipa"
 
       - uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v2
         if: env.APPLE_DISTRIBUTION_CERT_BASE64 != ''
         env:
           APPLE_DISTRIBUTION_CERT_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERT_BASE64 }}
         with:
-          tag_name: ${{ needs.release-please.outputs.tag_name }}
+          tag_name: ${{ needs.release-please.outputs.tag_name || inputs.ref }}
           files: artifacts/*.ipa
