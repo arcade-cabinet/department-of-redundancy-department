@@ -142,8 +142,23 @@ interface DirectorState {
 //   effective_windup = base * max(ADAPTIVE_FLOOR, 1 - ADAPTIVE_STEP * hitlessKills)
 // Streak resets on damage taken, missed shot, or entering a new dwell node.
 // Director-internal mutation only; not surfaced to GameState.
-const ADAPTIVE_FLOOR = 0.5;
-const ADAPTIVE_STEP = 0.05;
+export const ADAPTIVE_FLOOR = 0.5;
+export const ADAPTIVE_STEP = 0.05;
+
+/**
+ * Pure helper for the adaptive-difficulty windup curve. Exported so unit
+ * tests in `EncounterDirector.adaptive.test.ts` can pin the curve shape
+ * without instantiating a full director (which requires Babylon scene +
+ * listener wiring).
+ *
+ * Returns the multiplier applied to `aim-laser.durationMs` per the
+ * formula in the comment block above. Always in the range
+ * [ADAPTIVE_FLOOR, 1.0]. Negative or non-integer hitlessKills values
+ * are tolerated (the floor clamp catches them).
+ */
+export function computeAdaptiveWindupMultiplier(hitlessKills: number): number {
+	return Math.max(ADAPTIVE_FLOOR, 1 - ADAPTIVE_STEP * hitlessKills);
+}
 
 // Precomputed `justice-glint` aim/fire boundaries. The pattern is fixed at
 // module load and `isJusticeWindowOpen` runs every frame on the hot path,
@@ -617,7 +632,7 @@ export class EncounterDirector {
 	}
 
 	private adaptiveWindupMultiplier(): number {
-		return Math.max(ADAPTIVE_FLOOR, 1 - ADAPTIVE_STEP * this.hitlessKills);
+		return computeAdaptiveWindupMultiplier(this.hitlessKills);
 	}
 
 	private applyDifficultyToEvent(event: FireEvent): FireEvent {
