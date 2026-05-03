@@ -34,6 +34,13 @@ export type DordLevelId =
 	| 'boardroom'
 	| 'victory';
 
+export interface DordWeaponState {
+	active: 'pistol' | 'rifle';
+	pistolAmmo: number;
+	rifleAmmo: number;
+	reloadEndsAtMs: number | null;
+}
+
 export interface DordRunState {
 	currentLevelId: DordLevelId;
 	playerHp: number;
@@ -43,6 +50,7 @@ export interface DordRunState {
 	enemiesKilled: number;
 	justiceShots: number;
 	civilianHits: number;
+	weapon: DordWeaponState;
 }
 
 export interface DordGameState {
@@ -59,6 +67,10 @@ export interface DordGame {
 	endRun: (toGameOver: boolean) => void;
 	hitCivilian: () => void;
 	collectHealthKit: (hp?: number) => void;
+	tryFire: (nowMs: number) => boolean;
+	reload: (nowMs: number) => boolean;
+	tickReload: (nowMs: number) => void;
+	swapWeapon: () => boolean;
 }
 
 export interface DordEnemySnapshot {
