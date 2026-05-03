@@ -13,7 +13,7 @@ android {
         //   1.2.3 → 1*10000 + 2*100 + 3 = 10203
         // Monotonically-increasing as long as no minor/patch exceeds 99,
         // which matches store conventions for normal releases.
-        versionName "1.1.0" // x-release-please-version
+        versionName "1.1.1" // x-release-please-version
         versionCode versionName.split('\\.').with { (it[0].toInteger() * 10000) + (it[1].toInteger() * 100) + it[2].toInteger() }
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

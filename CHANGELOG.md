@@ -2,6 +2,18 @@
 
 All notable changes to this project. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [SemVer](https://semver.org/).
 
+## [1.1.1](https://github.com/arcade-cabinet/department-of-redundancy-department/compare/v1.1.0...v1.1.1) (2026-05-03)
+
+
+### Bug Fixes
+
+* **ci:** allow ios archive without signing secrets (validation-only) ([#109](https://github.com/arcade-cabinet/department-of-redundancy-department/issues/109)) ([69f227f](https://github.com/arcade-cabinet/department-of-redundancy-department/commit/69f227f802f42746ff491c51422770d3c432043d))
+* **ci:** allow workflow_dispatch to rebuild artifacts for existing tag ([#106](https://github.com/arcade-cabinet/department-of-redundancy-department/issues/106)) ([0012639](https://github.com/arcade-cabinet/department-of-redundancy-department/commit/0012639ab828382e6742863bfd61c06f6c1d2ce6))
+* **ci:** build-ios continue-on-error until signing + plugin compat ready ([#110](https://github.com/arcade-cabinet/department-of-redundancy-department/issues/110)) ([59ff9d6](https://github.com/arcade-cabinet/department-of-redundancy-department/commit/59ff9d63e91451176c47269ad903e274f2e3b30b))
+* **ci:** correct setup-java SHA + Xcode path in native build jobs ([#104](https://github.com/arcade-cabinet/department-of-redundancy-department/issues/104)) ([e68b426](https://github.com/arcade-cabinet/department-of-redundancy-department/commit/e68b426c8b2a372d5bd39f4f1b4688446d9b0649))
+* **ci:** Java 21 for Android, drop Pod install for Capacitor 8 SPM ([#107](https://github.com/arcade-cabinet/department-of-redundancy-department/issues/107)) ([ca8e61d](https://github.com/arcade-cabinet/department-of-redundancy-department/commit/ca8e61d42f19cb81c00e92c1adf53929d3e685bd))
+* **ci:** xcodebuild -project (SPM) not -workspace (CocoaPods) ([#108](https://github.com/arcade-cabinet/department-of-redundancy-department/issues/108)) ([73b7ef3](https://github.com/arcade-cabinet/department-of-redundancy-department/commit/73b7ef357e32c74628c81fc43b3a71e92908dc41))
+
 ## [1.1.0](https://github.com/arcade-cabinet/department-of-redundancy-department/compare/v1.0.0...v1.1.0) (2026-05-03)
 
 
