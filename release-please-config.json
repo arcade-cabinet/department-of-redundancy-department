@@ -4,7 +4,13 @@
 	"packages": {
 		".": {
 			"release-type": "node",
-			"include-component-in-tag": false
+			"include-component-in-tag": false,
+			"extra-files": [
+				{
+					"type": "generic",
+					"path": "android/app/build.gradle"
+				}
+			]
 		}
 	},
 	"include-v-in-tag": true,

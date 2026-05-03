@@ -44,6 +44,7 @@
 		"test:all": "pnpm test:node && pnpm test:audio && pnpm test:e2e",
 		"assets:check": "node scripts/check-asset-manifest.mjs",
 		"cap:icon": "node scripts/generate-app-icon.mjs",
+		"cap:ios-version": "node scripts/sync-ios-version.mjs",
 		"cap:resources": "pnpm cap:icon && capacitor-assets generate --android --ios",
 		"cap:sync": "pnpm build:native && cap sync"
 	},
