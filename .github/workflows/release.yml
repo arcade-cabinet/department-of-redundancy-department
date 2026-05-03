@@ -62,3 +62,82 @@ jobs:
         with:
           tag_name: ${{ needs.release-please.outputs.tag_name }}
           files: department-of-redundancy-department-web.tar.gz
+
+  build-android:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+          lfs: true
+
+      - uses: pnpm/action-setup@903f9c1a6ebcba6cf41d87230be49611ac97822e # v6.0.3
+        with: { version: 10.33.0 }
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with: { node-version: 22, cache: pnpm }
+      - uses: actions/setup-java@3a4f6e1af504cf6a31855fa4c4392c7639697b04 # v5.0.0
+        with: { java-version: '17', distribution: 'temurin' }
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+
+      - run: pnpm install --frozen-lockfile
+
+      # Build the web bundle Capacitor needs to bundle into the APK/AAB.
+      # CAPACITOR=true sets vite `base: '/'` and disables sourcemaps so
+      # the asset paths resolve inside the WebView's `file://` scheme.
+      - name: Build native web bundle
+        run: pnpm build:native
+
+      # Sync the dist/ → android/app/src/main/assets/public/ before
+      # gradle bundles. Without this the .aab would ship a stale or
+      # empty `public/` folder.
+      - name: Capacitor sync (Android)
+        run: pnpm exec cap sync android
+
+      # Decode the upload-signing keystore from a base64 secret. We
+      # derive the keystore path from the workspace root so the gradle
+      # signing config below can reference it via env vars.
+      #
+      # If ANDROID_KEYSTORE_BASE64 is unset (e.g. on a fork) we skip
+      # signing and produce an unsigned debug-keyed AAB so the job
+      # still proves the toolchain is wired. Once secrets are
+      # provisioned, the signed-release path activates automatically.
+      - name: Decode keystore
+        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload.keystore"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/upload.keystore" >> "$GITHUB_ENV"
+
+      # Build the Android App Bundle. When the keystore env vars are
+      # set, gradle picks them up via android/app/build.gradle's
+      # signingConfigs.release block (added below as part of B.5);
+      # otherwise it falls back to the default debug signing.
+      - name: Gradle bundleRelease
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ env.ANDROID_KEYSTORE_PATH }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew bundleRelease --no-daemon --stacktrace
+
+      # Locate + rename the AAB so the GitHub Release attaches a
+      # version-stamped artifact instead of the generic `app-release.aab`.
+      - name: Stage AAB for release
+        run: |
+          AAB=$(find android/app/build/outputs/bundle -name '*.aab' | head -n 1)
+          if [ -z "$AAB" ]; then
+            echo "::error::No .aab produced by gradle bundleRelease"
+            exit 1
+          fi
+          mkdir -p artifacts
+          cp "$AAB" "artifacts/dord-${{ needs.release-please.outputs.tag_name }}.aab"
+
+      - uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v2
+        with:
+          tag_name: ${{ needs.release-please.outputs.tag_name }}
+          files: artifacts/*.aab
