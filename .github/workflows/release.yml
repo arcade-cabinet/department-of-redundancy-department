@@ -240,18 +240,32 @@ jobs:
       # Capacitor 8.x uses Swift Package Manager — only App.xcodeproj
       # exists, no .xcworkspace (CocoaPods would have generated that).
       # Use -project rather than -workspace.
+      #
+      # When signing secrets are not configured (forks, repos without
+      # an Apple Developer account), produce an unsigned archive so the
+      # build pipeline still validates end-to-end. The exportArchive
+      # step downstream is gated on the same secret and will skip — no
+      # .ipa is produced, but the archive proves the toolchain wires up.
       - name: xcodebuild archive
         working-directory: ios/App
+        env:
+          APPLE_DISTRIBUTION_CERT_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERT_BASE64 }}
         run: |
           set -euo pipefail
-          xcodebuild \
-            -project App.xcodeproj \
-            -scheme App \
-            -configuration Release \
-            -archivePath "$RUNNER_TEMP/App.xcarchive" \
-            -destination 'generic/platform=iOS' \
-            -allowProvisioningUpdates \
-            archive
+          ARGS=(
+            -project App.xcodeproj
+            -scheme App
+            -configuration Release
+            -archivePath "$RUNNER_TEMP/App.xcarchive"
+            -destination 'generic/platform=iOS'
+          )
+          if [ -n "${APPLE_DISTRIBUTION_CERT_BASE64:-}" ]; then
+            ARGS+=(-allowProvisioningUpdates)
+          else
+            echo "::notice::No signing secrets configured — building unsigned archive (validation only, no .ipa will be produced)"
+            ARGS+=(CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="")
+          fi
+          xcodebuild "${ARGS[@]}" archive
 
       - name: xcodebuild exportArchive
         if: env.APPLE_DISTRIBUTION_CERT_BASE64 != ''
