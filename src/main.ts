@@ -231,6 +231,12 @@ if (IS_DEV) {
 			const mesh = levelHandles?.props.get(propId);
 			return !!mesh && !mesh.isDisposed();
 		},
+		// Whether an active civilian is currently riding the named civilian
+		// rail. Used by the hostage-loss e2e (PRQ A.9) to confirm the
+		// paired civilian is disposed when the hostage-threat fires.
+		hasCivilianOnRail: (railId: string): boolean => {
+			return runtime.civilians.getByRailId(railId) !== undefined;
+		},
 		enemySnapshots: (): Array<{ id: string; clientX: number; clientY: number; hp: number }> => {
 			if (!scene?.activeCamera || !director) return [];
 			const cam = scene.activeCamera;
@@ -599,6 +605,15 @@ function constructLevel(levelId: LevelId): void {
 		// listener never holds a stale reference across level transitions
 		// (audioBus is reconstructed per level).
 		playSfx: (audioFile, volume) => audioBus?.playStinger(audioFile, volume),
+		loseCivilianOnRail: (civilianRailId) => {
+			// Hostage-threat completed — claim the paired civilian.
+			const civ = runtime.civilians.getByRailId(civilianRailId);
+			if (!civ) return;
+			civ.mesh.dispose();
+			runtime.civilians.deleteById(civ.id);
+			audioBus?.playStinger('impact/impact-body-02.ogg', 0.9);
+			game.hitCivilian();
+		},
 	});
 
 	director = new EncounterDirector({

@@ -14,6 +14,7 @@ const noopListener: EncounterListener = {
 	onFireEvent: () => {},
 	onPlayerDamage: () => {},
 	onCameraUpdate: () => {},
+	onCivilianLoss: () => {},
 };
 
 const railWithDwell = {
@@ -351,5 +352,125 @@ describe('EncounterDirector — justice-glint window', () => {
 	it('returns false for unknown enemy ids', () => {
 		const { director } = justiceSetup();
 		expect(director.isJusticeWindowOpen('does-not-exist')).toBe(false);
+	});
+});
+
+describe('EncounterDirector — civilian-loss routing (PRQ A.9)', () => {
+	const railWithSpawn = {
+		id: 'rail-host-A',
+		path: [new Vector3(0, 0, 6), new Vector3(0, 0, 5)],
+		speed: 1,
+		loop: false,
+	} as const;
+
+	function makeBus() {
+		const events: Array<
+			{ kind: 'damage'; damage: number } | { kind: 'civilian-loss'; rail: string }
+		> = [];
+		const listener: EncounterListener = {
+			...noopListener,
+			onPlayerDamage: (damage) => events.push({ kind: 'damage', damage }),
+			onCivilianLoss: (_id, rail) => events.push({ kind: 'civilian-loss', rail }),
+		};
+		return { events, listener };
+	}
+
+	it('hostage-threat with hostageCivilianRailId emits onCivilianLoss instead of onPlayerDamage', () => {
+		const { events, listener } = makeBus();
+		const director = new EncounterDirector({
+			cameraRail: railWithDwell,
+			cues: [
+				{
+					id: 'spawn-host',
+					trigger: { kind: 'on-arrive', railNodeId: 'pos-1' },
+					action: {
+						verb: 'enemy-spawn',
+						railId: 'rail-host-A',
+						archetype: 'security-guard',
+						fireProgram: 'hostage-threat',
+						hostageCivilianRailId: 'rail-civ-1',
+					},
+				},
+			],
+			spawnRails: [railWithSpawn],
+			difficulty: 'normal',
+			listener,
+		});
+
+		// Glide-in (~1.25s) + run the hostage-threat 2500ms aim + fire-hitscan.
+		director.tick(2000);
+		director.tick(2000);
+		director.tick(1000);
+
+		const losses = events.filter((e) => e.kind === 'civilian-loss');
+		const damages = events.filter((e) => e.kind === 'damage');
+		expect(losses.length).toBeGreaterThanOrEqual(1);
+		expect(losses[0]).toEqual({ kind: 'civilian-loss', rail: 'rail-civ-1' });
+		expect(damages.length).toBe(0);
+	});
+
+	it('hostage-threat WITHOUT hostageCivilianRailId still damages the player (back-compat)', () => {
+		const { events, listener } = makeBus();
+		const director = new EncounterDirector({
+			cameraRail: railWithDwell,
+			cues: [
+				{
+					id: 'spawn-host-unpaired',
+					trigger: { kind: 'on-arrive', railNodeId: 'pos-1' },
+					action: {
+						verb: 'enemy-spawn',
+						railId: 'rail-host-A',
+						archetype: 'security-guard',
+						fireProgram: 'hostage-threat',
+					},
+				},
+			],
+			spawnRails: [railWithSpawn],
+			difficulty: 'normal',
+			listener,
+		});
+
+		director.tick(2000);
+		director.tick(2000);
+		director.tick(1000);
+
+		const losses = events.filter((e) => e.kind === 'civilian-loss');
+		const damages = events.filter((e) => e.kind === 'damage');
+		expect(losses.length).toBe(0);
+		expect(damages.length).toBeGreaterThanOrEqual(1);
+	});
+
+	it('non-hostage fire-hitscan ignores hostageCivilianRailId entirely (player still damaged)', () => {
+		// Even if a level mistakenly tags a non-hostage-threat enemy with
+		// hostageCivilianRailId, the routing only kicks in for the
+		// hostage-threat fire program. Other programs damage the player as usual.
+		const { events, listener } = makeBus();
+		const director = new EncounterDirector({
+			cameraRail: railWithDwell,
+			cues: [
+				{
+					id: 'spawn-pistol',
+					trigger: { kind: 'on-arrive', railNodeId: 'pos-1' },
+					action: {
+						verb: 'enemy-spawn',
+						railId: 'rail-host-A',
+						archetype: 'security-guard',
+						fireProgram: 'pistol-pop-aim',
+						hostageCivilianRailId: 'rail-civ-1',
+					},
+				},
+			],
+			spawnRails: [railWithSpawn],
+			difficulty: 'normal',
+			listener,
+		});
+
+		// pistol-pop-aim fires hitscan within ~1500ms of spawn; tick generously.
+		for (let i = 0; i < 10; i++) director.tick(500);
+
+		const losses = events.filter((e) => e.kind === 'civilian-loss');
+		const damages = events.filter((e) => e.kind === 'damage');
+		expect(losses.length).toBe(0);
+		expect(damages.length).toBeGreaterThanOrEqual(1);
 	});
 });

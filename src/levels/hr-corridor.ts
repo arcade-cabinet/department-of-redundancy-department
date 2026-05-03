@@ -467,6 +467,10 @@ const cues: Cue[] = [
 			railId: 'rail-spawn-hostage-host',
 			archetype: 'security-guard',
 			fireProgram: 'hostage-threat',
+			// PRQ A.9 — pair this hostage-taker with civilian #1. If the
+			// player doesn't kill the threat before its program completes,
+			// civilian-1 is claimed and the player eats the score penalty.
+			hostageCivilianRailId: 'rail-civ-hostage-1',
 		},
 	},
 	{
@@ -477,6 +481,9 @@ const cues: Cue[] = [
 			railId: 'rail-spawn-hostage-host-B',
 			archetype: 'security-guard',
 			fireProgram: 'hostage-threat',
+			// Pairs with civilian #2 (the third civilian is unpaired —
+			// survives unless the player shoots them).
+			hostageCivilianRailId: 'rail-civ-hostage-2',
 		},
 	},
 	{

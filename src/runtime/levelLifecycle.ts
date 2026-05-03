@@ -143,6 +143,13 @@ export interface EncounterListenerHost {
 	 * to a stale instance after a level transition).
 	 */
 	playSfx(audioFile: string, volume?: number): void;
+	/**
+	 * Closure into the per-level `Civilians` registry + the Game's
+	 * civilian-hit penalty. Looks up the civilian on `civilianRailId`,
+	 * disposes its mesh, deletes from the registry, plays a body-impact
+	 * stinger, and applies the score penalty. PRQ A.9.
+	 */
+	loseCivilianOnRail(civilianRailId: string): void;
 }
 
 /**
@@ -305,6 +312,12 @@ export function createEncounterListener(host: EncounterListenerHost): EncounterL
 		onCameraUpdate(position, lookAt) {
 			host.camera.position.copyFrom(position);
 			host.camera.setTarget(lookAt);
+		},
+		onCivilianLoss(_enemyId, civilianRailId) {
+			// PRQ A.9 — hostage-threat completed; dispose the paired civilian
+			// and apply the score penalty (same magnitude as a player-shot
+			// civilian since the cost should be felt either way).
+			host.loseCivilianOnRail(civilianRailId);
 		},
 	};
 }

@@ -47,6 +47,7 @@ function makeHost(scene: Scene, camera: FreeCamera, sfx: SfxRecord[]): Encounter
 		handleCueAction: (_action: CueAction) => {},
 		applyDamage: () => {},
 		playSfx: (audioFile, volume) => sfx.push({ audioFile, volume }),
+		loseCivilianOnRail: () => {},
 	};
 }
 

@@ -8,6 +8,7 @@ import type { Level } from '../levels';
 
 interface ActiveCivilian {
 	readonly id: string;
+	readonly railId: string;
 	readonly path: readonly Vector3[];
 	readonly speed: number;
 	readonly mesh: AbstractMesh;
@@ -33,6 +34,19 @@ export class Civilians {
 
 	getById(id: string): { mesh: AbstractMesh } | undefined {
 		return this.active.get(id);
+	}
+
+	/**
+	 * Look up the active civilian spawned on the given rail. Used by the
+	 * hostage-threat fire program (PRQ A.9): when a threat completes, its
+	 * paired civilian — identified by the rail the level paired with the
+	 * threat — is disposed.
+	 */
+	getByRailId(railId: string): { id: string; mesh: AbstractMesh } | undefined {
+		for (const civ of this.active.values()) {
+			if (civ.railId === railId) return { id: civ.id, mesh: civ.mesh };
+		}
+		return undefined;
 	}
 
 	/** Drop a civilian without disposing its mesh — caller already did. */
@@ -68,7 +82,7 @@ export class Civilians {
 		mat.specularColor = new Color3(0.05, 0.05, 0.05);
 		mesh.material = mat;
 		mesh.metadata = { civilianId: id };
-		this.active.set(id, { id, path: rail.path, speed: rail.speed, mesh, t: 0 });
+		this.active.set(id, { id, railId, path: rail.path, speed: rail.speed, mesh, t: 0 });
 	}
 
 	tick(dtMs: number, capsuleHeight: number): void {
