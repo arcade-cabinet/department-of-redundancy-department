@@ -30,7 +30,9 @@ const pbxPath = resolve(root, 'ios/App/App.xcodeproj/project.pbxproj');
 const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
 const version = pkg.version;
 if (!/^\d+\.\d+\.\d+$/.test(version)) {
-	process.stderr.write(`sync-ios-version: package.json version "${version}" is not semver MAJOR.MINOR.PATCH\n`);
+	process.stderr.write(
+		`sync-ios-version: package.json version "${version}" is not semver MAJOR.MINOR.PATCH\n`,
+	);
 	process.exit(1);
 }
 
@@ -43,12 +45,19 @@ let pbx = readFileSync(pbxPath, 'utf-8');
 // pbxproj uses tab indent so we accept any whitespace before the key.
 const before = pbx;
 pbx = pbx.replace(/MARKETING_VERSION = [^;]+;/g, `MARKETING_VERSION = ${version};`);
-pbx = pbx.replace(/CURRENT_PROJECT_VERSION = [^;]+;/g, `CURRENT_PROJECT_VERSION = ${projectVersion};`);
+pbx = pbx.replace(
+	/CURRENT_PROJECT_VERSION = [^;]+;/g,
+	`CURRENT_PROJECT_VERSION = ${projectVersion};`,
+);
 
 if (pbx === before) {
-	process.stderr.write(`sync-ios-version: no MARKETING_VERSION / CURRENT_PROJECT_VERSION lines matched in ${pbxPath}\n`);
+	process.stderr.write(
+		`sync-ios-version: no MARKETING_VERSION / CURRENT_PROJECT_VERSION lines matched in ${pbxPath}\n`,
+	);
 	process.exit(1);
 }
 
 writeFileSync(pbxPath, pbx);
-process.stdout.write(`sync-ios-version: ${pbxPath} → MARKETING_VERSION=${version}, CURRENT_PROJECT_VERSION=${projectVersion}\n`);
+process.stdout.write(
+	`sync-ios-version: ${pbxPath} → MARKETING_VERSION=${version}, CURRENT_PROJECT_VERSION=${projectVersion}\n`,
+);
