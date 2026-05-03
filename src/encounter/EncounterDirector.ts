@@ -33,7 +33,7 @@ import {
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'nightmare' | 'un';
 
-const DIFFICULTY_RANK: Readonly<Record<Difficulty, number>> = {
+export const DIFFICULTY_RANK: Readonly<Record<Difficulty, number>> = {
 	easy: 0,
 	normal: 1,
 	hard: 2,
@@ -41,13 +41,32 @@ const DIFFICULTY_RANK: Readonly<Record<Difficulty, number>> = {
 	un: 4,
 };
 
-const GATE_MIN_RANK: Readonly<Record<DifficultyGate, number>> = {
+export const GATE_MIN_RANK: Readonly<Record<DifficultyGate, number>> = {
 	'easy+': 0,
 	'normal+': 1,
 	'hard+': 2,
 	'nightmare+': 3,
 	'un-only': 4,
 };
+
+/**
+ * Pure helper for the difficulty-gate filter applied to cues at director
+ * construction. A cue with no `difficulty` field always passes; otherwise
+ * the supplied difficulty rank must meet or exceed the gate's minimum
+ * rank. Exported so unit tests can pin the matrix without instantiating
+ * a full director.
+ *
+ * Mirrors docs/spec/03-difficulty-and-modifiers.md.
+ */
+export function passesDifficultyGate(
+	cueDifficulty: DifficultyGate | undefined,
+	difficulty: Difficulty,
+): boolean {
+	if (!cueDifficulty) return true;
+	const minRank = GATE_MIN_RANK[cueDifficulty];
+	const myRank = DIFFICULTY_RANK[difficulty];
+	return myRank >= minRank;
+}
 
 export interface DifficultyParams {
 	readonly windupMultiplier: number;
@@ -185,7 +204,6 @@ const JUSTICE_WINDOW_BOUNDS = deriveJusticeWindowBounds();
 export class EncounterDirector {
 	private readonly cues: readonly Cue[];
 	private readonly spawnRailMap: ReadonlyMap<string, SpawnRailGraph>;
-	private readonly difficulty: Difficulty;
 	private readonly difficultyParams: DifficultyParams;
 	private readonly listener: EncounterListener;
 	private state: DirectorState;
@@ -201,9 +219,8 @@ export class EncounterDirector {
 	private readonly bossPhaseOneMaxHp = new Map<BossId, number>();
 
 	constructor(config: EncounterDirectorConfig) {
-		this.cues = config.cues.filter((c) => this.passesDifficultyGate(c, config.difficulty));
+		this.cues = config.cues.filter((c) => passesDifficultyGate(c.difficulty, config.difficulty));
 		this.spawnRailMap = new Map(config.spawnRails.map((r) => [r.id, r]));
-		this.difficulty = config.difficulty;
 		this.difficultyParams = DIFFICULTY_TABLE[config.difficulty];
 		this.listener = config.listener;
 
@@ -735,13 +752,6 @@ export class EncounterDirector {
 			position: spawnRailPosition(newRail),
 			state: newState,
 		};
-	}
-
-	private passesDifficultyGate(cue: Cue, difficulty: Difficulty = this.difficulty): boolean {
-		if (!cue.difficulty) return true;
-		const minRank = GATE_MIN_RANK[cue.difficulty];
-		const myRank = DIFFICULTY_RANK[difficulty];
-		return myRank >= minRank;
 	}
 
 	/**
