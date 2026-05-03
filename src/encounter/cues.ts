@@ -56,6 +56,12 @@ export type CueAction =
 			readonly archetype: ArchetypeId;
 			readonly fireProgram: FirePatternId;
 			readonly ceaseAfterMs?: number;
+			/**
+			 * Optional pairing for `hostage-threat`: the civilian rail whose
+			 * active civilian is claimed if this enemy completes its threat
+			 * program. PRQ A.9 — see `EncounterDirector.onFireEvent`.
+			 */
+			readonly hostageCivilianRailId?: string;
 	  }
 	| { readonly verb: 'civilian-spawn'; readonly railId: string }
 	| { readonly verb: 'boss-spawn'; readonly bossId: BossId; readonly phase: number }

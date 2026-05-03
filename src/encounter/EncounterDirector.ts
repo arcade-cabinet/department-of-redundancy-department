@@ -104,6 +104,13 @@ export interface EncounterListener {
 	onFireEvent(enemyId: string, event: FireEvent): void;
 	onPlayerDamage(damage: number, enemyId: string): void;
 	onCameraUpdate(position: Vector3, lookAt: Vector3): void;
+	/**
+	 * A `hostage-threat` enemy completed its threat program. PRQ A.9 — the
+	 * paired civilian on `civilianRailId` should be disposed and the score
+	 * penalised. Distinct from `onPlayerDamage` since the player is not
+	 * directly damaged by hostage-threats — the cost is the civilian.
+	 */
+	onCivilianLoss(enemyId: string, civilianRailId: string): void;
 }
 
 export interface EncounterDirectorConfig {
@@ -450,6 +457,7 @@ export class EncounterDirector {
 					cue.action.archetype,
 					cue.action.fireProgram,
 					cue.action.ceaseAfterMs,
+					cue.action.hostageCivilianRailId,
 				);
 				break;
 			case 'civilian-spawn':
@@ -511,6 +519,7 @@ export class EncounterDirector {
 			position: spawnRailPosition(railState),
 			ceaseAfterMs: null,
 			alerted: true,
+			hostageCivilianRailId: null,
 		});
 	}
 
@@ -559,6 +568,7 @@ export class EncounterDirector {
 		archetypeId: ArchetypeId,
 		fireProgramId: FirePatternId,
 		ceaseAfterMs: number | undefined,
+		hostageCivilianRailId: string | undefined,
 	): void {
 		const railGraph = this.spawnRailMap.get(railId);
 		if (!railGraph) {
@@ -579,6 +589,7 @@ export class EncounterDirector {
 			position: spawnRailPosition(railState),
 			ceaseAfterMs: ceaseAfterMs ?? null,
 			alerted: false,
+			hostageCivilianRailId: hostageCivilianRailId ?? null,
 		});
 	}
 
@@ -649,6 +660,14 @@ export class EncounterDirector {
 	private emitEvent(enemyId: string, event: FireEvent): void {
 		this.listener.onFireEvent(enemyId, event);
 		if (event.verb === 'fire-hitscan' || event.verb === 'melee-contact') {
+			// Hostage-threat enemies redirect their hitscan from the player
+			// to the paired civilian — the threat completes by claiming
+			// a hostage instead of damaging the player. PRQ A.9.
+			const enemy = this.state.enemies.get(enemyId);
+			if (enemy?.fireProgramId === 'hostage-threat' && enemy.hostageCivilianRailId) {
+				this.listener.onCivilianLoss(enemyId, enemy.hostageCivilianRailId);
+				return;
+			}
 			this.listener.onPlayerDamage(event.damage, enemyId);
 			// Player took damage → reset the adaptive-difficulty streak. The
 			// player is meant to feel pressure restart when they get tagged.

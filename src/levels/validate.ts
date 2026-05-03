@@ -346,6 +346,20 @@ function checkEnemySpawn(
 			`cue '${cue.id}' uses unknown fireProgram '${a.fireProgram}'`,
 		);
 	}
+	if (a.hostageCivilianRailId !== undefined) {
+		if (!index.civilianRailIds.has(a.hostageCivilianRailId)) {
+			log.err(
+				'CUE_DANGLING_HOSTAGE_RAIL',
+				`cue '${cue.id}' hostageCivilianRailId '${a.hostageCivilianRailId}' is not a civilianRail`,
+			);
+		}
+		if (a.fireProgram !== 'hostage-threat') {
+			log.warn(
+				'CUE_HOSTAGE_RAIL_NON_THREAT',
+				`cue '${cue.id}' has hostageCivilianRailId but fireProgram '${a.fireProgram}' isn't 'hostage-threat' — pairing will be ignored`,
+			);
+		}
+	}
 }
 
 function checkCues(level: Level, index: LevelIndex, log: IssueLog): void {

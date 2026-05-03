@@ -75,6 +75,7 @@ export interface DordSurface {
 	hitEnemy: (enemyId: string, target: 'head' | 'body' | 'justice') => void;
 	isJusticeWindowOpen: (enemyId: string) => boolean;
 	hasProp: (propId: string) => boolean;
+	hasCivilianOnRail: (railId: string) => boolean;
 }
 
 declare global {

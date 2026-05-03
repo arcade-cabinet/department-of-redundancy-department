@@ -125,6 +125,13 @@ export interface Enemy {
 	readonly ceaseAfterMs: number | null;
 	/** True once the director's `on-alert` signal has fired (used by pre-aggro programs). */
 	readonly alerted: boolean;
+	/**
+	 * For `hostage-threat` enemies: the civilian rail whose active
+	 * civilian is claimed if this enemy completes its threat program.
+	 * Authored by the level via `enemy-spawn` cue's `hostageCivilianRailId`.
+	 * Null for enemies not paired with a hostage. PRQ A.9.
+	 */
+	readonly hostageCivilianRailId: string | null;
 }
 
 export interface EnemyTickResult {
