@@ -21,6 +21,39 @@ export interface PickResult {
  * archetype's justiceShotTarget band. Outside the window, justice picks
  * fall back to the normal head/body split.
  */
+/**
+ * Pure helper for the enemy-pick target classifier. Decoupled from Babylon
+ * so unit tests can pin the head/body/justice routing matrix without
+ * standing up a Scene + pick raycast.
+ *
+ *   - Justice: director confirms the window is open AND `fromTopFrac`
+ *     lands within the archetype's justiceShotTarget band. Both gates
+ *     matter — the window-only gate would let any body hit during glint
+ *     score justice (cheapens the bonus); the band-only gate would let
+ *     a stray tie-knot pixel score justice anytime (breaks scoring).
+ *   - Head:   `fromTopFrac < 0.5` (upper half of the capsule).
+ *   - Body:   otherwise.
+ *
+ * `fromTopFrac` is `(meshY + capsuleHalfHeight - hitY) / (capsuleHalfHeight*2)`,
+ * computed by the caller from the picked mesh + raycast result.
+ */
+export function resolveEnemyPickTarget(
+	enemyId: string,
+	fromTopFrac: number,
+	director: EncounterDirector | null,
+): 'head' | 'body' | 'justice' {
+	if (director?.isJusticeWindowOpen(enemyId)) {
+		const enemy = director.getEnemy(enemyId);
+		if (enemy) {
+			const band = JUSTICE_TARGETS[ARCHETYPES[enemy.archetypeId].justiceShotTarget];
+			if (Math.abs(fromTopFrac - band.bandCenter) <= band.bandTol) {
+				return 'justice';
+			}
+		}
+	}
+	return fromTopFrac < 0.5 ? 'head' : 'body';
+}
+
 export function pickAt(
 	scene: Scene | null,
 	xPx: number,
@@ -41,21 +74,7 @@ export function pickAt(
 		const capsuleHeight = capsuleHalfHeight * 2;
 		const fromTop = meshY + capsuleHalfHeight - hitY;
 		const fromTopFrac = capsuleHeight > 0 ? fromTop / capsuleHeight : 0.5;
-		// Justice routing: only when the director confirms an open window AND
-		// the hit lands in the archetype-specific band. Both conditions matter
-		// — without the band check, any body-hit during glint would score
-		// justice (cheapens the precision-shot bonus); without the window
-		// check, any tie-knot hit ever would score justice (breaks scoring).
-		if (director?.isJusticeWindowOpen(meta.enemyId)) {
-			const enemy = director.getEnemy(meta.enemyId);
-			if (enemy) {
-				const band = JUSTICE_TARGETS[ARCHETYPES[enemy.archetypeId].justiceShotTarget];
-				if (Math.abs(fromTopFrac - band.bandCenter) <= band.bandTol) {
-					return { kind: 'enemy', enemyId: meta.enemyId, target: 'justice' };
-				}
-			}
-		}
-		const target: 'head' | 'body' = fromTopFrac < 0.5 ? 'head' : 'body';
+		const target = resolveEnemyPickTarget(meta.enemyId, fromTopFrac, director);
 		return { kind: 'enemy', enemyId: meta.enemyId, target };
 	}
 	if (meta?.civilianId) {
