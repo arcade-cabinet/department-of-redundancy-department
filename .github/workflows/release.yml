@@ -237,12 +237,15 @@ jobs:
       # method (app-store) and team identifier — committed under
       # ios/App/ExportOptions.plist with placeholder values that the
       # workflow overwrites at runtime via PlistBuddy.
+      # Capacitor 8.x uses Swift Package Manager — only App.xcodeproj
+      # exists, no .xcworkspace (CocoaPods would have generated that).
+      # Use -project rather than -workspace.
       - name: xcodebuild archive
         working-directory: ios/App
         run: |
           set -euo pipefail
           xcodebuild \
-            -workspace App.xcworkspace \
+            -project App.xcodeproj \
             -scheme App \
             -configuration Release \
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
