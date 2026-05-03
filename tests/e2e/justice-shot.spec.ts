@@ -124,9 +124,7 @@ test.describe('justice shot', () => {
 					for (const s of snaps) {
 						if (!dord.isJusticeWindowOpen(s.id)) continue;
 						for (const scene of dord.engine.scenes) {
-							const glint = scene.getMeshByName(`glint-${s.id}`) as
-								| { isVisible: boolean }
-								| null;
+							const glint = scene.getMeshByName(`glint-${s.id}`) as { isVisible: boolean } | null;
 							if (glint) return { id: s.id, glintVisible: glint.isVisible };
 						}
 					}
