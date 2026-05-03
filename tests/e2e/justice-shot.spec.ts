@@ -40,34 +40,35 @@ test.describe('justice shot', () => {
 		await waitForLevelReady(page);
 
 		// Fast-forward until at least one justice-glint enemy spawns AND its
-		// window opens. The open-plan justice-glint enemy spawns on `pos-2`
-		// arrival; rail glide + dwell timing means the spawn happens within
-		// the first ~30s of simulated time.
+		// window opens. open-plan rail dwells for 18s at pos-1 then arrives
+		// pos-2 where the justice-glint enemy spawns. Window is 300ms wide
+		// (elapsedMs ∈ [300, 600) per firePatterns.ts:140-141).
 		//
-		// The window is 300ms wide (elapsedMs ∈ [300, 600) per
-		// firePatterns.ts:140-141). We hop in 100ms steps so the post-tick
-		// observation lands inside the window deterministically — a 250ms
-		// stride could land the FIRST observation past the window if the
-		// enemy spawned mid-tick (elapsed jumps 0 → 250 → 500 → 750, with
-		// only the 500-tick observation falling in the window; flake-prone
-		// when other tick-time costs perturb the stride).
-		const justice = await page.waitForFunction(
-			() => {
-				if (!globalThis.__dord) return null;
-				globalThis.__dord.fastForward(100);
-				const snaps = globalThis.__dord.enemySnapshots();
+		// Run the simulation in a single in-page loop rather than a
+		// page.waitForFunction polling loop — the polling variant pays a
+		// ~150ms wallclock round-trip per 100ms simulated tick, which is
+		// fine locally (~36s) but blows the 60s budget on slower CI
+		// runners. An in-page tick loop pays the cost once.
+		const enemyId = await page.evaluate(async (): Promise<string> => {
+			const dord = globalThis.__dord;
+			if (!dord) throw new Error('__dord missing');
+			const STRIDE_MS = 100;
+			const MAX_SIM_MS = 90_000;
+			for (let elapsed = 0; elapsed < MAX_SIM_MS; elapsed += STRIDE_MS) {
+				dord.fastForward(STRIDE_MS);
+				const snaps = dord.enemySnapshots();
 				for (const s of snaps) {
-					if (globalThis.__dord.isJusticeWindowOpen(s.id)) return s.id;
+					if (dord.isJusticeWindowOpen(s.id)) return s.id;
 				}
-				return null;
-			},
-			null,
-			{ timeout: 60_000, polling: 50 },
-		);
-		const enemyId = await justice.jsonValue();
-		if (typeof enemyId !== 'string') {
-			throw new Error('expected a justice-glint enemy id from waitForFunction');
-		}
+				// Yield to the event loop occasionally so the page doesn't
+				// freeze. RAF gives Babylon a chance to render frames too,
+				// which keeps the engine clock in step with director time.
+				if (elapsed % 1000 === 0) {
+					await new Promise<void>((r) => requestAnimationFrame(() => r()));
+				}
+			}
+			throw new Error(`justice window never opened in ${MAX_SIM_MS}ms simulated time`);
+		});
 
 		const before = await readState(page);
 
@@ -101,36 +102,41 @@ test.describe('justice shot', () => {
 		await waitForLevel(page, 'open-plan');
 		await waitForLevelReady(page);
 
-		// Same wait as the scoring test, but capture both the enemy id AND
-		// the visibility of its child glint mesh when the window opens. We
-		// dig into the Babylon scene via the engine handle on `__dord` to
-		// avoid adding more debug surface for one assertion. 100ms stride
-		// reasoning lives on the scoring test above.
-		const result = await page.waitForFunction(
-			() => {
-				if (!globalThis.__dord) return null;
-				globalThis.__dord.fastForward(100);
-				const snaps = globalThis.__dord.enemySnapshots();
-				for (const s of snaps) {
-					if (!globalThis.__dord.isJusticeWindowOpen(s.id)) continue;
-					// Find the child glint mesh by name. The capsule is named
-					// `enemy-${id}` and the glint is `glint-${id}`. Both live
-					// in the active scene; pull from `engine.scenes`.
-					const dord = globalThis.__dord as unknown as {
-						engine: { scenes: Array<{ getMeshByName: (n: string) => unknown }> };
-					};
-					for (const scene of dord.engine.scenes) {
-						const glint = scene.getMeshByName(`glint-${s.id}`) as { isVisible: boolean } | null;
-						if (glint) return { id: s.id, glintVisible: glint.isVisible };
+		// In-page tick loop (rationale on the scoring test above). Captures
+		// both the enemy id AND the visibility of its child glint mesh
+		// when the window opens. We dig into the Babylon scene via the
+		// engine handle on `__dord` to avoid adding more debug surface
+		// for one assertion.
+		const payload = await page.evaluate(
+			async (): Promise<{ id: string; glintVisible: boolean }> => {
+				const dord = globalThis.__dord as unknown as {
+					fastForward: (ms: number) => void;
+					enemySnapshots: () => Array<{ id: string }>;
+					isJusticeWindowOpen: (id: string) => boolean;
+					engine: { scenes: Array<{ getMeshByName: (n: string) => unknown }> };
+				};
+				if (!dord) throw new Error('__dord missing');
+				const STRIDE_MS = 100;
+				const MAX_SIM_MS = 90_000;
+				for (let elapsed = 0; elapsed < MAX_SIM_MS; elapsed += STRIDE_MS) {
+					dord.fastForward(STRIDE_MS);
+					const snaps = dord.enemySnapshots();
+					for (const s of snaps) {
+						if (!dord.isJusticeWindowOpen(s.id)) continue;
+						for (const scene of dord.engine.scenes) {
+							const glint = scene.getMeshByName(`glint-${s.id}`) as
+								| { isVisible: boolean }
+								| null;
+							if (glint) return { id: s.id, glintVisible: glint.isVisible };
+						}
+					}
+					if (elapsed % 1000 === 0) {
+						await new Promise<void>((r) => requestAnimationFrame(() => r()));
 					}
 				}
-				return null;
+				throw new Error(`justice window never opened in ${MAX_SIM_MS}ms simulated time`);
 			},
-			null,
-			{ timeout: 60_000, polling: 50 },
 		);
-		const payload = (await result.jsonValue()) as { id: string; glintVisible: boolean } | null;
-		if (!payload) throw new Error('expected glint check payload');
 		expect(payload.glintVisible).toBe(true);
 	});
 });
