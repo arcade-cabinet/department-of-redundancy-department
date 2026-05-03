@@ -8,12 +8,15 @@ import type { CapacitorConfig } from '@capacitor/cli';
  * builds with `base: '/'` and disables sourcemaps for the bundled shell).
  *
  * Persistence is `@capacitor/preferences` only (no SQLite, no drizzle).
- * Native shells (`android/`, `ios/`) are NOT committed — they are
- * generated on demand by `pnpm cap add android` / `pnpm cap add ios`.
- * `pnpm cap:sync` will fail until that one-time scaffold runs.
+ * Native shells (`android/`, `ios/`) are committed (PRQ B.1); build
+ * artifacts under them are gitignored.
  *
- * Per spec §5: portrait-locked on Android. iOS uses automatic content
- * inset for the safe area.
+ * Per spec §5: portrait-locked on both platforms. Android lock is via
+ * `android:screenOrientation="portrait"` on MainActivity in
+ * `android/app/src/main/AndroidManifest.xml`. iOS lock is via
+ * `UISupportedInterfaceOrientations` in `ios/App/App/Info.plist`
+ * (portrait-only on iPhone; portrait + upside-down on iPad). iOS uses
+ * automatic content inset for the safe area.
  */
 const config: CapacitorConfig = {
 	appId: 'cabinet.arcade.dord',
