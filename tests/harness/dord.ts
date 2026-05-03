@@ -71,6 +71,12 @@ export interface DordGame {
 	reload: (nowMs: number) => boolean;
 	tickReload: (nowMs: number) => void;
 	swapWeapon: () => boolean;
+	openSettings: () => void;
+	closeSettings: () => void;
+	openHighScores: () => void;
+	closeHighScores: () => void;
+	openCabinetStats: () => void;
+	closeCabinetStats: () => void;
 }
 
 export interface DordEnemySnapshot {
