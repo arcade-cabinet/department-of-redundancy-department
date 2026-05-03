@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">DORD</string>
+    <string name="title_activity_main">DORD</string>
+    <string name="package_name">cabinet.arcade.dord</string>
+    <string name="custom_url_scheme">cabinet.arcade.dord</string>
+</resources>
