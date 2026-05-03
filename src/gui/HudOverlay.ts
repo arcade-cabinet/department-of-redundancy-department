@@ -2,6 +2,7 @@ import { Control } from '@babylonjs/gui/2D/controls/control';
 import { Rectangle } from '@babylonjs/gui/2D/controls/rectangle';
 import { TextBlock } from '@babylonjs/gui/2D/controls/textBlock';
 import { comboMultiplier, type GameState, WEAPONS, type WeaponState } from '../game/GameState';
+import { getSafeAreaInsets } from '../runtime/safeArea';
 import {
 	COLOR_HP_HIGH,
 	COLOR_HP_LOW,
@@ -41,6 +42,14 @@ export class HudOverlay {
 	private currentQuarters = 0;
 
 	constructor(private readonly overlay: Overlay) {
+		// iOS notch / Android cutout: shift every top-aligned HUD element
+		// down by the system's safe-area-top inset. Web (no notch) and
+		// landscape Android resolve to 0, so the layout is unchanged.
+		// The horizontal insets are 0 in portrait too — only adding
+		// `top` is enough for the spec. See src/runtime/safeArea.ts.
+		const insets = getSafeAreaInsets();
+		const safeTop = insets.top;
+
 		this.hpBar = new Rectangle('hud-hp-bar');
 		this.hpBar.width = `${HP_BAR_WIDTH}px`;
 		this.hpBar.height = '24px';
@@ -50,7 +59,7 @@ export class HudOverlay {
 		this.hpBar.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
 		this.hpBar.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
 		this.hpBar.left = '24px';
-		this.hpBar.top = '24px';
+		this.hpBar.top = `${24 + safeTop}px`;
 
 		this.hpFill = new Rectangle('hud-hp-fill');
 		this.hpFill.thickness = 0;
@@ -81,7 +90,7 @@ export class HudOverlay {
 		this.scoreLabel.width = '320px';
 		this.scoreLabel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
 		this.scoreLabel.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
-		this.scoreLabel.top = '20px';
+		this.scoreLabel.top = `${20 + safeTop}px`;
 
 		this.comboLabel = new TextBlock('hud-combo', '');
 		this.comboLabel.color = COLOR_HP_MID;
@@ -92,7 +101,7 @@ export class HudOverlay {
 		this.comboLabel.width = '320px';
 		this.comboLabel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
 		this.comboLabel.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
-		this.comboLabel.top = '60px';
+		this.comboLabel.top = `${60 + safeTop}px`;
 
 		this.quartersLabel = new TextBlock('hud-quarters', `Q  0`);
 		this.quartersLabel.color = QUARTERS_GOLD;
@@ -105,7 +114,7 @@ export class HudOverlay {
 		this.quartersLabel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
 		this.quartersLabel.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
 		this.quartersLabel.left = '-24px';
-		this.quartersLabel.top = '24px';
+		this.quartersLabel.top = `${24 + safeTop}px`;
 		this.quartersLabel.shadowColor = 'rgba(0, 0, 0, 0.95)';
 		this.quartersLabel.shadowOffsetX = 1;
 		this.quartersLabel.shadowOffsetY = 1;
@@ -120,7 +129,7 @@ export class HudOverlay {
 		this.livesLabel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
 		this.livesLabel.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
 		this.livesLabel.left = '-24px';
-		this.livesLabel.top = '60px';
+		this.livesLabel.top = `${60 + safeTop}px`;
 
 		this.ammoLabel = new TextBlock('hud-ammo', 'PISTOL  8 / 8');
 		this.ammoLabel.color = COLOR_PAPER;
@@ -133,7 +142,7 @@ export class HudOverlay {
 		this.ammoLabel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
 		this.ammoLabel.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
 		this.ammoLabel.left = '-24px';
-		this.ammoLabel.top = '104px';
+		this.ammoLabel.top = `${104 + safeTop}px`;
 		this.ammoLabel.shadowColor = 'rgba(0, 0, 0, 0.95)';
 		this.ammoLabel.shadowBlur = 0;
 		this.ammoLabel.shadowOffsetX = 1;
