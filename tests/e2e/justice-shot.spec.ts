@@ -42,12 +42,19 @@ test.describe('justice shot', () => {
 		// Fast-forward until at least one justice-glint enemy spawns AND its
 		// window opens. The open-plan justice-glint enemy spawns on `pos-2`
 		// arrival; rail glide + dwell timing means the spawn happens within
-		// the first ~30s of simulated time. We hop in 250ms steps so we
-		// catch the 0.3s aim window before fire-hitscan closes it.
+		// the first ~30s of simulated time.
+		//
+		// The window is 300ms wide (elapsedMs ∈ [300, 600) per
+		// firePatterns.ts:140-141). We hop in 100ms steps so the post-tick
+		// observation lands inside the window deterministically — a 250ms
+		// stride could land the FIRST observation past the window if the
+		// enemy spawned mid-tick (elapsed jumps 0 → 250 → 500 → 750, with
+		// only the 500-tick observation falling in the window; flake-prone
+		// when other tick-time costs perturb the stride).
 		const justice = await page.waitForFunction(
 			() => {
 				if (!globalThis.__dord) return null;
-				globalThis.__dord.fastForward(250);
+				globalThis.__dord.fastForward(100);
 				const snaps = globalThis.__dord.enemySnapshots();
 				for (const s of snaps) {
 					if (globalThis.__dord.isJusticeWindowOpen(s.id)) return s.id;
@@ -97,11 +104,12 @@ test.describe('justice shot', () => {
 		// Same wait as the scoring test, but capture both the enemy id AND
 		// the visibility of its child glint mesh when the window opens. We
 		// dig into the Babylon scene via the engine handle on `__dord` to
-		// avoid adding more debug surface for one assertion.
+		// avoid adding more debug surface for one assertion. 100ms stride
+		// reasoning lives on the scoring test above.
 		const result = await page.waitForFunction(
 			() => {
 				if (!globalThis.__dord) return null;
-				globalThis.__dord.fastForward(250);
+				globalThis.__dord.fastForward(100);
 				const snaps = globalThis.__dord.enemySnapshots();
 				for (const s of snaps) {
 					if (!globalThis.__dord.isJusticeWindowOpen(s.id)) continue;
